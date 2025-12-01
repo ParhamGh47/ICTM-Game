@@ -9,6 +9,7 @@ public class CameraController : MonoBehaviour
     // 3 = Reverse Camera
 
     public CarController car;
+    public ReverseBeep reverseSound;
 
     private void Awake()
     {
@@ -28,7 +29,12 @@ public class CameraController : MonoBehaviour
         if (throttle < -0.8f)
         {
             ActivateCamera(3);
+            reverseSound.SoundReverse();
             return;
+        }
+        else
+        {
+            reverseSound.StopReverse(); // stop beep if not reversing
         }
 
         bool isBrakingHard = throttle < -0.1f && speed > 30f;
@@ -45,9 +51,9 @@ public class CameraController : MonoBehaviour
             return;
         }
 
-
         ActivateCamera(1);
     }
+
 
     public void ActivateCamera(int index)
     {

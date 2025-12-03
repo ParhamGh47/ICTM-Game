@@ -2,14 +2,15 @@ using UnityEngine;
 
 public class CarController : MonoBehaviour
 {
-    private Rigidbody rb;
+    public Rigidbody rb { get; private set; }
+
 
     [Header("Input")]
     public float throttleInput;
     public float steerInput;
 
     [Header("Engine Settings")]
-    public float topSpeed = 50f;
+    public float topSpeed = 80f;
 
     public AnimationCurve torqueCurve = new AnimationCurve(
         new Keyframe(0f,    0.5f, 0f, 1.5f),
@@ -27,6 +28,8 @@ public class CarController : MonoBehaviour
     void Start()
     {
         rb = GetComponent<Rigidbody>();
+        rb.drag = 0.05f;
+        rb.angularDrag = 5f;
     }
 
     void Update()
@@ -65,6 +68,6 @@ public class CarController : MonoBehaviour
         Vector3 uprightEuler = new Vector3(0f, transform.eulerAngles.y, 0f);
         transform.rotation = Quaternion.Euler(uprightEuler);
 
-        transform.position += Vector3.up * 0.75f;
+        transform.position += Vector3.up * 1.2f;
     }
 }

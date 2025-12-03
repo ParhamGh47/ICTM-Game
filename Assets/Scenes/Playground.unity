@@ -210,17 +210,17 @@ MonoBehaviour:
   isFrontRight: 0
   isRearLeft: 1
   isRearRight: 0
-  maxSteerAngle: 25
-  lateralGrip: 1
+  maxSteerAngle: 20
+  lateralGrip: 0.8
   forwardGrip: 1
-  tireMass: 50
+  tireMass: 40
   engineForce: 5000
   brakeForce: 8000
-  reverseForce: 2500
+  reverseForce: 1500
   accelerationRate: 5
   decelerationRate: 12
-  driftThreshold: 3
-  driftMultiplier: 0.5
+  driftThreshold: 7
+  driftMultiplier: 1.2
   driftRecovery: 5
 --- !u!1 &448325471
 GameObject:
@@ -693,17 +693,17 @@ MonoBehaviour:
   isFrontRight: 0
   isRearLeft: 0
   isRearRight: 0
-  maxSteerAngle: 25
-  lateralGrip: 1
+  maxSteerAngle: 20
+  lateralGrip: 0.8
   forwardGrip: 1
-  tireMass: 50
+  tireMass: 40
   engineForce: 5000
   brakeForce: 8000
-  reverseForce: 2500
+  reverseForce: 1500
   accelerationRate: 5
   decelerationRate: 12
-  driftThreshold: 3
-  driftMultiplier: 0.5
+  driftThreshold: 7
+  driftMultiplier: 1.2
   driftRecovery: 5
 --- !u!1 &754402581
 GameObject:
@@ -752,12 +752,22 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   car: {fileID: 1194358809}
   idleRPM: 100
-  maxRPM: 800
-  rpmSmooth: 4
+  redlineRPM: 4200
+  rpmInertia: 4
+  gearRatios:
+  - 2.8
+  - 1.9
+  - 1.4
+  - 1.1
+  - 0.85
+  finalDrive: 3.9
+  shiftUpRPM: 3800
+  shiftDownRPM: 1500
+  currentGear: 1
+  pitchMin: 0.7
+  pitchMax: 1.35
   grainSize: 0.12
   grainJitter: 0.03
-  pitchRange: 1.35
-  loadBoost: 0.2
 --- !u!82 &754402584
 AudioSource:
   m_ObjectHideFlags: 0
@@ -1004,17 +1014,17 @@ MonoBehaviour:
   isFrontRight: 0
   isRearLeft: 0
   isRearRight: 1
-  maxSteerAngle: 25
-  lateralGrip: 1
+  maxSteerAngle: 20
+  lateralGrip: 0.8
   forwardGrip: 1
-  tireMass: 50
+  tireMass: 40
   engineForce: 5000
   brakeForce: 8000
-  reverseForce: 2500
+  reverseForce: 1500
   accelerationRate: 5
   decelerationRate: 12
-  driftThreshold: 3
-  driftMultiplier: 0.5
+  driftThreshold: 7
+  driftMultiplier: 1.2
   driftRecovery: 5
 --- !u!1 &1007928147
 GameObject:
@@ -1208,7 +1218,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   throttleInput: 0
   steerInput: 0
-  topSpeed: 50
+  topSpeed: 80
   torqueCurve:
     serializedVersion: 2
     m_Curve:
@@ -1876,17 +1886,17 @@ MonoBehaviour:
   isFrontRight: 1
   isRearLeft: 0
   isRearRight: 0
-  maxSteerAngle: 25
-  lateralGrip: 1
+  maxSteerAngle: 20
+  lateralGrip: 0.8
   forwardGrip: 1
-  tireMass: 50
+  tireMass: 40
   engineForce: 5000
   brakeForce: 8000
-  reverseForce: 2500
+  reverseForce: 1500
   accelerationRate: 5
   decelerationRate: 12
-  driftThreshold: 3
-  driftMultiplier: 0.5
+  driftThreshold: 7
+  driftMultiplier: 1.2
   driftRecovery: 5
 --- !u!1 &1960672446
 GameObject:
@@ -1993,6 +2003,7 @@ GameObject:
   - component: {fileID: 2115937393}
   - component: {fileID: 2115937392}
   - component: {fileID: 2115937391}
+  - component: {fileID: 2115937394}
   m_Layer: 0
   m_Name: Terrain
   m_TagString: Untagged
@@ -2060,6 +2071,30 @@ Transform:
   m_Father: {fileID: 0}
   m_RootOrder: 8
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &2115937394
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2115937390}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 81fe195562332d04ead2688a86c7325b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  mGSDID: 1567966749
+  tTerrain: {fileID: 2115937392}
+  SplatResoWidth: 1024
+  SplatResoHeight: 1024
+  SplatBackground: {r: 0, g: 0, b: 0, a: 1}
+  SplatForeground: {r: 1, g: 1, b: 1, a: 1}
+  SplatWidth: 30
+  SplatSkipBridges: 0
+  SplatSkipTunnels: 0
+  SplatSingleRoad: 0
+  SplatSingleChoiceIndex: 0
+  RoadSingleChoiceUID: 
 --- !u!1 &2124877034
 GameObject:
   m_ObjectHideFlags: 0

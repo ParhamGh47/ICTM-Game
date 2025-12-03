@@ -22,16 +22,15 @@ public class WheelPhysics : MonoBehaviour
 
     [Header("Steering")]
     public float maxSteerAngle = 25f;
-
     [Header("Grip & Handling")]
-    public float lateralGrip = 0.5f;
+    public float lateralGrip = 0.8f;
     public float forwardGrip = 1.0f;
-    public float tireMass = 50f;
+    public float tireMass = 40f;
 
     [Header("Engine / Brakes")]
     public float engineForce = 5000f;
     public float brakeForce = 8000f;
-    public float reverseForce = 2500f;
+    public float reverseForce = 1500f;
 
     [Header("Engine Behavior")]
     public float accelerationRate = 5f;
@@ -39,8 +38,8 @@ public class WheelPhysics : MonoBehaviour
     private float engineResponse = 0f;
 
     [Header("Drifting")]
-    public float driftThreshold = 3.0f;
-    public float driftMultiplier = 0.5f;
+    public float driftThreshold = 7.0f;
+    public float driftMultiplier = 1.2f;
     public float driftRecovery = 5f;   
 
     void Start()
@@ -156,15 +155,15 @@ public class WheelPhysics : MonoBehaviour
             carRb.AddForceAtPosition(-forwardDir * reverse, transform.position);
         }
 
-        // - Coasting :
+        // - Coasting (stronger rolling resistance):
         if (Mathf.Abs(throttle) < 0.01f)
         {
-            Vector3 rolling = -forwardDir * forwardVel * 4f;
+            Vector3 rolling = -forwardDir * forwardVel * 300f;
             carRb.AddForceAtPosition(rolling, transform.position);
         }
 
-        // - Air Drag :
-        Vector3 drag = -forwardDir * forwardVel * 20f;
+        // - Air Drag (now quadratic):
+        Vector3 drag = -forwardDir * forwardVel * Mathf.Abs(forwardVel) * 1.2f;
         carRb.AddForceAtPosition(drag, transform.position);
     }
 }

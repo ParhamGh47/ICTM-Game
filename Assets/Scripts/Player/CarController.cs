@@ -68,6 +68,6 @@ public class CarController : MonoBehaviour
         Vector3 uprightEuler = new Vector3(0f, transform.eulerAngles.y, 0f);
         transform.rotation = Quaternion.Euler(uprightEuler);
 
-        transform.position += Vector3.up * 1.2f;
+        transform.position += Vector3.up * 1.5f;
     }
 }

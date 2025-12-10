@@ -14,7 +14,7 @@ public class ReverseBeep : MonoBehaviour
     {
         if (!reverseBeep.isPlaying)
         {
-            StartCoroutine(PlayWithDelay(0.5f));
+            StartCoroutine(PlayWithDelay(1f));
         }
     }
 

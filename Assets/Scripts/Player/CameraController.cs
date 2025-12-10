@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Collections;
 
 public class CameraController : MonoBehaviour
 {
@@ -12,14 +13,17 @@ public class CameraController : MonoBehaviour
     public CarController car;
     public ReverseBeep reverseSound;
 
-    private int currentCamIndex = 1;
+    private int currentCam = 1;
     private bool isTransitioning = false;
-    public float transitionDuration = 0.2f;
+
+    [Header("Reverse Camera Settings")]
+    public float reverseSpeedThreshold = 5f;
+    public float forwardToReverseDelay = 1.5f;
+    public float reverseToForwardDelay = 1f;
 
     private void Awake()
     {
         ActivateCamera(1);
-        currentCamIndex = 1;
     }
 
     private void Update()
@@ -33,18 +37,21 @@ public class CameraController : MonoBehaviour
         float speed = car.currentSpeedKPH;
         float throttle = car.throttleInput;
 
-        int targetCam = DetermineTargetCamera(speed, throttle);
+        int targetCam = DetermineCamera(speed, throttle);
 
-        // If camera doesn't need to change, do nothing
-        if (targetCam == currentCamIndex) return;
+        if (targetCam == currentCam)
+            return;
 
-        // Check if transition with Above camera is needed
-        bool reversingToForward = currentCamIndex == 3 && targetCam != 3;
-        bool forwardToReversing = currentCamIndex != 3 && targetCam == 3;
+        bool forwardToReverse = currentCam != 3 && targetCam == 3;
+        bool reverseToForward = currentCam == 3 && targetCam != 3;
 
-        if (reversingToForward || forwardToReversing)
+        if (forwardToReverse)
         {
-            StartCoroutine(TransitionThroughAbove(targetCam));
+            StartCoroutine(TransitionAbove(3, forwardToReverseDelay));
+        }
+        else if (reverseToForward)
+        {
+            StartCoroutine(TransitionAbove(targetCam, reverseToForwardDelay));
         }
         else
         {
@@ -52,17 +59,27 @@ public class CameraController : MonoBehaviour
         }
     }
 
-    // Camera decision logic preserved
-    private int DetermineTargetCamera(float speed, float throttle)
+    private int DetermineCamera(float speed, float throttle)
     {
         if (throttle < -0.8f)
         {
-            reverseSound.SoundReverse();
-            return 3; // reverse camera
+            if (speed < reverseSpeedThreshold)
+            {
+                if (!isTransitioning || currentCam == 3)
+                    reverseSound.SoundReverse();
+
+                return 3;
+            }
+            else
+            {
+                if (currentCam != 3) reverseSound.StopReverse();
+                return currentCam;
+            }
         }
         else
         {
-            reverseSound.StopReverse();
+            if (currentCam == 3 && !isTransitioning)
+                reverseSound.StopReverse();
         }
 
         bool hardBrake = throttle < -0.1f && speed > 30f;
@@ -73,20 +90,25 @@ public class CameraController : MonoBehaviour
         return 1;
     }
 
-    private System.Collections.IEnumerator TransitionThroughAbove(int finalCam)
+    private IEnumerator TransitionAbove(int finalCam, float delay)
     {
         isTransitioning = true;
 
-        ActivateCamera(4); // Above camera
-        yield return new WaitForSeconds(transitionDuration);
+        ActivateCamera(4);
+        yield return new WaitForSeconds(delay);
 
         ActivateCamera(finalCam);
         isTransitioning = false;
+
+        if (finalCam == 3)
+            reverseSound.SoundReverse();
+        else
+            reverseSound.StopReverse();
     }
 
-    public void ActivateCamera(int index)
+    private void ActivateCamera(int index)
     {
-        currentCamIndex = index;
+        currentCam = index;
 
         for (int i = 0; i < Cameras.Length; i++)
         {

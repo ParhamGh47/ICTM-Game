@@ -5,6 +5,9 @@ public class WheelPhysics : MonoBehaviour
     Rigidbody carRb;
     CarController car;
 
+    [Tooltip("Visual Front Wheels")]
+    public Transform frontWheelsParent;
+
     [Header("Suspension")]
     public float restLength = 0.25f;
     public float springTravel = 0.3f;
@@ -22,6 +25,9 @@ public class WheelPhysics : MonoBehaviour
 
     [Header("Steering")]
     public float maxSteerAngle = 25f;
+
+    private Quaternion frontWheelsBaseRotation;
+
     [Header("Grip & Handling")]
     public float lateralGrip = 0.8f;
     public float forwardGrip = 1.0f;
@@ -40,7 +46,7 @@ public class WheelPhysics : MonoBehaviour
     [Header("Drifting")]
     public float driftThreshold = 7.0f;
     public float driftMultiplier = 1.2f;
-    public float driftRecovery = 5f;   
+    public float driftRecovery = 5f;
 
     void Start()
     {
@@ -50,14 +56,23 @@ public class WheelPhysics : MonoBehaviour
         minLen = restLength - springTravel;
         maxLen = restLength + springTravel;
         springLen = restLength;
+
+        if (frontWheelsParent != null)
+            frontWheelsBaseRotation = frontWheelsParent.localRotation;
     }
 
     void Update()
     {
+        float steerAngle = car != null ? car.steerInput * maxSteerAngle : 0f;
+
         if (isFrontLeft || isFrontRight)
         {
-            float steer = car.steerInput * maxSteerAngle;
-            transform.localRotation = Quaternion.Euler(0f, steer, 0f);
+            transform.localRotation = Quaternion.Euler(0f, steerAngle, 0f);
+        }
+
+        if (frontWheelsParent != null && (isFrontLeft || isFrontRight))
+        {
+            frontWheelsParent.localRotation = frontWheelsBaseRotation * Quaternion.Euler(0f, steerAngle, 0f);
         }
     }
 
@@ -69,7 +84,7 @@ public class WheelPhysics : MonoBehaviour
         Vector3 springDir = transform.up;
         Vector3 tireVel = carRb.GetPointVelocity(transform.position);
 
-        // - Suspension :
+        // Suspension
         lastLen = springLen;
         float rawLen = hit.distance - wheelRadius;
         springLen = Mathf.Clamp(rawLen, minLen, maxLen);
@@ -81,88 +96,72 @@ public class WheelPhysics : MonoBehaviour
 
         carRb.AddForceAtPosition(springDir * suspensionForce, transform.position);
 
-        //  - Drifting :
+        // Drifting
         Vector3 lateralDir = transform.right;
         float lateralVel = Vector3.Dot(lateralDir, tireVel);
         float speed = carRb.velocity.magnitude;
 
-        // - Speed-based Grip loss :
         float speedGripFactor = Mathf.Lerp(1f, 0.35f, speed / car.topSpeed);
-
-        // - Slip Amount :
         float slip = Mathf.Abs(lateralVel);
 
         float finalGrip;
-
         if (slip < driftThreshold)
         {
-            // - Grip :
             finalGrip = lateralGrip * speedGripFactor;
         }
         else
         {
-            // - Drifting Grip :
             float t = (slip - driftThreshold) / driftThreshold;
             finalGrip = Mathf.Lerp(lateralGrip * speedGripFactor, lateralGrip * driftMultiplier, t);
         }
 
-        // - lateral Friction :
         float desiredLatVelChange = -lateralVel * finalGrip;
         float desiredLatAccel = desiredLatVelChange / Time.fixedDeltaTime;
         carRb.AddForceAtPosition(lateralDir * tireMass * desiredLatAccel, transform.position);
 
-        // - Drift Stabilization :
         if (slip > driftThreshold)
         {
             Vector3 stabilizingForce = -lateralDir * slip * driftRecovery;
             carRb.AddForceAtPosition(stabilizingForce, transform.position);
         }
 
-        // - Engine / Braking / Reverse :
+        // Engine / Braking / Reverse
         Vector3 forwardDir = transform.forward;
         float forwardVel = Vector3.Dot(forwardDir, tireVel);
-
         float throttle = car.throttleInput;
 
-        // - Engine Ramping :
         if (throttle > 0f)
             engineResponse = Mathf.MoveTowards(engineResponse, throttle, accelerationRate * Time.fixedDeltaTime);
         else if (throttle == 0f)
             engineResponse = Mathf.MoveTowards(engineResponse, 0f, decelerationRate * Time.fixedDeltaTime);
 
-        // - Torque Curve Integration -
         float normalizedSpeed = Mathf.Clamp01(Mathf.Abs(forwardVel) / car.topSpeed);
         float torqueMultiplier = car.torqueCurve.Evaluate(normalizedSpeed);
 
-        // - Forward Acceleration :
         if (throttle > 0.01f)
         {
             float torque = engineForce * engineResponse * forwardGrip * torqueMultiplier;
             carRb.AddForceAtPosition(forwardDir * torque, transform.position);
         }
 
-        // - Braking :
         if (throttle < -0.01f && forwardVel > 0.5f)
         {
             float brake = brakeForce * -throttle;
             carRb.AddForceAtPosition(-forwardDir * brake, transform.position);
         }
 
-        // - Reverse :
         if (throttle < -0.01f && forwardVel <= 0.5f)
         {
             float reverse = reverseForce * -throttle;
             carRb.AddForceAtPosition(-forwardDir * reverse, transform.position);
         }
 
-        // - Coasting (stronger rolling resistance):
         if (Mathf.Abs(throttle) < 0.01f)
         {
             Vector3 rolling = -forwardDir * forwardVel * 300f;
             carRb.AddForceAtPosition(rolling, transform.position);
         }
 
-        // - Air Drag (now quadratic):
         Vector3 drag = -forwardDir * forwardVel * Mathf.Abs(forwardVel) * 1.2f;
         carRb.AddForceAtPosition(drag, transform.position);
     }

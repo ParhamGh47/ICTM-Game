@@ -6,12 +6,26 @@ public class EngineAudio : MonoBehaviour
 {
     public CarController car;
 
+    [Header("Current Gear")]
+    [SerializeField] private int currentGearDisplay = 1;
+    public int CurrentGear => currentGearDisplay;
+
     [Header("Gear Shift")]
     public AudioSource shiftSource;
     [Range(0f, 1f)] public float shiftVolume = 0.5f;
     public float shiftRPMDrop = 0.60f;
     public float shiftRPMFlare = 1.15f;
     public float shiftCutTime = 0.3f;
+
+    [Header("Shift Timing - Make every shift feel heavy")]
+    public float baseShiftDelay = 0.65f;
+    public AnimationCurve shiftDelayCurve = new AnimationCurve(
+        new Keyframe(0f,   1.1f),
+        new Keyframe(0.25f, 1.0f),
+        new Keyframe(0.5f,  0.8f),
+        new Keyframe(0.75f, 0.6f),
+        new Keyframe(1f,   0.45f)
+    );
 
     [Header("Engine Volume Envelope")]
     [Range(0f, 1f)] public float baseVolume = 0.6f;
@@ -72,6 +86,7 @@ public class EngineAudio : MonoBehaviour
 
         loopLength = engineSource.clip.length;
         currentGear = 0;
+        currentGearDisplay = 1;
         lastVariationTime = Time.time;
     }
 
@@ -82,6 +97,9 @@ public class EngineAudio : MonoBehaviour
         UpdatePitchAndFilters();
         UpdateVolumeEnvelope();
         UpdateOrganicVariation();
+
+        bool isReversing = Vector3.Dot(car.rb.velocity, transform.forward) < -0.5f;
+        currentGearDisplay = isReversing ? 0 : currentGear + 1;
     }
 
     private void HandleShifting()
@@ -91,6 +109,9 @@ public class EngineAudio : MonoBehaviour
             shiftTimer -= Time.deltaTime;
             return;
         }
+
+        bool movingReverse = Vector3.Dot(car.rb.velocity, transform.forward) < -0.5f;
+        if (movingReverse) return;
 
         float speedKPH = car.currentSpeedKPH;
 
@@ -108,12 +129,15 @@ public class EngineAudio : MonoBehaviour
     {
         if (envelopeState != EnvelopeState.Normal) return;
 
-        shiftTimer = shiftCutTime + 0.15f;
-        envelopeState = EnvelopeState.Dipping;
-        envelopeTimer = 0f;
-
         int oldGear = currentGear;
         currentGear = newGear;
+
+        float t = (float)oldGear / (gearRatios.Length - 1);
+        float multiplier = shiftDelayCurve.Evaluate(t);
+        shiftTimer = baseShiftDelay * multiplier + 0.15f;
+
+        envelopeState = EnvelopeState.Dipping;
+        envelopeTimer = 0f;
 
         if (shiftSource != null)
         {
@@ -182,7 +206,6 @@ public class EngineAudio : MonoBehaviour
     {
         float rpmNorm = Mathf.InverseLerp(idleRPM, redlineRPM, engineRPM);
         engineSource.pitch = Mathf.Lerp(pitchMin, pitchMax, rpmNorm);
-
         lowpassFilter.cutoffFrequency = Mathf.Lerp(lowpassCutoffMin, lowpassCutoffMax, rpmNorm);
     }
 

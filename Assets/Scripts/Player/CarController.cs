@@ -4,7 +4,6 @@ public class CarController : MonoBehaviour
 {
     public Rigidbody rb { get; private set; }
 
-
     [Header("Input")]
     public float throttleInput;
     public float steerInput;
@@ -25,11 +24,24 @@ public class CarController : MonoBehaviour
     public float minSteerPercent = 0.2f;
     public float steerFadeSpeed = 40f;
 
+    [Header("Brake Lights")]
+    public Renderer brakeLightRenderer;
+    public float brakeThreshold = -0.1f;
+
+    private Material brakeMat;
+
+    [Header("Reset Cooldown")]
+    public float resetCooldown = 2f;
+    private float lastResetTime = -999f;
+
     void Start()
     {
         rb = GetComponent<Rigidbody>();
         rb.drag = 0.05f;
         rb.angularDrag = 5f;
+
+        if (brakeLightRenderer != null)
+            brakeMat = brakeLightRenderer.material;
     }
 
     void Update()
@@ -39,6 +51,23 @@ public class CarController : MonoBehaviour
 
         float mps = rb.velocity.magnitude;
         currentSpeedKPH = mps * 3.6f;
+
+        UpdateBrakeLights();
+    }
+
+    private void UpdateBrakeLights()
+    {
+        if (brakeMat == null)
+            return;
+
+        if (throttleInput < brakeThreshold)
+        {
+            brakeMat.EnableKeyword("_EMISSION");
+        }
+        else
+        {
+            brakeMat.DisableKeyword("_EMISSION");
+        }
     }
 
     public float GetSpeedAdjustedSteer()
@@ -57,7 +86,13 @@ public class CarController : MonoBehaviour
     private void FixedUpdate()
     {
         if (Input.GetKeyDown(KeyCode.R))
-            ResetCar();
+        {
+            if (Time.time - lastResetTime >= resetCooldown)
+            {
+                ResetCar();
+                lastResetTime = Time.time;
+            }
+        }
     }
 
     private void ResetCar()

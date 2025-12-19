@@ -9,17 +9,22 @@ public class CameraController : MonoBehaviour
     // 2 = Braking
     // 3 = Reverse
     // 4 = Above (transition camera)
+    // 5 = Boost
 
     public CarController car;
     public ReverseBeep reverseSound;
 
     private int currentCam = 1;
     private bool isTransitioning = false;
+    private bool boostActive = false;
 
     [Header("Reverse Camera Settings")]
     public float reverseSpeedThreshold = 5f;
     public float forwardToReverseDelay = 1.5f;
     public float reverseToForwardDelay = 1f;
+
+    [Header("Boost Camera Settings")]
+    public float boostCamDuration = 1.5f;
 
     private void Awake()
     {
@@ -28,7 +33,7 @@ public class CameraController : MonoBehaviour
 
     private void Update()
     {
-        if (!isTransitioning)
+        if (!isTransitioning && !boostActive)
             UpdateCameraBasedOnCar();
     }
 
@@ -104,6 +109,22 @@ public class CameraController : MonoBehaviour
             reverseSound.SoundReverse();
         else
             reverseSound.StopReverse();
+    }
+
+    public void TriggerBoostCamera()
+    {
+        if (!boostActive)
+            StartCoroutine(BoostCameraRoutine());
+    }
+
+    private IEnumerator BoostCameraRoutine()
+    {
+        boostActive = true;
+
+        ActivateCamera(5);
+        yield return new WaitForSeconds(boostCamDuration);
+
+        boostActive = false;
     }
 
     private void ActivateCamera(int index)

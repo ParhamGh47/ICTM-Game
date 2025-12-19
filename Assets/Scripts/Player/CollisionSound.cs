@@ -3,8 +3,8 @@ using UnityEngine;
 public class CollisionSound : MonoBehaviour
 {
     [Header("References")]
-    public CarController car;                // your existing controller
-    public AudioSource audioSource;          // AudioSource for collision SFX
+    public CarController car;              
+    public AudioSource audioSource;
 
     [Header("Collision Clips")]
     public AudioClip softHitClip;
@@ -12,9 +12,9 @@ public class CollisionSound : MonoBehaviour
     public AudioClip hardHitClip;
 
     [Header("Impact Settings")]
-    public float softImpactThreshold = 2f;   // speed (m/s) for soft hits
-    public float mediumImpactThreshold = 6f; // speed for medium hits
-    public float hardImpactThreshold = 12f;  // speed for hard hits
+    public float softImpactThreshold = 2f;
+    public float mediumImpactThreshold = 6f;
+    public float hardImpactThreshold = 12f;
 
     [Header("Volume Settings")]
     public float softVolume = 0.25f;
@@ -26,7 +26,7 @@ public class CollisionSound : MonoBehaviour
     public float maxPitch = 1.1f;
 
     [Header("Cooldown")]
-    public float cooldownTime = 0.25f;       // prevents spamming collisions
+    public float cooldownTime = 0.5f;
 
     private float lastPlayTime = -999f;
     private Vector3 lastVelocity;

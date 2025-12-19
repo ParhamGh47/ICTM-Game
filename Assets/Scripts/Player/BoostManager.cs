@@ -7,6 +7,7 @@ public class BoostManager : MonoBehaviour
     public ParticleSystem particleA;
     public ParticleSystem particleB;
     public ParticleSystem particleC;
+    public ParticleSystem particleD;
 
     [Header("Settings")]
     public float boostDuration = 1.5f;
@@ -45,6 +46,7 @@ public class BoostManager : MonoBehaviour
         HandleParticle(particleA, state);
         HandleParticle(particleB, state);
         HandleParticle(particleC, state);
+        HandleParticle(particleD, state);
     }
 
     private void HandleParticle(ParticleSystem ps, bool enable)

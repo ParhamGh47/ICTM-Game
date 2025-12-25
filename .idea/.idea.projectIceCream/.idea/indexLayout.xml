@@ -58,6 +58,7 @@
       <Path>.idea</Path>
       <Path>.vscode</Path>
       <Path>Logs</Path>
+      <Path>RoadArchitect</Path>
       <Path>UserSettings</Path>
       <Path>obj</Path>
     </explicitExcludes>

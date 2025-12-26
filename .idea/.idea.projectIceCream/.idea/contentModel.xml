@@ -17,6 +17,8 @@
         </e>
         <e p="Fonts" t="Include" />
         <e p="Materials" t="Include">
+          <e p="Player" t="Include" />
+          <e p="Police" t="Include" />
           <e p="Sprites" t="Include" />
         </e>
         <e p="Objects" t="Include">

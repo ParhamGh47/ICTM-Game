@@ -15,17 +15,22 @@ public class menuBTN : MonoBehaviour
     {
         
     }
-    public void extbtn()
+    public void extBtn()
     {
         Application.Quit();
     }
     
-    public void playbtn()
+    public void playBtn()
     {
         SceneManager.LoadScene("Playground");
     }
-    public void optionbtn()
+    public void optionBtn()
     {
         SceneManager.LoadScene("Option");
     }
+    public void backBtn()
+    {
+        SceneManager.LoadScene("Menu");
+    }
+    
 }

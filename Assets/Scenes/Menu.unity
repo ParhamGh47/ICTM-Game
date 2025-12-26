@@ -506,7 +506,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4731495458965025977, guid: bbbf61837eeb59d4b8609efbf7007adf, type: 3}
       propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_MethodName
-      value: extbtn
+      value: extBtn
       objectReference: {fileID: 0}
     - target: {fileID: 4731495458965025977, guid: bbbf61837eeb59d4b8609efbf7007adf, type: 3}
       propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_TargetAssemblyTypeName
@@ -586,7 +586,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4731495459545786016, guid: bbbf61837eeb59d4b8609efbf7007adf, type: 3}
       propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_MethodName
-      value: playbtn
+      value: playBtn
       objectReference: {fileID: 0}
     - target: {fileID: 4731495459545786016, guid: bbbf61837eeb59d4b8609efbf7007adf, type: 3}
       propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_TargetAssemblyTypeName
@@ -614,7 +614,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4731495459644363951, guid: bbbf61837eeb59d4b8609efbf7007adf, type: 3}
       propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_MethodName
-      value: optionbtn
+      value: optionBtn
       objectReference: {fileID: 0}
     - target: {fileID: 4731495459644363951, guid: bbbf61837eeb59d4b8609efbf7007adf, type: 3}
       propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_TargetAssemblyTypeName

@@ -6297,7 +6297,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 521363391}
   m_LocalRotation: {x: -0, y: 0.38268343, z: -0, w: 0.92387956}
-  m_LocalPosition: {x: 0.118, y: 0.06999999, z: 0.069}
+  m_LocalPosition: {x: 0.03, y: 0, z: 0}
   m_LocalScale: {x: -1.439861, y: 0.7829399, z: 0.7806412}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -44056,21 +44056,16 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   player: {fileID: 1194358807}
   playerRb: {fileID: 1194358808}
-  baseSpeed: 38
-  maxSpeed: 48
-  acceleration: 9000
-  deceleration: 12000
-  turnRate: 4.5
-  minTurnSpeed: 1.5
-  turnDampening: 0.015
-  followDistance: 7
-  maxSideOffset: 1.2
-  predictionTime: 0.6
-  lateralGrip: 7
-  downForce: 9000
-  ramDistance: 3.5
-  ramForce: 11000
-  ramCooldown: 2.5
+  baseSpeed: 50
+  acceleration: 20
+  angularSpeed: 300
+  stoppingDistance: 5
+  predictionTime: 1.5
+  closeDistanceBoost: 15
+  speedBoostMultiplier: 1.3
+  ramForce: 20000
+  cooldownTime: 4
+  cooldownSpeedMultiplier: 0.4
 --- !u!134 &1511581442
 PhysicMaterial:
   m_ObjectHideFlags: 0
@@ -58667,7 +58662,7 @@ Light:
   serializedVersion: 10
   m_Type: 1
   m_Shape: 0
-  m_Color: {r: 1, g: 0.95686275, b: 0.8392157, a: 1}
+  m_Color: {r: 0, g: 0, b: 0, a: 1}
   m_Intensity: 1
   m_Range: 10
   m_SpotAngle: 30
@@ -58679,7 +58674,7 @@ Light:
     m_CustomResolution: -1
     m_Strength: 1
     m_Bias: 0.05
-    m_NormalBias: 0.4
+    m_NormalBias: 0.48
     m_NearPlane: 0.2
     m_CullingMatrixOverride:
       e00: 1
@@ -58707,7 +58702,7 @@ Light:
     serializedVersion: 2
     m_Bits: 4294967295
   m_RenderingLayerMask: 1
-  m_Lightmapping: 4
+  m_Lightmapping: 1
   m_LightShadowCasterMode: 0
   m_AreaSize: {x: 1, y: 1}
   m_BounceIntensity: 1

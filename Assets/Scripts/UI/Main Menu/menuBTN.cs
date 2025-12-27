@@ -26,7 +26,7 @@ public class menuBTN : MonoBehaviour
     }
     public void optionBtn()
     {
-        SceneManager.LoadScene("Option");
+        SceneManager.LoadScene("Playground"); // This should be 'Option' later
     }
     public void backBtn()
     {

@@ -5,30 +5,22 @@ using UnityEngine.AI;
 public class PoliceCarController : MonoBehaviour
 {
     [Header("References")]
-    public Transform player; // Drag the player car transform here
-    public Rigidbody playerRb; // Optional: Drag player Rigidbody for prediction (better chasing)
+    public Transform player;
+    public Rigidbody playerRb;
 
     [Header("Chase Settings")]
-    public float baseSpeed = 50f; // Base speed in m/s (~180 kph)
-    public float acceleration = 20f;
-    public float angularSpeed = 300f; // Faster turning
-    public float stoppingDistance = 5f; // Close enough for ram without orbiting
+    public float baseSpeed = 35f; // m/s (~126 kph)
+    public float acceleration = 30f;
+    public float angularSpeed = 540f; // Increased for snappier rotation
+    public float tailDistance = 10f;
+    public float stoppingDistance = 3f;
+    public float maxPredictionTime = 0.8f;
 
-    [Header("Aggression")]
-    public float predictionTime = 1.5f; // Seconds to lead the player
-    public float closeDistanceBoost = 15f; // Distance to trigger speed boost
-    public float speedBoostMultiplier = 1.3f; // Extra speed when close
-
-    [Header("Ramming")]
-    public float ramForce = 20000f; // Impulse force on player when hit
-
-    [Header("Post-Ram Cooldown")]
-    public float cooldownTime = 4f; // Seconds to back off after ram
-    public float cooldownSpeedMultiplier = 0.4f; // Slower during cooldown
+    [Header("Rotation Polish")]
+    public float rotationSpeed = 8f; // Smooth alignment to movement direction
+    public float velocityAlignmentWeight = 0.7f; // Blend velocity vs path direction
 
     private NavMeshAgent agent;
-    private float lastRamTime;
-    private bool inCooldown;
 
     void Awake()
     {
@@ -37,17 +29,17 @@ public class PoliceCarController : MonoBehaviour
 
     void Start()
     {
-        // Configure agent for car-like feel
         agent.speed = baseSpeed;
         agent.acceleration = acceleration;
         agent.angularSpeed = angularSpeed;
         agent.stoppingDistance = stoppingDistance;
         agent.autoBraking = true;
-        agent.radius = 1.5f; // Adjust based on your car size
+        agent.radius = 1.5f;
         agent.height = 1.5f;
+        agent.baseOffset = 0f; // Ensures wheels touch ground
         agent.obstacleAvoidanceType = ObstacleAvoidanceType.HighQualityObstacleAvoidance;
 
-        if (playerRb == null && player != null)
+        if (player != null && playerRb == null)
             playerRb = player.GetComponent<Rigidbody>();
     }
 
@@ -55,56 +47,48 @@ public class PoliceCarController : MonoBehaviour
     {
         if (player == null) return;
 
-        inCooldown = Time.time - lastRamTime < cooldownTime;
+        Vector3 playerVelocity = playerRb ? playerRb.velocity : Vector3.zero;
+        float playerSpeed = playerVelocity.magnitude;
 
+        float predictionTime = Mathf.Lerp(0.2f, maxPredictionTime, playerSpeed / 40f);
+
+        Vector3 predictedPos = player.position + playerVelocity * predictionTime;
+        Vector3 rawTargetPos = predictedPos - player.forward * tailDistance;
+
+        NavMeshHit hit;
         Vector3 targetPos;
-
-        if (inCooldown)
+        if (NavMesh.SamplePosition(rawTargetPos, out hit, 10f, NavMesh.AllAreas))
         {
-            // Back off: target a point away from player
-            Vector3 awayDir = (transform.position - player.position).normalized;
-            targetPos = transform.position + awayDir * 30f; // Aim 30m away
-            agent.speed = baseSpeed * cooldownSpeedMultiplier;
+            targetPos = hit.position;
         }
         else
         {
-            // Normal chase: predict player position
-            Vector3 playerVelocity = playerRb ? playerRb.velocity : Vector3.zero;
-            Vector3 predictedPlayerPos = player.position + playerVelocity * predictionTime;
-
-            targetPos = predictedPlayerPos;
-
-            // Speed boost when close
-            float distToPlayer = Vector3.Distance(transform.position, player.position);
-            if (distToPlayer < closeDistanceBoost)
-            {
-                agent.speed = baseSpeed * speedBoostMultiplier;
-            }
-            else
-            {
-                agent.speed = baseSpeed;
-            }
+            targetPos = predictedPos;
         }
 
-        // Update destination less frequently for performance (every 0.1s)
-        if (Time.frameCount % 6 == 0) // ~10 times per second
+        float distToTarget = Vector3.Distance(transform.position, targetPos);
+        agent.speed = Mathf.Lerp(baseSpeed * 0.8f, baseSpeed * 1.3f, distToTarget / 20f);
+
+        if (Time.frameCount % 3 == 0)
         {
             agent.SetDestination(targetPos);
         }
     }
 
-    void OnCollisionEnter(Collision collision)
+    void LateUpdate()
     {
-        if (!collision.collider.CompareTag("Player")) return;
-
-        Rigidbody playerRigid = collision.collider.GetComponent<Rigidbody>();
-        if (playerRigid != null)
+        // Polish: Smoothly align car to actual movement direction (velocity + path)
+        if (agent.velocity.sqrMagnitude > 0.1f)
         {
-            Vector3 ramDirection = (collision.transform.position - transform.position).normalized;
-            playerRigid.AddForce(ramDirection * ramForce, ForceMode.Impulse);
-        }
+            Vector3 moveDir = Vector3.Slerp(agent.steeringTarget - transform.position, agent.velocity, velocityAlignmentWeight);
+            moveDir.y = 0;
+            moveDir.Normalize();
 
-        // Trigger cooldown after successful ram
-        lastRamTime = Time.time;
+            if (moveDir.sqrMagnitude > 0.1f)
+            {
+                Quaternion targetRot = Quaternion.LookRotation(moveDir);
+                transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, rotationSpeed * Time.deltaTime);
+            }
+        }
     }
 }

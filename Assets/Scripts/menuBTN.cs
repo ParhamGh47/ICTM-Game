@@ -22,7 +22,7 @@ public class menuBTN : MonoBehaviour
     
     public void playBtn()
     {
-        SceneManager.LoadScene("Playground");
+        SceneManager.LoadScene("Levels");
     }
     public void optionBtn()
     {

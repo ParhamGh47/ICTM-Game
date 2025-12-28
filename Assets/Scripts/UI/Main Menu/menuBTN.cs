@@ -5,16 +5,19 @@ using UnityEngine.SceneManagement;
 
 public class menuBTN : MonoBehaviour
 {
-    void Start()
+
+    public void backBtn()
     {
-        
+        SceneManager.LoadScene("Menu");
     }
 
-    // Update is called once per frame
-    void Update()
+    public void optionBtn()
     {
-        
+        SceneManager.LoadScene("Option");
     }
+
+    #region MainMenu
+
     public void extBtn()
     {
         Application.Quit();
@@ -24,13 +27,15 @@ public class menuBTN : MonoBehaviour
     {
         SceneManager.LoadScene("Levels");
     }
-    public void optionBtn()
+    #endregion
+
+    #region Levels
+
+    public void playGround()
     {
-        SceneManager.LoadScene("Playground"); // This should be 'Option' later
+        SceneManager.LoadScene("Playground");
     }
-    public void backBtn()
-    {
-        SceneManager.LoadScene("Menu");
-    }
+
+    #endregion
     
 }

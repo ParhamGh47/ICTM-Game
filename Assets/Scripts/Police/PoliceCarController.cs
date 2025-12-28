@@ -77,7 +77,6 @@ public class PoliceCarController : MonoBehaviour
 
     void LateUpdate()
     {
-        // Polish: Smoothly align car to actual movement direction (velocity + path)
         if (agent.velocity.sqrMagnitude > 0.1f)
         {
             Vector3 moveDir = Vector3.Slerp(agent.steeringTarget - transform.position, agent.velocity, velocityAlignmentWeight);

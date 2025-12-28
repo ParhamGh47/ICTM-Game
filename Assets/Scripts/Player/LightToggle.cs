@@ -2,11 +2,11 @@ using UnityEngine;
 
 public class LightToggle : MonoBehaviour
 {
-    public Light headlight1;
-    public Light headlight2;
+    [Header("Headlights")]
+    public Light[] headlights;          // Assign as many lights as you want
     public AudioSource toggleSound;
 
-    [Header("Emmiting Lights")]
+    [Header("Emitting Lights")]
     public Renderer emissionObject;  
 
     public bool startOn = false;
@@ -21,8 +21,8 @@ public class LightToggle : MonoBehaviour
     {
         headlightsOn = startOn;
 
-        if (headlight1) headlight1.enabled = headlightsOn;
-        if (headlight2) headlight2.enabled = headlightsOn;
+        // Enable/disable all headlights at start
+        SetHeadlights(headlightsOn);
 
         if (emissionObject != null && emissionObject.materials.Length > 1)
         {
@@ -44,12 +44,21 @@ public class LightToggle : MonoBehaviour
 
             headlightsOn = !headlightsOn;
 
-            if (headlight1) headlight1.enabled = headlightsOn;
-            if (headlight2) headlight2.enabled = headlightsOn;
-
+            SetHeadlights(headlightsOn);
             UpdateEmission();
 
             lastToggleTime = Time.time;
+        }
+    }
+
+    private void SetHeadlights(bool state)
+    {
+        if (headlights == null) return;
+
+        foreach (Light l in headlights)
+        {
+            if (l != null)
+                l.enabled = state;
         }
     }
 

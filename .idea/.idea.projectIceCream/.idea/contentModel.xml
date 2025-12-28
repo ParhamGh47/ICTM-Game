@@ -17,6 +17,7 @@
         </e>
         <e p="Fonts" t="Include" />
         <e p="Materials" t="Include">
+          <e p="Hud" t="Include" />
           <e p="Player" t="Include" />
           <e p="Police" t="Include" />
           <e p="Sprites" t="Include" />
@@ -211,7 +212,6 @@
           <e p="Global" t="Include">
             <e p="CameraController.cs" t="Include" />
           </e>
-          <e p="menuBTN.cs" t="Include" />
           <e p="PassingCar" t="Include">
             <e p="PathTracker.cs" t="Include" />
           </e>
@@ -235,7 +235,8 @@
           </e>
           <e p="UI" t="Include">
             <e p="Main Menu" t="Include">
-              <e p="menuButton.cs" t="Include" />
+              <e p="menuBTN.cs" t="Include" />
+              <e p="MenuSoundtrackHandler.cs" t="Include" />
             </e>
           </e>
         </e>

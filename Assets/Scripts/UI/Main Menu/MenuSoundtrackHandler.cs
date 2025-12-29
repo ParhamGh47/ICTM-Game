@@ -4,10 +4,10 @@ using UnityEngine.SceneManagement;
 public class MenuSoundtrackHandler : MonoBehaviour
 {
     private AudioSource audioSource;
+    private string lastSceneName;
 
     void Awake()
     {
-        // Ensure only one instance persists
         if (FindObjectsOfType<MenuSoundtrackHandler>().Length > 1)
         {
             Destroy(gameObject);
@@ -16,29 +16,38 @@ public class MenuSoundtrackHandler : MonoBehaviour
 
         DontDestroyOnLoad(gameObject);
         audioSource = GetComponent<AudioSource>();
-
-        // Subscribe to scene change events
         SceneManager.sceneLoaded += OnSceneLoaded;
     }
 
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
-        // Resume soundtrack only for specific scenes
-        if (scene.name == "Menu" || scene.name == "Levels" || scene.name == "Option")
+        bool isMenuScene = scene.name == "Menu" || scene.name == "Levels" || scene.name == "Option";
+
+        if (isMenuScene)
         {
-            if (!audioSource.isPlaying)
+            if (!string.IsNullOrEmpty(lastSceneName) && 
+                lastSceneName != "Menu" && lastSceneName != "Levels" && lastSceneName != "Option")
+            {
+                audioSource.Stop();
                 audioSource.Play();
+            }
+            else
+            {
+                if (!audioSource.isPlaying)
+                    audioSource.Play();
+            }
         }
         else
         {
             if (audioSource.isPlaying)
                 audioSource.Pause();
         }
+
+        lastSceneName = scene.name;
     }
 
     void OnDestroy()
     {
-        // Unsubscribe to avoid memory leaks
         SceneManager.sceneLoaded -= OnSceneLoaded;
     }
 }

@@ -222,6 +222,10 @@
             <e p="CollisionSound.cs" t="Include" />
             <e p="EngineAudio.cs" t="Include" />
             <e p="ExhaustSmokeController.cs" t="Include" />
+            <e p="Hud" t="Include">
+              <e p="GearDisplay.cs" t="Include" />
+              <e p="SpeedDisplay.cs" t="Include" />
+            </e>
             <e p="LightToggle.cs" t="Include" />
             <e p="ReverseBeep.cs" t="Include" />
             <e p="SpeedEffect.cs" t="Include" />
@@ -238,6 +242,7 @@
               <e p="menuBTN.cs" t="Include" />
               <e p="MenuSoundtrackHandler.cs" t="Include" />
             </e>
+            <e p="PauseMenu.cs" t="Include" />
           </e>
         </e>
         <e p="Sprites" t="Include">

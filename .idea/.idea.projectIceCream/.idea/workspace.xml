@@ -8,6 +8,7 @@
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="HighlightingSettingsPerFile">
+    <setting file="file://$PROJECT_DIR$/Assets/Scripts/UI/PauseMenu.cs" root0="FORCE_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/Library/PackageCache/com.unity.ugui@1.0.0/Runtime/UI/Core/VertexModifiers/Shadow.cs" root0="FORCE_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/Assets/RoadArchitect/RoadArchitect-master/Scripts/Editor/EditorMenu.cs" root0="FORCE_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/Assets/Scripts/UI/Main Menu/menuBTN.cs" root0="FORCE_HIGHLIGHTING" />
@@ -18,6 +19,7 @@
       <list>
         <option value="$PROJECT_DIR$/Assets/RoadArchitect/RoadArchitect-master/Scripts/EngineIntegration.cs" />
         <option value="$PROJECT_DIR$/Assets/Scripts/menuBTN.cs" />
+        <option value="$PROJECT_DIR$/Assets/Scripts/UI/PauseMenu.cs" />
       </list>
     </option>
   </component>

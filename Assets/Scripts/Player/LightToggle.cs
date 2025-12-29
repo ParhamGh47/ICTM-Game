@@ -3,7 +3,7 @@ using UnityEngine;
 public class LightToggle : MonoBehaviour
 {
     [Header("Headlights")]
-    public Light[] headlights;          // Assign as many lights as you want
+    public Light[] headlights;
     public AudioSource toggleSound;
 
     [Header("Emitting Lights")]
@@ -21,7 +21,6 @@ public class LightToggle : MonoBehaviour
     {
         headlightsOn = startOn;
 
-        // Enable/disable all headlights at start
         SetHeadlights(headlightsOn);
 
         if (emissionObject != null && emissionObject.materials.Length > 1)

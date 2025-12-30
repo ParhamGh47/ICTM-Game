@@ -100,9 +100,9 @@ public class CarController : MonoBehaviour
         rb.velocity = Vector3.zero;
         rb.angularVelocity = Vector3.zero;
 
-        Vector3 uprightEuler = new Vector3(0f, transform.eulerAngles.y, 0f);
+        Vector3 uprightEuler = new Vector3(0f, transform.eulerAngles.y, 2.6f);
         transform.rotation = Quaternion.Euler(uprightEuler);
 
-        transform.position += Vector3.up * 1.5f;
+        transform.position += Vector3.up * 1.6f;
     }
 }

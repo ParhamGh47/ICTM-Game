@@ -3,24 +3,28 @@ using UnityEngine.SceneManagement;
 
 public class PauseMenu : MonoBehaviour
 {
-    [Header("Pause Panel")]
+    [Header("Panels")]
     public GameObject pausePanel;
+    public GameObject controlsPanel;
 
     [Header("Pause Music")]
     public AudioSource pauseMusic;
 
     private bool isPaused = false;
+    private bool controlsOpen = false;
 
     void Start()
     {
         pausePanel.SetActive(false);
+        controlsPanel.SetActive(false);
+
         Time.timeScale = 1f;
         AudioListener.pause = false;
 
         if (pauseMusic != null)
         {
             pauseMusic.Stop();
-            pauseMusic.ignoreListenerPause = true; // ⭐ KEY LINE
+            pauseMusic.ignoreListenerPause = true;
         }
     }
 
@@ -28,10 +32,18 @@ public class PauseMenu : MonoBehaviour
     {
         if (Input.GetKeyDown(KeyCode.Escape))
         {
-            if (isPaused)
+            if (controlsOpen)
+            {
+                CloseControls();
+            }
+            else if (isPaused)
+            {
                 ResumeGame();
+            }
             else
+            {
                 PauseGame();
+            }
         }
     }
 
@@ -39,12 +51,11 @@ public class PauseMenu : MonoBehaviour
     {
         isPaused = true;
         pausePanel.SetActive(true);
-        Time.timeScale = 0f;
+        controlsPanel.SetActive(false);
 
-        // Pause all gameplay audio
+        Time.timeScale = 0f;
         AudioListener.pause = true;
 
-        // Play pause menu music
         if (pauseMusic != null && !pauseMusic.isPlaying)
             pauseMusic.Play();
     }
@@ -52,21 +63,28 @@ public class PauseMenu : MonoBehaviour
     public void ResumeGame()
     {
         isPaused = false;
-        pausePanel.SetActive(false);
-        Time.timeScale = 1f;
+        controlsOpen = false;
 
-        // Resume gameplay audio
+        pausePanel.SetActive(false);
+        controlsPanel.SetActive(false);
+
+        Time.timeScale = 1f;
         AudioListener.pause = false;
 
-        // Stop pause music
         if (pauseMusic != null && pauseMusic.isPlaying)
             pauseMusic.Stop();
     }
 
     public void OpenControls()
     {
-        ResumeGame();
-        SceneManager.LoadScene("Option");
+        controlsOpen = true;
+        controlsPanel.SetActive(true);
+    }
+
+    public void CloseControls()
+    {
+        controlsOpen = false;
+        controlsPanel.SetActive(false);
     }
 
     public void RestartLevel()

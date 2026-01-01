@@ -8,11 +8,14 @@
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="HighlightingSettingsPerFile">
-    <setting file="file://$PROJECT_DIR$/Assets/Scripts/UI/PauseMenu.cs" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/Assets/Scripts/UI/gameOver.cs" root0="FORCE_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/Library/PackageCache/com.unity.ugui@1.0.0/Runtime/UI/Core/VertexModifiers/Shadow.cs" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/Assets/Scripts/UI/Trackers/KillDisplay.cs" root0="FORCE_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/Assets/Scripts/UI/StoryTypeWriter.cs" root0="FORCE_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/Assets/RoadArchitect/RoadArchitect-master/Scripts/Editor/EditorMenu.cs" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/Assets/Scripts/UI/Trackers/TimeTracker.cs" root0="FORCE_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/Assets/Scripts/UI/Main Menu/menuBTN.cs" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/Assets/Scripts/UI/Pause/PauseMenu.cs" root0="FORCE_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/Assets/RoadArchitect/RoadArchitect-master/Scripts/EngineIntegration.cs" root0="FORCE_HIGHLIGHTING" />
   </component>
   <component name="IdeDocumentHistory">
@@ -25,6 +28,9 @@
         <option value="$PROJECT_DIR$/Assets/Scripts/UI/BackButton.cs" />
         <option value="$PROJECT_DIR$/Assets/Scripts/UI/test.cs" />
         <option value="$PROJECT_DIR$/Assets/Scripts/UI/StoryTypeWriter.cs" />
+        <option value="$PROJECT_DIR$/Assets/Scripts/UI/Trackers/TimeTracker.cs" />
+        <option value="$PROJECT_DIR$/Assets/Scripts/UI/Trackers/KillDisplay.cs" />
+        <option value="$PROJECT_DIR$/Assets/Scripts/UI/gameOver.cs" />
       </list>
     </option>
   </component>

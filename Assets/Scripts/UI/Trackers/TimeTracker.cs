@@ -13,6 +13,8 @@ public class TimeTracker : MonoBehaviour
 
     private float elapsedTime = 0f;
     private bool isRunning = true;
+    
+    
 
     void Start()
     {
@@ -36,7 +38,7 @@ public class TimeTracker : MonoBehaviour
         if (elapsedTime >= targetTimeSeconds)
         {
             isRunning = false;
-            Debug.Log("Game Over");
+            gameOver.Instance.ShowGameOver();
         }
     }
 

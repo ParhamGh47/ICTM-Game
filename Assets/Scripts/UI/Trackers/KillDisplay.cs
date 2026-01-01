@@ -11,6 +11,7 @@ public class KillDisplay : MonoBehaviour
     public int targetKills = 10;
     private int currentKills = 0;
 
+    
     void Start()
     {
         UpdateDisplay();
@@ -35,7 +36,7 @@ public class KillDisplay : MonoBehaviour
     {
         if (currentKills < targetKills)
         {
-            Debug.Log("Game Over Kill");
+            gameOver.Instance.ShowGameOver();
         }
     }
 }

@@ -44,6 +44,8 @@
         <e p="Prefabs" t="Include">
           <e p="Adamaks" t="Include" />
           <e p="Effects" t="Include" />
+          <e p="Pickups" t="Include" />
+          <e p="UI" t="Include" />
         </e>
         <e p="RoadArchitect" t="Include">
           <e p="RoadArchitect-master" t="Include">
@@ -197,8 +199,15 @@
             </e>
           </e>
         </e>
-        <e p="Samples" t="Include" />
         <e p="Scenes" t="Include">
+          <e p="Levels Scenes" t="Include">
+            <e p="1" t="Include" />
+            <e p="2" t="Include" />
+            <e p="3" t="Include" />
+            <e p="4" t="Include" />
+            <e p="5" t="Include" />
+            <e p="6" t="Include" />
+          </e>
           <e p="Playground" t="Include" />
           <e p="Playground_Profiles" t="Include" />
         </e>
@@ -214,6 +223,7 @@
             <e p="CameraController.cs" t="Include" />
           </e>
           <e p="PassingCar" t="Include">
+            <e p="AITarget.cs" t="Include" />
             <e p="PathTracker.cs" t="Include" />
           </e>
           <e p="Player" t="Include">
@@ -234,17 +244,30 @@
             <e p="WheelPhysics.cs" t="Include" />
           </e>
           <e p="Police" t="Include">
-            <e p="AITarget.cs" t="Include" />
             <e p="PoliceCarController.cs" t="Include" />
             <e p="PoliceWheels.cs" t="Include" />
           </e>
           <e p="UI" t="Include">
+            <e p="CheckpointIndicator.cs" t="Include" />
+            <e p="gameOver.cs" t="Include" />
             <e p="Main Menu" t="Include">
               <e p="menuBTN.cs" t="Include" />
               <e p="MenuSoundtrackHandler.cs" t="Include" />
             </e>
-            <e p="PauseMenu.cs" t="Include" />
+            <e p="Pause" t="Include">
+              <e p="PauseMenu.cs" t="Include" />
+              <e p="PauseTracker.cs" t="Include" />
+            </e>
             <e p="StoryTypeWriter.cs" t="Include" />
+            <e p="Trackers" t="Include">
+              <e p="KillDisplay.cs" t="Include" />
+              <e p="ProgressTracker" t="Include">
+                <e p="FinishLine.cs" t="Include" />
+                <e p="ProgressDisplay.cs" t="Include" />
+                <e p="ProgressTracker.cs" t="Include" />
+              </e>
+              <e p="TimeTracker.cs" t="Include" />
+            </e>
           </e>
         </e>
         <e p="Sprites" t="Include">

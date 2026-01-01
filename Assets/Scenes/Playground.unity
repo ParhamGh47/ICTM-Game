@@ -38,7 +38,7 @@ RenderSettings:
   m_ReflectionIntensity: 0.432
   m_CustomReflection: {fileID: 0}
   m_Sun: {fileID: 0}
-  m_IndirectSpecularColor: {r: 0.055000965, g: 0.05795162, b: 0.05230593, a: 0.432}
+  m_IndirectSpecularColor: {r: 0.055001155, g: 0.057951752, b: 0.052306, a: 0.432}
   m_UseRadianceAmbientProbe: 0
 --- !u!157 &3
 LightmapSettings:
@@ -404,7 +404,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!224 &42842458
 RectTransform:
   m_ObjectHideFlags: 0
@@ -449,7 +449,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 21300000, guid: 6ed19d12ba95c4341876dca2992a832f, type: 3}
+  m_Sprite: {fileID: 21300000, guid: c79b8ee9069dd9c489e75580cdb20f26, type: 3}
   m_Type: 0
   m_PreserveAspect: 0
   m_FillCenter: 1
@@ -2231,7 +2231,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!224 &112426154
 RectTransform:
   m_ObjectHideFlags: 0
@@ -2292,7 +2292,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 21300000, guid: 6ed19d12ba95c4341876dca2992a832f, type: 3}
+  m_Sprite: {fileID: 21300000, guid: c79b8ee9069dd9c489e75580cdb20f26, type: 3}
   m_Type: 0
   m_PreserveAspect: 0
   m_FillCenter: 1
@@ -43193,7 +43193,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 0.8773585, g: 0.5186899, b: 0.5186899, a: 1}
+  m_Color: {r: 0.9960785, g: 0.45882353, b: 0.73333335, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1

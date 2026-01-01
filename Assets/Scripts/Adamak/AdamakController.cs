@@ -13,6 +13,9 @@ public class AdamakController : MonoBehaviour
     [SerializeField] private Rigidbody parentRigidbody;
     [SerializeField] private Rigidbody[] ragdollRigidbodies;
 
+    [Header("Kill Tracking")]
+    [SerializeField] private KillDisplay killDisplay;
+
     private Transform player;
     private bool isFleeing = false;
     private bool isDead = false;
@@ -74,11 +77,27 @@ public class AdamakController : MonoBehaviour
         if (particlePrefab != null)
         {
             Vector3 spawnPos = transform.position + Vector3.up * particleYOffset;
-            Instantiate(particlePrefab, spawnPos, Quaternion.identity);
+            GameObject particles = Instantiate(particlePrefab, spawnPos, Quaternion.identity);
+
+            ParticleSystem ps = particles.GetComponent<ParticleSystem>();
+            if (ps != null)
+            {
+                Destroy(particles, ps.main.duration + ps.main.startLifetime.constantMax);
+            }
+            else
+            {
+                Destroy(particles, 3f);
+            }
         }
 
         EnableRagdoll(true);
+
+        if (killDisplay != null)
+        {
+            killDisplay.IncrementKills();
+        }
     }
+
 
     private void EnableRagdoll(bool enable)
     {

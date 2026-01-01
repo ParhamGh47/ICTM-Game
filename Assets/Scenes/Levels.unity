@@ -2228,7 +2228,7 @@ MonoBehaviour:
       m_Calls:
       - m_Target: {fileID: 816005327}
         m_TargetAssemblyTypeName: menuBTN, Assembly-CSharp
-        m_MethodName: optionBtn
+        m_MethodName: playType
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}

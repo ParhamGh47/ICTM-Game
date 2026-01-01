@@ -13,6 +13,9 @@ public class CarHorn : MonoBehaviour
 
     void Update()
     {
+        if (PauseTracker.Instance != null && PauseTracker.Instance.isPaused)
+            return;
+
         if (Input.GetKeyDown(KeyCode.H) && Time.time >= nextHonkTime)
         {
             hornSound.Play();

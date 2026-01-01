@@ -15,8 +15,10 @@ public class PauseMenu : MonoBehaviour
 
     void Start()
     {
-        pausePanel.SetActive(false);
-        controlsPanel.SetActive(false);
+        if (pausePanel != null)
+            pausePanel.SetActive(false);
+        if (controlsPanel != null)
+            controlsPanel.SetActive(false);
 
         Time.timeScale = 1f;
         AudioListener.pause = false;
@@ -26,6 +28,9 @@ public class PauseMenu : MonoBehaviour
             pauseMusic.Stop();
             pauseMusic.ignoreListenerPause = true;
         }
+
+        if (PauseTracker.Instance != null)
+            PauseTracker.Instance.isPaused = false;
     }
 
     void Update()
@@ -50,14 +55,21 @@ public class PauseMenu : MonoBehaviour
     void PauseGame()
     {
         isPaused = true;
-        pausePanel.SetActive(true);
-        controlsPanel.SetActive(false);
+        controlsOpen = false;
+
+        if (pausePanel != null)
+            pausePanel.SetActive(true);
+        if (controlsPanel != null)
+            controlsPanel.SetActive(false);
 
         Time.timeScale = 0f;
         AudioListener.pause = true;
 
         if (pauseMusic != null && !pauseMusic.isPlaying)
             pauseMusic.Play();
+
+        if (PauseTracker.Instance != null)
+            PauseTracker.Instance.isPaused = true;
     }
 
     public void ResumeGame()
@@ -65,26 +77,33 @@ public class PauseMenu : MonoBehaviour
         isPaused = false;
         controlsOpen = false;
 
-        pausePanel.SetActive(false);
-        controlsPanel.SetActive(false);
+        if (pausePanel != null)
+            pausePanel.SetActive(false);
+        if (controlsPanel != null)
+            controlsPanel.SetActive(false);
 
         Time.timeScale = 1f;
         AudioListener.pause = false;
 
         if (pauseMusic != null && pauseMusic.isPlaying)
             pauseMusic.Stop();
+
+        if (PauseTracker.Instance != null)
+            PauseTracker.Instance.isPaused = false;
     }
 
     public void OpenControls()
     {
         controlsOpen = true;
-        controlsPanel.SetActive(true);
+        if (controlsPanel != null)
+            controlsPanel.SetActive(true);
     }
 
     public void CloseControls()
     {
         controlsOpen = false;
-        controlsPanel.SetActive(false);
+        if (controlsPanel != null)
+            controlsPanel.SetActive(false);
     }
 
     public void RestartLevel()

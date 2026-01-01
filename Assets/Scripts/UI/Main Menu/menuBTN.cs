@@ -36,6 +36,11 @@ public class menuBTN : MonoBehaviour
         SceneManager.LoadScene("Playground");
     }
 
+        public void playType()
+    {
+        SceneManager.LoadScene("Typewriter");
+    }
+
     #endregion
     
 }

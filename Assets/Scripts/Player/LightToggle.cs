@@ -38,6 +38,9 @@ public class LightToggle : MonoBehaviour
     {
         if (Input.GetKeyDown(KeyCode.L) && Time.time - lastToggleTime >= toggleCooldown)
         {
+            if (PauseTracker.Instance != null && PauseTracker.Instance.isPaused)
+            return;
+
             if (toggleSound != null)
                 toggleSound.Play();
 

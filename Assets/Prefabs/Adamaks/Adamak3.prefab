@@ -14,7 +14,7 @@ PrefabInstance:
       objectReference: {fileID: -6922793697723135513, guid: ad678784176a97545935f6e422f1d2f5, type: 3}
     - target: {fileID: 3923136064189347077, guid: d4525ed0a5d5f714aab479b558afb1d1, type: 3}
       propertyPath: m_Name
-      value: Adamak1 (1)
+      value: Adamak3
       objectReference: {fileID: 0}
     - target: {fileID: 3923136064189347078, guid: d4525ed0a5d5f714aab479b558afb1d1, type: 3}
       propertyPath: m_RootOrder

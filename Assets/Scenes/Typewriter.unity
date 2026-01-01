@@ -38,7 +38,7 @@ RenderSettings:
   m_ReflectionIntensity: 1
   m_CustomReflection: {fileID: 0}
   m_Sun: {fileID: 0}
-  m_IndirectSpecularColor: {r: 0.18028378, g: 0.22571412, b: 0.30692285, a: 1}
+  m_IndirectSpecularColor: {r: 0.18028334, g: 0.22571328, b: 0.3069217, a: 1}
   m_UseRadianceAmbientProbe: 0
 --- !u!157 &3
 LightmapSettings:
@@ -253,7 +253,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 339, y: -405}
+  m_AnchoredPosition: {x: 495, y: -405}
   m_SizeDelta: {x: 208.8819, y: 120.7807}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1070969797
@@ -499,8 +499,8 @@ MonoBehaviour:
       m_Calls: []
   m_text: lorem ipsum
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 2d0505e51269a5d4892c63a10e061fce, type: 2}
-  m_sharedMaterial: {fileID: 7955795402285420711, guid: 2d0505e51269a5d4892c63a10e061fce, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: 5d9ca5d060d66fc43a47e0cec6e394a6, type: 2}
+  m_sharedMaterial: {fileID: 68024296241799011, guid: 5d9ca5d060d66fc43a47e0cec6e394a6, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
@@ -524,13 +524,13 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 70
-  m_fontSizeBase: 70
+  m_fontSize: 60
+  m_fontSizeBase: 60
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
   m_fontSizeMax: 72
-  m_fontStyle: 1
+  m_fontStyle: 0
   m_HorizontalAlignment: 1
   m_VerticalAlignment: 256
   m_textAlignment: 65535
@@ -560,7 +560,7 @@ MonoBehaviour:
   m_VertexBufferAutoSizeReduction: 0
   m_useMaxVisibleDescender: 1
   m_pageToDisplay: 1
-  m_margin: {x: 0, y: 0, z: -318.26404, w: -18.291046}
+  m_margin: {x: 0, y: -2.6524048, z: -275.1338, w: -18.291046}
   m_isUsingLegacyAnimationComponent: 0
   m_isVolumetricText: 0
   m_hasFontAssetChanged: 0
@@ -590,11 +590,12 @@ MonoBehaviour:
   skipMultiplier: 6
   continueButton: {fileID: 1070969797}
   skipButton: {fileID: 1894850818}
-  startText: 'Lorem ipsum dolor sit amet consectetur adipiscing elit. Ex sapien vitae
+  startText: Lorem ipsum dolor sit amet consectetur adipiscing elit. Ex sapien vitae
+    Lorem ipsum dolor sit amet <i>consectetur</i> adipiscing elit. Ex sapien vitae
     pellentesque sem placerat in id. Pretium tellus duis convallis tempus leo eu
     aenean. Urna tempor pulvinar vivamus fringilla lacus nec metus. Iaculis massa
     nisl malesuada lacinia integer nunc posuere. Semper vel class aptent taciti sociosqu
-    ad litora. Conubia nostra '
+    ad litora. Conubia nostra
 --- !u!1 &1624336669
 GameObject:
   m_ObjectHideFlags: 0
@@ -794,7 +795,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 625, y: -405}
+  m_AnchoredPosition: {x: 781, y: -405}
   m_SizeDelta: {x: 208.8819, y: 120.7807}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1894850818
@@ -1071,7 +1072,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: Continue
+  m_Text: Next
 --- !u!222 &1919445661
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -1245,7 +1246,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: Skip
+  m_Text: Continue
 --- !u!222 &2096337723
 CanvasRenderer:
   m_ObjectHideFlags: 0

@@ -1,9 +1,9 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-public class gameOver : MonoBehaviour
+public class GameOver : MonoBehaviour
 {
-    public static gameOver Instance { get; private set; }
+    public static GameOver Instance { get; private set; }
 
     [Header("Panels")]
     [SerializeField] private GameObject gameOverPanel;
@@ -12,17 +12,16 @@ public class gameOver : MonoBehaviour
     [SerializeField] private AudioSource pauseMusic;
 
     private bool isGameOver = false;
+    public bool IsGameOver => isGameOver;
 
     private void Awake()
     {
-        
         if (Instance != null && Instance != this)
         {
             Destroy(gameObject);
             return;
         }
         Instance = this;
-       
     }
 
     private void Start()
@@ -43,10 +42,9 @@ public class gameOver : MonoBehaviour
             PauseTracker.Instance.isPaused = false;
     }
 
-    
     public void ShowGameOver()
     {
-        if (isGameOver) return; 
+        if (isGameOver) return;
         isGameOver = true;
 
         if (gameOverPanel != null)
@@ -62,18 +60,32 @@ public class gameOver : MonoBehaviour
             PauseTracker.Instance.isPaused = true;
     }
 
-   
-   
-
     public void RestartLevel()
-    {   
-        //for test
-        SceneManager.LoadScene("Playground");
-        //SceneManager.LoadScene("Levels");
+    {
+        Time.timeScale = 1f;
+        AudioListener.pause = false;
+
+        if (pauseMusic != null && pauseMusic.isPlaying)
+            pauseMusic.Stop();
+
+        if (PauseTracker.Instance != null)
+            PauseTracker.Instance.isPaused = false;
+
+        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
     }
 
     public void ExitToMenu()
     {
+        Time.timeScale = 1f;
+        AudioListener.pause = false;
+
+        if (pauseMusic != null && pauseMusic.isPlaying)
+            pauseMusic.Stop();
+
+        if (PauseTracker.Instance != null)
+            PauseTracker.Instance.isPaused = false;
+
         SceneManager.LoadScene("Menu");
     }
+
 }

@@ -438,6 +438,134 @@ Transform:
   m_Father: {fileID: 0}
   m_RootOrder: 0
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1091124708
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1091124709}
+  - component: {fileID: 1091124710}
+  m_Layer: 0
+  m_Name: SoundTrack
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1091124709
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1091124708}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 1044.692, y: 496.97894, z: 188.22546}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_RootOrder: 3
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!82 &1091124710
+AudioSource:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1091124708}
+  m_Enabled: 1
+  serializedVersion: 4
+  OutputAudioMixerGroup: {fileID: 0}
+  m_audioClip: {fileID: 8300000, guid: 49a1c15d87230cf419efc9860d281402, type: 3}
+  m_PlayOnAwake: 1
+  m_Volume: 1
+  m_Pitch: 1
+  Loop: 1
+  Mute: 0
+  Spatialize: 0
+  SpatializePostEffects: 0
+  Priority: 128
+  DopplerLevel: 1
+  MinDistance: 1
+  MaxDistance: 500
+  Pan2D: 0
+  rolloffMode: 0
+  BypassEffects: 0
+  BypassListenerEffects: 0
+  BypassReverbZones: 0
+  rolloffCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    - serializedVersion: 3
+      time: 1
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  panLevelCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  spreadCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  reverbZoneMixCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
 --- !u!1 &1600101714
 GameObject:
   m_ObjectHideFlags: 0
@@ -590,12 +718,20 @@ MonoBehaviour:
   skipMultiplier: 6
   continueButton: {fileID: 1070969797}
   skipButton: {fileID: 1894850818}
-  startText: Lorem ipsum dolor sit amet consectetur adipiscing elit. Ex sapien vitae
-    Lorem ipsum dolor sit amet <i>consectetur</i> adipiscing elit. Ex sapien vitae
-    pellentesque sem placerat in id. Pretium tellus duis convallis tempus leo eu
-    aenean. Urna tempor pulvinar vivamus fringilla lacus nec metus. Iaculis massa
-    nisl malesuada lacinia integer nunc posuere. Semper vel class aptent taciti sociosqu
-    ad litora. Conubia nostra
+  startText: "In this Game you play as <b>Mark</b>.\r\n\r\nYou are <b>Mark Stensson</b>.
+    A 26-year-old man living alone in a tiny house. It's been 2 years since you moved
+    in. Although it was hard at first, you adapted quickly.\r\nSometimes you miss
+    the old times\u2014Times without worrying or doubt. You miss playing in the backyard,
+    the ease of lying in the grass as it tickled your hand. You miss everything.\r\nNow,
+    all you have left is your <b>Truck</b>\u2014an <i>Ice Cream Truck</i> that once
+    belonged to your grandpa. After he passed away, no one wanted the poor thing,
+    and it's now yours.\r\nThe Truck is now your only friend since your <i>mom</i>
+    died. You even gave it a name: <b>Walter</b>. Since the refrigerators no longer
+    work and you can't make ice cream, your job is to <i>deliver</i> some things-bags
+    of potatoes and fruit, bottles of soda and juice, sometimes food.\nYou and Walter
+    are always together. After all, it's not hard to feel close to something that
+    is always with you.\r\n\r\nAnother day begins. You change your clothes and prepare
+    your medicine for the night before heading out.\nIt's time to <i>work</i>."
 --- !u!1 &1624336669
 GameObject:
   m_ObjectHideFlags: 0
@@ -770,6 +906,7 @@ GameObject:
   - component: {fileID: 1894850819}
   - component: {fileID: 1894850818}
   - component: {fileID: 1894850821}
+  - component: {fileID: 1894850822}
   m_Layer: 5
   m_Name: skip
   m_TagString: Untagged
@@ -841,7 +978,19 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 1894850819}
   m_OnClick:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 1894850822}
+        m_TargetAssemblyTypeName: LevelOneSceneManager, Assembly-CSharp
+        m_MethodName: Gameplay
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
 --- !u!114 &1894850819
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -895,6 +1044,18 @@ MonoBehaviour:
   m_EffectColor: {r: 0, g: 0, b: 0, a: 0.7058824}
   m_EffectDistance: {x: 7, y: -7}
   m_UseGraphicAlpha: 1
+--- !u!114 &1894850822
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1894850816}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0414ceb8876062d44ae5aa1b38a2bb9e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &1916624449
 GameObject:
   m_ObjectHideFlags: 0

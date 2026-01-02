@@ -35,6 +35,10 @@ public class PauseMenu : MonoBehaviour
 
     void Update()
     {
+        // Prevent pause menu input if game is over
+        if (GameOver.Instance != null && GameOver.Instance.IsGameOver)
+            return;
+
         if (Input.GetKeyDown(KeyCode.Escape))
         {
             if (controlsOpen)

@@ -31,14 +31,14 @@ public class menuBTN : MonoBehaviour
 
     #region Levels
 
+    public void levelOne()
+    {
+        SceneManager.LoadScene("TW-Start-1");
+    }
+
     public void playGround()
     {
         SceneManager.LoadScene("Playground");
-    }
-
-        public void playType()
-    {
-        SceneManager.LoadScene("Typewriter");
     }
 
     #endregion

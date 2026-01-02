@@ -38,7 +38,7 @@ public class TimeTracker : MonoBehaviour
         if (elapsedTime >= targetTimeSeconds)
         {
             isRunning = false;
-            gameOver.Instance.ShowGameOver();
+            GameOver.Instance.ShowGameOver();
         }
     }
 

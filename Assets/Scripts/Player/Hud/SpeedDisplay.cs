@@ -10,7 +10,7 @@ public class SpeedDisplay : MonoBehaviour
 
     [Header("Pointer Settings")]
     public float minZRotation = -15f;
-    public float maxZRotation = -130f;
+    public float maxZRotation = -150f;
     public float maxSpeed = 240f;
 
     void Update()

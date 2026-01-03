@@ -6,6 +6,9 @@ public class ProgressDisplay : MonoBehaviour
     [Header("UI Reference")]
     public Text progressText;
 
+    [Header("Loader")]
+    public LevelLoader loader;
+
     [Header("Kills (optional)")]
     public KillDisplay ks;
 
@@ -20,9 +23,12 @@ public class ProgressDisplay : MonoBehaviour
 
     public void AddProgress(float amount)
     {
-        currentProgress += amount;
-        currentProgress = Mathf.Clamp(currentProgress, 0f, 100f);
-        UpdateDisplay();
+        if (amount > currentProgress)
+        {
+            currentProgress = amount;
+            currentProgress = Mathf.Clamp(currentProgress, 0f, 100f);
+            UpdateDisplay();
+        }
     }
 
     private void UpdateDisplay()
@@ -38,6 +44,7 @@ public class ProgressDisplay : MonoBehaviour
         if (ks != null)
         {
             ks.CheckGameOver();
+            loader.LoadEnd();
         }
     }
 }

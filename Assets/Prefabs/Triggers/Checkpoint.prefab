@@ -112,6 +112,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   progressAmount: 5
   progressDisplay: {fileID: 0}
+  checkpointCompass: {fileID: 0}
 --- !u!1 &2214681332534666673
 GameObject:
   m_ObjectHideFlags: 0
@@ -137,10 +138,10 @@ Transform:
   m_GameObject: {fileID: 2214681332534666673}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 927.87, y: 4.2, z: 36.29}
-  m_LocalScale: {x: 1, y: 9.0372095, z: 21.816679}
+  m_LocalScale: {x: 1, y: 105.99656, z: 95.824356}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 2214681331949017562}
   m_Father: {fileID: 0}
-  m_RootOrder: 16
+  m_RootOrder: 0
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}

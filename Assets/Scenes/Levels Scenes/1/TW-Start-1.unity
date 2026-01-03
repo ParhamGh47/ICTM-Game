@@ -725,13 +725,13 @@ MonoBehaviour:
     the ease of lying in the grass as it tickled your hand. You miss everything.\r\nNow,
     all you have left is your <b>Truck</b>\u2014an <i>Ice Cream Truck</i> that once
     belonged to your grandpa. After he passed away, no one wanted the poor thing,
-    and it's now yours.\r\nThe Truck is now your only friend since your <i>mom</i>
-    died. You even gave it a name: <b>Walter</b>. Since the refrigerators no longer
-    work and you can't make ice cream, your job is to <i>deliver</i> some things-bags
-    of potatoes and fruit, bottles of soda and juice, sometimes food.\nYou and Walter
-    are always together. After all, it's not hard to feel close to something that
-    is always with you.\r\n\r\nAnother day begins. You change your clothes and prepare
-    your medicine for the night before heading out.\nIt's time to <i>work</i>."
+    and it's now yours.\r\nThe Truck is now your only friend now. You even gave it
+    a name: <b>Walter</b>. Since the refrigerators no longer work and you can't make
+    ice cream, your job is to <i>deliver</i> some things-bags of potatoes and fruit,
+    bottles of soda and juice, sometimes food. You and Walter are always together.
+    After all, it's not hard to feel close to something that is always with you.\r\n\r\nAnother
+    day begins. You change your clothes and prepare your medicine for the night before
+    heading out. It's time to <i>work</i>."
 --- !u!1 &1624336669
 GameObject:
   m_ObjectHideFlags: 0
@@ -980,7 +980,7 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls:
       - m_Target: {fileID: 1894850822}
-        m_TargetAssemblyTypeName: LevelOneSceneManager, Assembly-CSharp
+        m_TargetAssemblyTypeName: LevelLoader, Assembly-CSharp
         m_MethodName: Gameplay
         m_Mode: 1
         m_Arguments:
@@ -1053,9 +1053,11 @@ MonoBehaviour:
   m_GameObject: {fileID: 1894850816}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0414ceb8876062d44ae5aa1b38a2bb9e, type: 3}
+  m_Script: {fileID: 11500000, guid: c4b1585b316e7a04989302c57ad9e633, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  gameplaySceneName: Core-1
+  endScene: 
 --- !u!1 &1916624449
 GameObject:
   m_ObjectHideFlags: 0

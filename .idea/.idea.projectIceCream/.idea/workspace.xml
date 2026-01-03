@@ -28,9 +28,10 @@
         <option value="$PROJECT_DIR$/Assets/Scripts/UI/BackButton.cs" />
         <option value="$PROJECT_DIR$/Assets/Scripts/UI/test.cs" />
         <option value="$PROJECT_DIR$/Assets/Scripts/UI/StoryTypeWriter.cs" />
-        <option value="$PROJECT_DIR$/Assets/Scripts/UI/Trackers/TimeTracker.cs" />
-        <option value="$PROJECT_DIR$/Assets/Scripts/UI/Trackers/KillDisplay.cs" />
         <option value="$PROJECT_DIR$/Assets/Scripts/UI/gameOver.cs" />
+        <option value="$PROJECT_DIR$/Assets/Scripts/UI/Trackers/TimeTracker.cs" />
+        <option value="$PROJECT_DIR$/Assets/Scripts/UI/Pause/PauseMenu.cs" />
+        <option value="$PROJECT_DIR$/Assets/Scripts/UI/Trackers/KillDisplay.cs" />
       </list>
     </option>
   </component>

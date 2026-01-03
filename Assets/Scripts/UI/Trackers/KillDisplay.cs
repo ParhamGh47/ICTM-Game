@@ -36,7 +36,7 @@ public class KillDisplay : MonoBehaviour
     {
         if (currentKills != 0 && currentKills < targetKills)
         {
-            GameOver.Instance.ShowGameOver();
+            gameOver.Instance.ShowGameOver();
         }
     }
 }

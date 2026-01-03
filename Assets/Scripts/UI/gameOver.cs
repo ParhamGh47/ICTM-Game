@@ -1,9 +1,9 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-public class GameOver : MonoBehaviour
+public class gameOver : MonoBehaviour
 {
-    public static GameOver Instance { get; private set; }
+    public static gameOver Instance { get; private set; }
 
     [Header("Panels")]
     [SerializeField] private GameObject gameOverPanel;

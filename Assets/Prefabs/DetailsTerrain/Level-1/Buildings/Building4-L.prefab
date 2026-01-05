@@ -43,8 +43,8 @@ BoxCollider:
   m_IsTrigger: 0
   m_Enabled: 1
   serializedVersion: 2
-  m_Size: {x: 7.5197754, y: 31.82566, z: 7.4836426}
-  m_Center: {x: -0.02178955, y: 15.41283, z: -0.05593872}
+  m_Size: {x: 7.279785, y: 31.82566, z: 7.4836426}
+  m_Center: {x: 0.09820557, y: 15.41283, z: -0.05593872}
 --- !u!1 &9191085234140275888
 GameObject:
   m_ObjectHideFlags: 0
@@ -101,7 +101,7 @@ LODGroup:
     fadeTransitionWidth: 0
     renderers:
     - renderer: {fileID: 370065814246925714}
-  - screenRelativeHeight: 0.02
+  - screenRelativeHeight: 0
     fadeTransitionWidth: 0
     renderers:
     - renderer: {fileID: 370065814246925714}

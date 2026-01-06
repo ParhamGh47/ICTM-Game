@@ -38,7 +38,7 @@ RenderSettings:
   m_ReflectionIntensity: 0.432
   m_CustomReflection: {fileID: 0}
   m_Sun: {fileID: 0}
-  m_IndirectSpecularColor: {r: 0.22549935, g: 0.21575572, b: 0.12940408, a: 0.432}
+  m_IndirectSpecularColor: {r: 0.2254986, g: 0.21575499, b: 0.12940358, a: 0.432}
   m_UseRadianceAmbientProbe: 0
 --- !u!157 &3
 LightmapSettings:
@@ -74125,8 +74125,8 @@ Transform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1262020872}
-  m_LocalRotation: {x: 0.20985529, y: 0, z: 0, w: 0.9777325}
-  m_LocalPosition: {x: 967.33, y: 1.041, z: 50.43}
+  m_LocalRotation: {x: -0.000000009173066, y: 0.9777325, z: -0.20985529, w: -0.000000042738044}
+  m_LocalPosition: {x: 967.33, y: 1.041, z: 54.43}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -137378,7 +137378,7 @@ Rigidbody:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2132544014}
   serializedVersion: 2
-  m_Mass: 5000
+  m_Mass: 10000
   m_Drag: 0
   m_AngularDrag: 0.05
   m_UseGravity: 1
@@ -137403,10 +137403,10 @@ MonoBehaviour:
   frontRightWheel: {fileID: 1833795476}
   rearLeftWheel: {fileID: 1674871218}
   rearRightWheel: {fileID: 1356070246}
-  wheelRadius: 0.06
+  wheelRadius: 0.2
   restLength: 0.25
   springTravel: 0.3
-  springStiffness: 80000
+  springStiffness: 140000
   damperStiffness: 20000
   maxSteerAngle: 25
   minSteerPercent: 0.2

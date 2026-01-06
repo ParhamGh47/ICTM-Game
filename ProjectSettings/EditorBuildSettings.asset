@@ -32,4 +32,13 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/Levels Scenes/1/TW-End-1.unity
     guid: c73d7e81ab780a74d9439d320364a75a
+  - enabled: 1
+    path: Assets/Scenes/Levels Scenes/2/Core-2.unity
+    guid: 56d6ec187ec3d3942b3ceef9da7fd34a
+  - enabled: 1
+    path: Assets/Scenes/Levels Scenes/2/TW-Start-2.unity
+    guid: bd0b47152fd63114faf35ae9b3f3e7fe
+  - enabled: 1
+    path: Assets/Scenes/Levels Scenes/2/TW-End-2.unity
+    guid: f90828c95ad66764881d3a289c09adfc
   m_configObjects: {}

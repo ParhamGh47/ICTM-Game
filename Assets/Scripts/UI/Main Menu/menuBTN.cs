@@ -36,9 +36,9 @@ public class menuBTN : MonoBehaviour
         SceneManager.LoadScene("TW-Start-1");
     }
 
-    public void playGround()
+    public void levelTwo()
     {
-        SceneManager.LoadScene("Playground");
+        SceneManager.LoadScene("TW-Start-2");
     }
 
     #endregion

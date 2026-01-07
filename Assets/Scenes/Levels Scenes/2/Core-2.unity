@@ -537,7 +537,10 @@ PrefabInstance:
       value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
-    m_AddedGameObjects: []
+    m_AddedGameObjects:
+    - targetCorrespondingSourceObject: {fileID: 8216069434134235312, guid: b33661988ae95f84ca7edb2885e86146, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1841501919}
   m_SourcePrefab: {fileID: 100100000, guid: b33661988ae95f84ca7edb2885e86146, type: 3}
 --- !u!43 &21585714
 Mesh:
@@ -17770,6 +17773,37 @@ Mesh:
     offset: 0
     size: 0
     path: 
+--- !u!1 &1041628468
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1041628469}
+  m_Layer: 0
+  m_Name: Area
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1041628469
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1041628468}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1841501919}
+  m_RootOrder: -1
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!43 &1044343182
 Mesh:
   m_ObjectHideFlags: 0
@@ -26872,8 +26906,8 @@ Transform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1262020872}
-  m_LocalRotation: {x: 0.15166786, y: 0, z: 0, w: 0.9884315}
-  m_LocalPosition: {x: 780.5, y: 1.241, z: 23.8}
+  m_LocalRotation: {x: 0.20577289, y: 0, z: 0, w: 0.9785998}
+  m_LocalPosition: {x: 780.5, y: 1.241, z: 24.8}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -38526,6 +38560,61 @@ Mesh:
     offset: 0
     size: 0
     path: 
+--- !u!1 &1841501917
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1841501919}
+  - component: {fileID: 1841501920}
+  m_Layer: 0
+  m_Name: IceCreamSpawner
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1841501919
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1841501917}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 4.09, z: 11.27}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 1041628469}
+  m_Father: {fileID: 1714265991}
+  m_RootOrder: -1
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1841501920
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1841501917}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e2079f2a44cff0544b2f1b043fcf0ed5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  particlePrefabs:
+  - {fileID: 8815678699535104187, guid: 9cc7b6c71eddbcc4ca504e5bca5cadd0, type: 3}
+  - {fileID: 8815678699535104187, guid: 84fed5a0c5e3f37428cbab910487b415, type: 3}
+  - {fileID: 8815678699535104187, guid: 12d7bdc017cf09a48ae39c106f2e0580, type: 3}
+  - {fileID: 7195237445975302480, guid: e034031f129cdcc44bb54633a4eb00cc, type: 3}
+  - {fileID: 7195237445975302480, guid: c5def6bfc4160234d8d7a73970e8052a, type: 3}
+  - {fileID: 7195237445975302480, guid: b5e6dea9d18a4f6408d5754cd2cbc9e7, type: 3}
+  spawnArea: {fileID: 1041628469}
+  spawnSize: {x: 12, y: 25}
+  levelDuration: 160
 --- !u!43 &1842387226
 Mesh:
   m_ObjectHideFlags: 0

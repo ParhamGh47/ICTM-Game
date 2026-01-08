@@ -8,7 +8,6 @@ public class IceCreamSpawner : MonoBehaviour
     [Header("Spawn Area")]
     public Transform spawnArea;
 
-    // 🔹 Rectangle size (X/Z)
     public Vector2 spawnSize = new Vector2(4f, 4f);
 
     [Header("Level Timing")]
@@ -39,14 +38,14 @@ public class IceCreamSpawner : MonoBehaviour
     {
         if (time < 10f) return -1f;
 
-        if (time < 45f) return 1f;
-        if (time < 70f) return 0.8f;
-        if (time < 90f) return 0.6f;
-        if (time < 105f) return 0.4f;
-        if (time < 120f) return 0.2f;
-        if (time < 145f) return 0.1f;
+        if (time < 45f) return 0.8f;
+        if (time < 70f) return 0.6f;
+        if (time < 90f) return 0.4f;
+        if (time < 105f) return 0.2f;
+        if (time < 120f) return 0.1f;
+        if (time < 145f) return 0.05f;
 
-        return 0.05f;
+        return 0.02f;
     }
 
     void SpawnParticle()
@@ -56,7 +55,6 @@ public class IceCreamSpawner : MonoBehaviour
         GameObject prefab =
             particlePrefabs[Random.Range(0, particlePrefabs.Length)];
 
-        // 🔹 Random point inside rectangle
         float x = Random.Range(-spawnSize.x * 0.5f, spawnSize.x * 0.5f);
         float z = Random.Range(-spawnSize.y * 0.5f, spawnSize.y * 0.5f);
 
@@ -65,7 +63,6 @@ public class IceCreamSpawner : MonoBehaviour
         Instantiate(prefab, spawnPos, Quaternion.identity);
     }
 
-    // 🔹 RECTANGLE DEBUG GIZMO
     void OnDrawGizmosSelected()
     {
         if (spawnArea == null) return;

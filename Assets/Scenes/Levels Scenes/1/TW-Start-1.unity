@@ -480,7 +480,7 @@ AudioSource:
   m_Enabled: 1
   serializedVersion: 4
   OutputAudioMixerGroup: {fileID: 0}
-  m_audioClip: {fileID: 8300000, guid: 49a1c15d87230cf419efc9860d281402, type: 3}
+  m_audioClip: {fileID: 8300000, guid: 85798e7b59e19384e8e8d442a234dfce, type: 3}
   m_PlayOnAwake: 1
   m_Volume: 1
   m_Pitch: 1
@@ -727,8 +727,8 @@ MonoBehaviour:
     belonged to your grandpa. After he passed away, no one wanted the poor thing,
     and it's now yours.\r\nThe Truck is now your only friend now. You even gave it
     a name: <b>Walter</b>. Since the refrigerators no longer work and you can't make
-    ice cream, your job is to <i>deliver</i> some things-bags of potatoes and fruit,
-    bottles of soda and juice, sometimes food. You and Walter are always together.
+    ice cream, your job is to <i>deliver</i> some things\u2014bags of potatoes and
+    fruit, bottles of soda and juice, sometimes food. You and Walter are always together.
     After all, it's not hard to feel close to something that is always with you.\r\n\r\nAnother
     day begins. You change your clothes and prepare your medicine for the night before
     heading out. It's time to <i>work</i>."

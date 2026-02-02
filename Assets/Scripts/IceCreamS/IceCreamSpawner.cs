@@ -38,12 +38,12 @@ public class IceCreamSpawner : MonoBehaviour
     {
         if (time < 10f) return -1f;
 
-        if (time < 45f) return 0.8f;
-        if (time < 70f) return 0.6f;
-        if (time < 90f) return 0.4f;
-        if (time < 105f) return 0.2f;
-        if (time < 120f) return 0.1f;
-        if (time < 145f) return 0.05f;
+        if (time < 45f) return 0.2f;
+        if (time < 70f) return 0.08f;
+        if (time < 90f) return 0.04f;
+        if (time < 105f) return 0.01f;
+        if (time < 120f) return 0.005f;
+        if (time < 145f) return 0.002f;
 
         return 0.02f;
     }

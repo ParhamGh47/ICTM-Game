@@ -38,7 +38,7 @@ RenderSettings:
   m_ReflectionIntensity: 0.432
   m_CustomReflection: {fileID: 0}
   m_Sun: {fileID: 0}
-  m_IndirectSpecularColor: {r: 0.15235443, g: 0.14429875, b: 0.14748047, a: 0.432}
+  m_IndirectSpecularColor: {r: 0.15235373, g: 0.14429787, b: 0.14747979, a: 0.432}
   m_UseRadianceAmbientProbe: 0
 --- !u!157 &3
 LightmapSettings:
@@ -27856,8 +27856,8 @@ Transform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1262020872}
-  m_LocalRotation: {x: 0.20985529, y: 0, z: 0, w: 0.9777325}
-  m_LocalPosition: {x: 780.5, y: 1.041, z: 25.3}
+  m_LocalRotation: {x: 0.20577289, y: 0, z: 0, w: 0.9785998}
+  m_LocalPosition: {x: 780.5, y: 1.241, z: 24.8}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -40137,7 +40137,7 @@ MonoBehaviour:
   - {fileID: 7195237445975302480, guid: c5def6bfc4160234d8d7a73970e8052a, type: 3}
   - {fileID: 7195237445975302480, guid: b5e6dea9d18a4f6408d5754cd2cbc9e7, type: 3}
   spawnArea: {fileID: 1041628469}
-  spawnSize: {x: 30, y: 30}
+  spawnSize: {x: 35, y: 35}
   levelDuration: 160
 --- !u!43 &1842387226
 Mesh:

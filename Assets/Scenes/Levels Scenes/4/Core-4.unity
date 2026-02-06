@@ -23615,6 +23615,14 @@ PrefabInstance:
       propertyPath: m_SpotAngle
       value: 100
       objectReference: {fileID: 0}
+    - target: {fileID: 3815330352313960673, guid: cde5d51946e661044a747e577c65971a, type: 3}
+      propertyPath: baseVolume
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3815330352313960673, guid: cde5d51946e661044a747e577c65971a, type: 3}
+      propertyPath: engineVolumeMultiplier
+      value: 3
+      objectReference: {fileID: 0}
     - target: {fileID: 3815330352704501216, guid: cde5d51946e661044a747e577c65971a, type: 3}
       propertyPath: m_Name
       value: Truck
@@ -46351,8 +46359,8 @@ Transform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1262020872}
-  m_LocalRotation: {x: 0.05313217, y: 0.9458759, z: -0.20301758, w: 0.24754722}
-  m_LocalPosition: {x: 74.50226, y: 3.112, z: 933.7196}
+  m_LocalRotation: {x: 0.1774604, y: 0.6900111, z: -0.678072, w: 0.18058503}
+  m_LocalPosition: {x: 75.482, y: 4.212, z: 931.976}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -77060,6 +77068,18 @@ PrefabInstance:
       propertyPath: reverseSound
       value: 
       objectReference: {fileID: 565592018}
+    - target: {fileID: 5259838745441529802, guid: 9de7ea8ebea5b664bb865e6f78009de3, type: 3}
+      propertyPath: instantCutThreshold
+      value: 5
+      objectReference: {fileID: 0}
+    - target: {fileID: 5259838745441529802, guid: 9de7ea8ebea5b664bb865e6f78009de3, type: 3}
+      propertyPath: reverseSpeedThreshold
+      value: 20
+      objectReference: {fileID: 0}
+    - target: {fileID: 5259838745441529802, guid: 9de7ea8ebea5b664bb865e6f78009de3, type: 3}
+      propertyPath: reverseToForwardDelay
+      value: 0.8
+      objectReference: {fileID: 0}
     - target: {fileID: 5259838745475480382, guid: 9de7ea8ebea5b664bb865e6f78009de3, type: 3}
       propertyPath: m_LocalPosition.x
       value: -904.24207

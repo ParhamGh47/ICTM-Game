@@ -38,7 +38,7 @@ RenderSettings:
   m_ReflectionIntensity: 1
   m_CustomReflection: {fileID: 0}
   m_Sun: {fileID: 0}
-  m_IndirectSpecularColor: {r: 0.18028378, g: 0.22571412, b: 0.30692285, a: 1}
+  m_IndirectSpecularColor: {r: 0.18028334, g: 0.22571328, b: 0.3069217, a: 1}
   m_UseRadianceAmbientProbe: 0
 --- !u!157 &3
 LightmapSettings:
@@ -720,10 +720,10 @@ MonoBehaviour:
   skipButton: {fileID: 1894850818}
   startText: 'Or maybe it isn''t.
 
-    You''re gasping as you close the door behind
+    You''re gasping as you slam the door behind
     you.
 
-    Breathing heavily as you run towards the kitchen for some water.
+    Breathing heavily, you run towards the kitchen for some water.
 
     ...
 
@@ -734,35 +734,45 @@ MonoBehaviour:
     You''re
     scared.
 
-    Questions circling your head like a tornado, Thoughts raid your
-    brain like a storm.
+    Questions spiral through your mind like a tornado, Thoughts raid
+    your brain like a storm.
 
     Did you actually... kill someone?
 
     It couldn''t
-    be real. No it''s not.
+    be real.
 
-    But it seemed real enough.
+    No it''s not.
+
+    But it felt real enough.
 
     No. No. No...
+
+    
 
     "What
     should I do?"
 
     You ask yourself.
 
-    You know what''s wrong.
+    
 
-    At first
-    it was <i>ice creams</i> that were falling from the sky and now...
+    You know something is wrong.
 
-    And now
+    At
+    first it was <i>ice creams</i> falling from the sky.
+
+    And now...
+
+    Now
     this.
 
-    You should''ve taken your <b>pills</b>.
+    
 
-    It''s the only explanation;
-    isn''t it?
+    You should have taken your <b>pills</b>.
+
+    It''s the only
+    explanation; isn''t it?
 
     ...
 
@@ -770,25 +780,29 @@ MonoBehaviour:
 
     But now what?
 
-    The feeling of cold sweat
-    as you''re struggling to find an answer.
+    Cold sweat
+    runs down your skin as you struggle to find an answer.
 
     This has to stop.
 
-    "Be brave,
-    Mark.
+    "Be
+    brave, Mark." You whisper
 
-    Be brave."
+    "Be brave."
+
+    
 
     You gather your strength.
 
-    It''s time to end this
-    right now.
+    It''s
+    time to end this, right now.
 
-    ...
+    
 
-    You quickly grab your pills, swallowing as many as you
-    can while you''re whispering to yourself:
+    You grab the bottle, hands trembling,
+    and swallow pill after pill after pill.
+
+    
 
     "This has to stop"
 
@@ -799,13 +813,13 @@ MonoBehaviour:
 
     You''re nervous.
 
-    There''s no need to be worried.
-    You took more than enough pills. The effects will appear soon.
+    But there''s no need to worry.
+    You took more than enough. The effects will come soon.
 
-    You will
-    be fine.
+    You''ll be fine.
 
-    You fall asleep.'
+    You
+    fall asleep.'
 --- !u!1 &1624336669
 GameObject:
   m_ObjectHideFlags: 0

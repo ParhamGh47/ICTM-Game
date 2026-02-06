@@ -40763,7 +40763,7 @@ AudioSource:
   OutputAudioMixerGroup: {fileID: 0}
   m_audioClip: {fileID: 8300000, guid: ecbf82d48a5211548bdb2a7eca8b332c, type: 3}
   m_PlayOnAwake: 1
-  m_Volume: 0.7
+  m_Volume: 0.65
   m_Pitch: 1
   Loop: 1
   Mute: 0
@@ -50232,6 +50232,11 @@ Mesh:
     offset: 0
     size: 0
     path: 
+--- !u!1 &839970583 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 5259838745664698383, guid: 9de7ea8ebea5b664bb865e6f78009de3, type: 3}
+  m_PrefabInstance: {fileID: 5259838745509833887}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1001 &842319070
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -138169,6 +138174,14 @@ PrefabInstance:
       propertyPath: m_Type
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 3815330352313960673, guid: cde5d51946e661044a747e577c65971a, type: 3}
+      propertyPath: baseVolume
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3815330352313960673, guid: cde5d51946e661044a747e577c65971a, type: 3}
+      propertyPath: engineVolumeMultiplier
+      value: 3
+      objectReference: {fileID: 0}
     - target: {fileID: 3815330352704501216, guid: cde5d51946e661044a747e577c65971a, type: 3}
       propertyPath: m_Name
       value: Truck
@@ -138316,6 +138329,30 @@ PrefabInstance:
       propertyPath: reverseSound
       value: 
       objectReference: {fileID: 448325473}
+    - target: {fileID: 5259838745441529802, guid: 9de7ea8ebea5b664bb865e6f78009de3, type: 3}
+      propertyPath: Cameras.Array.size
+      value: 6
+      objectReference: {fileID: 0}
+    - target: {fileID: 5259838745441529802, guid: 9de7ea8ebea5b664bb865e6f78009de3, type: 3}
+      propertyPath: instantCutThreshold
+      value: 5
+      objectReference: {fileID: 0}
+    - target: {fileID: 5259838745441529802, guid: 9de7ea8ebea5b664bb865e6f78009de3, type: 3}
+      propertyPath: Cameras.Array.data[4]
+      value: 
+      objectReference: {fileID: 839970583}
+    - target: {fileID: 5259838745441529802, guid: 9de7ea8ebea5b664bb865e6f78009de3, type: 3}
+      propertyPath: forwardToReverseDelay
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 5259838745441529802, guid: 9de7ea8ebea5b664bb865e6f78009de3, type: 3}
+      propertyPath: reverseSpeedThreshold
+      value: 20
+      objectReference: {fileID: 0}
+    - target: {fileID: 5259838745441529802, guid: 9de7ea8ebea5b664bb865e6f78009de3, type: 3}
+      propertyPath: reverseToForwardDelay
+      value: 0.8
+      objectReference: {fileID: 0}
     - target: {fileID: 5259838745475480382, guid: 9de7ea8ebea5b664bb865e6f78009de3, type: 3}
       propertyPath: m_LocalPosition.x
       value: -13.373779

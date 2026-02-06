@@ -28,10 +28,13 @@ public class EngineAudio : MonoBehaviour
     );
 
     [Header("Engine Volume Envelope")]
-    [Range(0f, 1f)] public float baseVolume = 0.6f;
+    [Range(0f, 1f)] public float baseVolume = 1f;
     [Range(0f, 1f)] public float dipPercent = 0.5f;
     public float dipDuration = 0.2f;
     public float recoveryDuration = 0.55f;
+
+    [Header("Master Engine Volume Multiplier")]
+    [Range(0f, 3f)] public float engineVolumeMultiplier = 3f;
 
     [Header("Engine RPM")]
     public float idleRPM = 800f;
@@ -81,7 +84,7 @@ public class EngineAudio : MonoBehaviour
         engineSource.loop = true;
         engineSource.playOnAwake = false;
         engineSource.spatialBlend = 1f;
-        engineSource.volume = baseVolume;
+        engineSource.volume = baseVolume * engineVolumeMultiplier;
         engineSource.Play();
 
         loopLength = engineSource.clip.length;
@@ -183,7 +186,9 @@ public class EngineAudio : MonoBehaviour
                 volumeEnvelope = 1f;
                 break;
         }
-        engineSource.volume = baseVolume * volumeEnvelope;
+
+        // <-- APPLY MASTER VOLUME MULTIPLIER
+        engineSource.volume = baseVolume * volumeEnvelope * engineVolumeMultiplier;
     }
 
     private void UpdateEngineRPM()

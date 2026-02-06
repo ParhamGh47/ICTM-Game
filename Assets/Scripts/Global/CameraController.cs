@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections;
+using Cinemachine;
 
 public class CameraController : MonoBehaviour
 {
@@ -19,7 +20,8 @@ public class CameraController : MonoBehaviour
     private bool boostActive = false;
 
     [Header("Reverse Camera Settings")]
-    public float reverseSpeedThreshold = 5f;
+    public float reverseSpeedThreshold = 20f;
+    public float instantCutThreshold = 10f;
     public float forwardToReverseDelay = 1.5f;
     public float reverseToForwardDelay = 1f;
 
@@ -39,10 +41,10 @@ public class CameraController : MonoBehaviour
 
     private void UpdateCameraBasedOnCar()
     {
-        float speed = car.currentSpeedKPH;
         float throttle = car.throttleInput;
+        float forwardSpeed = Vector3.Dot(car.rb.velocity, car.transform.forward) * 3.6f;
 
-        int targetCam = DetermineCamera(speed, throttle);
+        int targetCam = DetermineCamera(forwardSpeed, throttle);
 
         if (targetCam == currentCam)
             return;
@@ -50,25 +52,25 @@ public class CameraController : MonoBehaviour
         bool forwardToReverse = currentCam != 3 && targetCam == 3;
         bool reverseToForward = currentCam == 3 && targetCam != 3;
 
+        if ((forwardToReverse || reverseToForward) && Mathf.Abs(forwardSpeed) < instantCutThreshold)
+        {
+            ForceInstantCut(targetCam);
+            return;
+        }
+
         if (forwardToReverse)
-        {
             StartCoroutine(TransitionAbove(3, forwardToReverseDelay));
-        }
         else if (reverseToForward)
-        {
             StartCoroutine(TransitionAbove(targetCam, reverseToForwardDelay));
-        }
         else
-        {
             ActivateCamera(targetCam);
-        }
     }
 
-    private int DetermineCamera(float speed, float throttle)
+    private int DetermineCamera(float forwardSpeed, float throttle)
     {
         if (throttle < -0.8f)
         {
-            if (speed < reverseSpeedThreshold)
+            if (Mathf.Abs(forwardSpeed) < reverseSpeedThreshold)
             {
                 if (!isTransitioning || currentCam == 3)
                     reverseSound.SoundReverse();
@@ -77,7 +79,9 @@ public class CameraController : MonoBehaviour
             }
             else
             {
-                if (currentCam != 3) reverseSound.StopReverse();
+                if (currentCam != 3)
+                    reverseSound.StopReverse();
+
                 return currentCam;
             }
         }
@@ -87,10 +91,10 @@ public class CameraController : MonoBehaviour
                 reverseSound.StopReverse();
         }
 
-        bool hardBrake = throttle < -0.1f && speed > 30f;
+        bool hardBrake = throttle < -0.1f && forwardSpeed > 30f;
         if (hardBrake) return 2;
 
-        if (speed < 30f) return 0;
+        if (forwardSpeed < 30f) return 0;
 
         return 1;
     }
@@ -134,6 +138,30 @@ public class CameraController : MonoBehaviour
         for (int i = 0; i < Cameras.Length; i++)
         {
             Cameras[i].SetActive(i == index);
+
+            var vcam = Cameras[i].GetComponent<CinemachineVirtualCamera>();
+            if (vcam != null)
+                vcam.Priority = (i == index) ? 1000 : 0;
         }
     }
+
+    private void ForceInstantCut(int index)
+    {
+        currentCam = index;
+
+        for (int i = 0; i < Cameras.Length; i++)
+        {
+            var vcam = Cameras[i].GetComponent<CinemachineVirtualCamera>();
+            if (vcam != null)
+                vcam.Priority = (i == index) ? 1000 : 0;
+
+            Cameras[i].SetActive(i == index);
+        }
+
+        if (index == 3)
+            reverseSound.SoundReverse();
+        else
+            reverseSound.StopReverse();
+    }
+
 }

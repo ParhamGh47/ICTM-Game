@@ -536,6 +536,14 @@ PrefabInstance:
       propertyPath: m_IsActive
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 8216069434750743984, guid: b33661988ae95f84ca7edb2885e86146, type: 3}
+      propertyPath: baseVolume
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 8216069434750743984, guid: b33661988ae95f84ca7edb2885e86146, type: 3}
+      propertyPath: engineVolumeMultiplier
+      value: 3
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_AddedGameObjects:
     - targetCorrespondingSourceObject: {fileID: 8216069434134235312, guid: b33661988ae95f84ca7edb2885e86146, type: 3}
@@ -4370,7 +4378,7 @@ AudioSource:
   OutputAudioMixerGroup: {fileID: 0}
   m_audioClip: {fileID: 8300000, guid: 7a8d6d3fadaf8e24f82ed1e48602e527, type: 3}
   m_PlayOnAwake: 1
-  m_Volume: 0.7
+  m_Volume: 0.65
   m_Pitch: 1
   Loop: 1
   Mute: 0
@@ -27856,8 +27864,8 @@ Transform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1262020872}
-  m_LocalRotation: {x: 0.20577289, y: 0, z: 0, w: 0.9785998}
-  m_LocalPosition: {x: 780.5, y: 1.241, z: 24.8}
+  m_LocalRotation: {x: 0.20985529, y: 0, z: 0, w: 0.9777325}
+  m_LocalPosition: {x: 780.5, y: 1.041, z: 25.3}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -45688,6 +45696,18 @@ PrefabInstance:
       propertyPath: reverseSound
       value: 
       objectReference: {fileID: 619900989}
+    - target: {fileID: 5259838745441529802, guid: 9de7ea8ebea5b664bb865e6f78009de3, type: 3}
+      propertyPath: instantCutThreshold
+      value: 5
+      objectReference: {fileID: 0}
+    - target: {fileID: 5259838745441529802, guid: 9de7ea8ebea5b664bb865e6f78009de3, type: 3}
+      propertyPath: reverseSpeedThreshold
+      value: 20
+      objectReference: {fileID: 0}
+    - target: {fileID: 5259838745441529802, guid: 9de7ea8ebea5b664bb865e6f78009de3, type: 3}
+      propertyPath: reverseToForwardDelay
+      value: 0.8
+      objectReference: {fileID: 0}
     - target: {fileID: 5259838745475480382, guid: 9de7ea8ebea5b664bb865e6f78009de3, type: 3}
       propertyPath: m_LocalPosition.x
       value: -200.2038

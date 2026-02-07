@@ -165,3 +165,6 @@ public class CameraController : MonoBehaviour
     }
 
 }
+
+
+    // (componentBase as Cinemachine3rdPersonFollow).CameraDistance = cameraDistanceValue;

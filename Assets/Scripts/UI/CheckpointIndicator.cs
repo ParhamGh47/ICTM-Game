@@ -10,7 +10,7 @@ public class CheckpointIndicator : MonoBehaviour
 
     public Transform[] checkpoints;
 
-    public Graphic wrongWayUI;
+    // public Graphic wrongWayUI;
 
     public float wrongWayAngleThreshold = 100f;
 
@@ -35,8 +35,8 @@ public class CheckpointIndicator : MonoBehaviour
         arrowImage.transform.rotation = Quaternion.Euler(0f, 0f, -angle);
 
         bool isWrongWay = Mathf.Abs(angle) > wrongWayAngleThreshold;
-        if (wrongWayUI != null)
-            wrongWayUI.gameObject.SetActive(isWrongWay);
+        // if (wrongWayUI != null)
+        //     wrongWayUI.gameObject.SetActive(isWrongWay);
     }
 
     public void NextCheckpoint()

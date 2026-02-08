@@ -31,7 +31,6 @@ public class StoryTypeWriter : MonoBehaviour
     {
         tmp = GetComponent<TMP_Text>();
 
-        // مهم: برای صفحه‌بندی
         tmp.overflowMode = TextOverflowModes.Page;
         tmp.enableWordWrapping = true;
 
@@ -47,7 +46,6 @@ public class StoryTypeWriter : MonoBehaviour
             SetText(startText);
     }
 
-    /// <summary>متن جدید بده (از بیرون هم می‌تونی صدا بزنی)</summary>
     public void SetText(string fullText)
     {
         StopTyping();
@@ -55,7 +53,6 @@ public class StoryTypeWriter : MonoBehaviour
         tmp.text = fullText ?? "";
         tmp.maxVisibleCharacters = 0;
 
-        // تولید اطلاعات صفحه‌ها
         tmp.ForceMeshUpdate();
 
         totalPages = Mathf.Max(1, tmp.textInfo.pageCount);
@@ -68,18 +65,15 @@ public class StoryTypeWriter : MonoBehaviour
     {
         StopTyping();
 
-        // اطمینان از آپدیت شدن pageInfo
         tmp.pageToDisplay = page;
         tmp.ForceMeshUpdate();
 
         currentPage = Mathf.Clamp(page, 1, totalPages);
 
-        // محدودۀ کاراکترهای همین صفحه
         var pageInfo = tmp.textInfo.pageInfo[currentPage - 1];
         int first = pageInfo.firstCharacterIndex;
         int last = pageInfo.lastCharacterIndex;
 
-        // اگر صفحه خالی بود:
         if (last < first || last < 0)
         {
             tmp.maxVisibleCharacters = tmp.textInfo.characterCount;
@@ -88,7 +82,6 @@ public class StoryTypeWriter : MonoBehaviour
             return;
         }
 
-        // از اول این صفحه شروع کن
         tmp.maxVisibleCharacters = first;
         isTyping = true;
 
@@ -98,10 +91,8 @@ public class StoryTypeWriter : MonoBehaviour
 
     private IEnumerator TypePageCoroutine(int first, int last)
     {
-        // سرعت امن: صفر نباشه
         float baseDelay = 1f / Mathf.Max(1f, charactersPerSecond);
 
-        // تا آخرین کاراکتر این صفحه تایپ کن
         for (int i = first; i <= last; i++)
         {
             tmp.maxVisibleCharacters = i + 1;
@@ -113,7 +104,6 @@ public class StoryTypeWriter : MonoBehaviour
         isTyping = false;
         typingCo = null;
 
-        // وقتی صفحه تموم شد، اگر صفحه بعدی هست Continue فعال شه
         SetContinueInteractable(currentPage < totalPages);
     }
 
@@ -127,7 +117,6 @@ public class StoryTypeWriter : MonoBehaviour
         isTyping = false;
     }
 
-    /// <summary>Continue: اگر در حال تایپ هست، همین صفحه رو سریع تا آخر نشون بده. اگر تموم شده، برو صفحه بعد.</summary>
     public void OnContinueClicked()
     {
         if (tmp == null) return;
@@ -137,7 +126,6 @@ public class StoryTypeWriter : MonoBehaviour
 
         if (isTyping)
         {
-            // سریع صفحه جاری رو کامل کن
             var pageInfo = tmp.textInfo.pageInfo[currentPage - 1];
             int last = pageInfo.lastCharacterIndex;
             tmp.maxVisibleCharacters = Mathf.Max(tmp.maxVisibleCharacters, last + 1);
@@ -149,7 +137,6 @@ public class StoryTypeWriter : MonoBehaviour
 
         if (currentPage < totalPages)
         {
-            // حس "پاک شدن صفحه قبل" با PageToDisplay انجام میشه (صفحه قبلی نمایش داده نمیشه)
             StartTypingPage(currentPage + 1);
         }
         else
@@ -158,13 +145,9 @@ public class StoryTypeWriter : MonoBehaviour
         }
     }
 
-    /// <summary>Skip: سرعت تایپ رو زیاد/کم می‌کنه (Toggle)</summary>
     public void OnSkipClicked()
     {
         skipActive = !skipActive;
-
-        // اگر دوست داری ظاهر دکمه تغییر کنه، اینجا می‌تونی رنگ/متن رو عوض کنی
-        // مثلا: skipButton.GetComponentInChildren<TMP_Text>().text = skipActive ? "SKIP: ON" : "SKIP";
     }
 
     private void SetContinueInteractable(bool value)

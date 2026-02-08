@@ -8,7 +8,7 @@ public class gameOver : MonoBehaviour
     [Header("Panels")]
     [SerializeField] private GameObject gameOverPanel;
 
-    [Header("Pause Music (optional)")]
+    [Header("Pause Music")]
     [SerializeField] private AudioSource pauseMusic;
 
     private bool isGameOver = false;

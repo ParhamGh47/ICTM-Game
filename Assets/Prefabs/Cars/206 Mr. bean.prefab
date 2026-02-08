@@ -25,7 +25,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 6977000078699580704}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0.009, z: 0.016495}
+  m_LocalPosition: {x: 0, y: 0.165, z: 0.016495}
   m_LocalScale: {x: 0.57113045, y: 0.30604553, z: 1.4065218}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -154,7 +154,7 @@ GameObject:
   - component: {fileID: 6977000079694909198}
   - component: {fileID: 6977000079694909199}
   m_Layer: 0
-  m_Name: 207
+  m_Name: 206 Mr. bean
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -186,14 +186,14 @@ Rigidbody:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 6977000079694909200}
   serializedVersion: 2
-  m_Mass: 6500
+  m_Mass: 10000
   m_Drag: 0
   m_AngularDrag: 0.05
   m_UseGravity: 1
   m_IsKinematic: 0
-  m_Interpolate: 1
+  m_Interpolate: 0
   m_Constraints: 0
-  m_CollisionDetection: 2
+  m_CollisionDetection: 0
 --- !u!114 &6977000079694909199
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -201,7 +201,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 6977000079694909200}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: d9c3d48bc623c6b4b8ba5dfa74867e5d, type: 3}
   m_Name: 
@@ -213,7 +213,7 @@ MonoBehaviour:
   rearRightWheel: {fileID: 6977000080362027128}
   wheelRadius: 0.2
   restLength: 0.25
-  springTravel: 0.3
+  springTravel: 0.32
   springStiffness: 140000
   damperStiffness: 20000
   maxSteerAngle: 25

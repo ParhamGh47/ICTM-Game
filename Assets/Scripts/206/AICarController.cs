@@ -3,13 +3,15 @@ using UnityEngine;
 [RequireComponent(typeof(Rigidbody))]
 public class AICarController : MonoBehaviour
 {
-    [Header("AI Targets (Waypoints)")]
-    public Transform[] targets;
-    private int currentTargetIndex = 0;
+    [Header("Waypoints")]
+    public Transform waypointsRoot;
+    private Transform[] waypoints;
+    private int currentWaypoint;
 
     [Header("Movement")]
     public float speedKPH = 60f;
-    public float turnSpeed = 5f;
+    public float turnSpeed = 6f;
+    public float maxSteerAngle = 35f;
     public float reachThreshold = 2f;
 
     [Header("Wheels (visual only)")]
@@ -17,55 +19,72 @@ public class AICarController : MonoBehaviour
     public float suspensionDistance = 0.4f;
     public LayerMask groundMask;
 
-    [Header("Physics Tuning")]
-    public float forwardForceMultiplier = 500f;
-
     Rigidbody rb;
+    float speedMS;
 
     void Awake()
     {
         rb = GetComponent<Rigidbody>();
+
         rb.isKinematic = false;
-        rb.drag = 0.1f;
-        rb.angularDrag = 2f;
-        rb.mass = 2000f;
+        rb.mass = 2500f;
+        rb.drag = 0.5f;
+        rb.angularDrag = 5f;
+        rb.interpolation = RigidbodyInterpolation.Interpolate;
+        rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
 
         rb.position += Vector3.up * 0.05f;
+
+        speedMS = speedKPH / 3.6f;
+        CacheWaypoints();
+    }
+
+    void CacheWaypoints()
+    {
+        if (!waypointsRoot) return;
+
+        int count = waypointsRoot.childCount;
+        waypoints = new Transform[count];
+
+        for (int i = 0; i < count; i++)
+            waypoints[i] = waypointsRoot.GetChild(i);
     }
 
     void FixedUpdate()
     {
-        MoveTowardsTarget();
+        MoveCar();
         UpdateWheelVisuals();
     }
 
-    void MoveTowardsTarget()
+    void MoveCar()
     {
-        if (targets == null || targets.Length == 0) return;
+        if (waypoints == null || waypoints.Length == 0) return;
 
-        Transform target = targets[currentTargetIndex];
+        Transform target = waypoints[currentWaypoint];
 
         Vector3 toTarget = target.position - transform.position;
         toTarget.y = 0f;
 
         if (toTarget.magnitude < reachThreshold)
         {
-            currentTargetIndex = (currentTargetIndex + 1) % targets.Length;
-            target = targets[currentTargetIndex];
-            toTarget = target.position - transform.position;
-            toTarget.y = 0f;
+            currentWaypoint = (currentWaypoint + 1) % waypoints.Length;
+            return;
         }
 
         Vector3 desiredDir = toTarget.normalized;
 
-        Quaternion desiredRotation = Quaternion.LookRotation(desiredDir);
-        rb.MoveRotation(Quaternion.Slerp(rb.rotation, desiredRotation, turnSpeed * Time.fixedDeltaTime));
+        float angle = Vector3.SignedAngle(transform.forward, desiredDir, Vector3.up);
+        angle = Mathf.Clamp(angle, -maxSteerAngle, maxSteerAngle);
 
-        float speedMS = speedKPH / 3.6f;
-        Vector3 velocityForward = transform.forward * speedMS;
+        Quaternion steerRot = Quaternion.AngleAxis(angle, Vector3.up);
+        Quaternion targetRot = rb.rotation * steerRot;
 
-        Vector3 velocityChange = velocityForward - new Vector3(rb.velocity.x, 0, rb.velocity.z);
-        rb.AddForce(velocityChange * forwardForceMultiplier * Time.fixedDeltaTime, ForceMode.Acceleration);
+        rb.MoveRotation(
+            Quaternion.Slerp(rb.rotation, targetRot, turnSpeed * Time.fixedDeltaTime)
+        );
+
+        Vector3 move = transform.forward * speedMS * Time.fixedDeltaTime;
+        rb.MovePosition(rb.position + move);
     }
 
     void UpdateWheelVisuals()
@@ -74,7 +93,12 @@ public class AICarController : MonoBehaviour
 
         foreach (var wheel in wheels)
         {
-            if (Physics.Raycast(wheel.position + Vector3.up, Vector3.down, out RaycastHit hit, suspensionDistance * 2f, groundMask))
+            if (Physics.Raycast(
+                wheel.position + Vector3.up,
+                Vector3.down,
+                out RaycastHit hit,
+                suspensionDistance * 2f,
+                groundMask))
             {
                 Vector3 pos = wheel.position;
                 pos.y = hit.point.y + suspensionDistance;

@@ -27,7 +27,7 @@ public class AICarController : MonoBehaviour
         rb = GetComponent<Rigidbody>();
 
         rb.isKinematic = false;
-        rb.mass = 2500f;
+        rb.mass = 2000f;
         rb.drag = 0.5f;
         rb.angularDrag = 5f;
         rb.interpolation = RigidbodyInterpolation.Interpolate;

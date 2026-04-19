@@ -14,7 +14,7 @@ public class CarController : MonoBehaviour
     public AnimationCurve torqueCurve = new AnimationCurve(
         new Keyframe(0f,    0.5f, 0f, 1.5f),
         new Keyframe(0.35f, 1.0f, 1.5f, -1.5f),
-        new Keyframe(1f,    0.0f, -1.5f, 0f)
+        new Keyframe(1f, 0.0f, -1.5f, 0f)
     );
 
     [Header("Speed Readout")]
@@ -33,6 +33,9 @@ public class CarController : MonoBehaviour
     [Header("Reset Cooldown")]
     public float resetCooldown = 2f;
     private float lastResetTime = -999f;
+
+    public bool isShiftingUp = false;
+    public bool isShiftingDown = false;
 
     void Start()
     {
@@ -57,9 +60,6 @@ public class CarController : MonoBehaviour
 
     private void UpdateBrakeLights()
     {
-        if (brakeMat == null)
-            return;
-
         if (throttleInput < brakeThreshold)
         {
             brakeMat.EnableKeyword("_EMISSION");

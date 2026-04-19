@@ -33,6 +33,11 @@ public class WheelPhysics : MonoBehaviour
     public float forwardGrip = 1.0f;
     public float tireMass = 40f;
 
+    [Header("Surface Friction")]
+    public float roadFriction = 1.0f;
+    public float offRoadFriction = 0.3f;
+    private float currentSurfaceFriction = 1.0f;
+
     [Header("Engine / Brakes")]
     public float engineForce = 5000f;
     public float brakeForce = 8000f;
@@ -63,7 +68,38 @@ public class WheelPhysics : MonoBehaviour
 
     void Update()
     {
-        float steerAngle = car != null ? car.steerInput * maxSteerAngle : 0f;
+        int speed = Mathf.RoundToInt(car.currentSpeedKPH);
+
+        float steerAngle = 0f;
+
+        if (speed < 10)
+        {
+            steerAngle = car != null ? car.steerInput * maxSteerAngle * 2.8f : 0f;
+        }
+        else if (speed < 20)
+        {
+            steerAngle = car != null ? car.steerInput * maxSteerAngle * 2.4f : 0f;
+        }
+        else if (speed < 35)
+        {
+            steerAngle = car != null ? car.steerInput * maxSteerAngle * 2f : 0f;
+        }
+        else if (speed < 60)
+        {
+            steerAngle = car != null ? car.steerInput * maxSteerAngle : 0f;
+        }
+        else if (speed < 90)
+        {
+            steerAngle = car != null ? car.steerInput * maxSteerAngle * 0.8f: 0f;
+        }
+        else if (speed < 120)
+        {
+            steerAngle = car != null ? car.steerInput * maxSteerAngle * 0.5f : 0f;
+        }
+        else
+        {
+            steerAngle = car != null ? car.steerInput * maxSteerAngle * 0.3f : 0f;
+        }
 
         if (isFrontLeft || isFrontRight)
         {
@@ -72,7 +108,7 @@ public class WheelPhysics : MonoBehaviour
 
         if (frontWheelsParent != null && (isFrontLeft || isFrontRight))
         {
-            frontWheelsParent.localRotation = frontWheelsBaseRotation * Quaternion.Euler(0f, steerAngle, 0f);
+            frontWheelsParent.localRotation = frontWheelsBaseRotation * Quaternion.Euler(0f, steerAngle * 0.8f, 0f);
         }
     }
 
@@ -80,6 +116,19 @@ public class WheelPhysics : MonoBehaviour
     {
         if (!Physics.Raycast(transform.position, -transform.up, out RaycastHit hit, maxLen + wheelRadius))
             return;
+
+        if (hit.collider.CompareTag("Road"))
+        {
+            currentSurfaceFriction = roadFriction;
+        }
+        else if (hit.collider.CompareTag("!Road"))
+        {
+            currentSurfaceFriction = offRoadFriction;
+        }
+        else
+        {
+            currentSurfaceFriction = roadFriction;
+        }
 
         Vector3 springDir = transform.up;
         Vector3 tireVel = carRb.GetPointVelocity(transform.position);
@@ -107,12 +156,12 @@ public class WheelPhysics : MonoBehaviour
         float finalGrip;
         if (slip < driftThreshold)
         {
-            finalGrip = lateralGrip * speedGripFactor;
+            finalGrip = lateralGrip * speedGripFactor * roadFriction;
         }
         else
         {
             float t = (slip - driftThreshold) / driftThreshold;
-            finalGrip = Mathf.Lerp(lateralGrip * speedGripFactor, lateralGrip * driftMultiplier, t);
+            finalGrip = Mathf.Lerp(lateralGrip * speedGripFactor * currentSurfaceFriction, lateralGrip * driftMultiplier * currentSurfaceFriction, t);
         }
 
         float desiredLatVelChange = -lateralVel * finalGrip;
@@ -121,7 +170,7 @@ public class WheelPhysics : MonoBehaviour
 
         if (slip > driftThreshold)
         {
-            Vector3 stabilizingForce = -lateralDir * slip * driftRecovery;
+            Vector3 stabilizingForce = -lateralDir * slip * driftRecovery * roadFriction;
             carRb.AddForceAtPosition(stabilizingForce, transform.position);
         }
 
@@ -131,7 +180,7 @@ public class WheelPhysics : MonoBehaviour
         float throttle = car.throttleInput;
 
         if (throttle > 0f)
-            engineResponse = Mathf.MoveTowards(engineResponse, throttle, accelerationRate * Time.fixedDeltaTime);
+            engineResponse = Mathf.MoveTowards(engineResponse, throttle, accelerationRate * Time.fixedDeltaTime);    
         else if (throttle == 0f)
             engineResponse = Mathf.MoveTowards(engineResponse, 0f, decelerationRate * Time.fixedDeltaTime);
 
@@ -140,29 +189,54 @@ public class WheelPhysics : MonoBehaviour
 
         if (throttle > 0.01f)
         {
-            float torque = engineForce * engineResponse * forwardGrip * torqueMultiplier;
-            carRb.AddForceAtPosition(forwardDir * torque, transform.position);
+            if (car.isShiftingUp)
+            {
+                float brake = brakeForce * throttle * 0.65f * currentSurfaceFriction;
+                carRb.AddForceAtPosition(-forwardDir * brake, transform.position);
+            }  
+            else
+            {
+                float torque = engineForce * engineResponse * forwardGrip * torqueMultiplier * currentSurfaceFriction;
+                carRb.AddForceAtPosition(forwardDir * torque, transform.position);
+            }
         }
 
         if (throttle < -0.01f && forwardVel > 0.5f)
         {
-            float brake = brakeForce * -throttle;
-            carRb.AddForceAtPosition(-forwardDir * brake, transform.position);
+            if (car.isShiftingDown)
+            {
+                float torque = engineForce * engineResponse * forwardGrip * torqueMultiplier * currentSurfaceFriction;
+                carRb.AddForceAtPosition(forwardDir * torque * 1f, transform.position);
+            } 
+            else
+            {
+                float brake = brakeForce * -throttle * currentSurfaceFriction;
+                carRb.AddForceAtPosition(-forwardDir * brake, transform.position);
+            }      
         }
 
         if (throttle < -0.01f && forwardVel <= 0.5f)
         {
-            float reverse = reverseForce * -throttle;
+            float reverse = reverseForce * -throttle * currentSurfaceFriction;
             carRb.AddForceAtPosition(-forwardDir * reverse, transform.position);
         }
 
         if (Mathf.Abs(throttle) < 0.01f)
         {
-            Vector3 rolling = -forwardDir * forwardVel * 300f;
-            carRb.AddForceAtPosition(rolling, transform.position);
+            if (car.isShiftingDown)
+            {
+                float torque = engineForce * engineResponse * forwardGrip * torqueMultiplier * currentSurfaceFriction;
+                carRb.AddForceAtPosition(forwardDir * 1f, transform.position);
+            }
+            else
+            {
+                Vector3 rolling = -forwardDir * forwardVel * 300f * currentSurfaceFriction;
+                carRb.AddForceAtPosition(rolling, transform.position);
+            }
+
         }
 
-        Vector3 drag = -forwardDir * forwardVel * Mathf.Abs(forwardVel) * 1.2f;
+        Vector3 drag = -forwardDir * forwardVel * Mathf.Abs(forwardVel) * 1.2f * currentSurfaceFriction;
         carRb.AddForceAtPosition(drag, transform.position);
     }
 }

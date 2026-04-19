@@ -66,7 +66,7 @@ public class CollisionSound : MonoBehaviour
 
         AudioClip chosenClip = null;
         float chosenVolume = 0f;
-        float impactStrength = 0f; // 0 = soft, 0.5 = medium, 1 = hard
+        float impactStrength = 0f;
 
         if (impactSpeed > hardImpactThreshold)
         {

@@ -8,8 +8,8 @@ public class ExhaustSmokeController : MonoBehaviour
 
     [Header("Particle Settings")]
     public int idleMaxParticles = 10;
-    public int accelMaxParticles = 50;
-    public int heavyLoadMaxParticles = 60;
+    public int accelMaxParticles = 7;
+    public int heavyLoadMaxParticles = 15;
 
     [Header("Speed Settings")]
     public float idleSpeed = 0.5f;
@@ -35,6 +35,7 @@ public class ExhaustSmokeController : MonoBehaviour
         {
             targetMaxParticles = idleMaxParticles;
             targetSpeed = idleSpeed;
+            main.startSize = 3;
         }
         else if (throttle > 0.05f)
         {
@@ -43,6 +44,8 @@ public class ExhaustSmokeController : MonoBehaviour
                 Mathf.Lerp(idleMaxParticles, accelMaxParticles, throttle)
             );
             targetSpeed = Mathf.Lerp(idleSpeed, accelSpeed, throttle);
+
+            main.startSize = 2.5f;
 
             if (speed < 20f && throttle > 0.6f)
             {
@@ -54,6 +57,7 @@ public class ExhaustSmokeController : MonoBehaviour
         {
             targetMaxParticles = idleMaxParticles;
             targetSpeed = idleSpeed;
+            main.startSize = 3;
         }
 
         main.maxParticles = targetMaxParticles;

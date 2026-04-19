@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Collections;
 
 [RequireComponent(typeof(AudioSource))]
 [RequireComponent(typeof(AudioLowPassFilter))]
@@ -13,18 +14,18 @@ public class EngineAudio : MonoBehaviour
     [Header("Gear Shift")]
     public AudioSource shiftSource;
     [Range(0f, 1f)] public float shiftVolume = 0.5f;
-    public float shiftRPMDrop = 0.60f;
+    public float shiftRPMDrop = 0.65f;
     public float shiftRPMFlare = 1.15f;
     public float shiftCutTime = 0.3f;
 
-    [Header("Shift Timing - Make every shift feel heavy")]
-    public float baseShiftDelay = 0.65f;
+    [Header("Shift Timing - More Realistic & Heavier")]
+    public float baseShiftDelay = 0.85f;
     public AnimationCurve shiftDelayCurve = new AnimationCurve(
-        new Keyframe(0f,   1.1f),
-        new Keyframe(0.25f, 1.0f),
-        new Keyframe(0.5f,  0.8f),
-        new Keyframe(0.75f, 0.6f),
-        new Keyframe(1f,   0.45f)
+        new Keyframe(0f,   1.25f),
+        new Keyframe(0.25f, 1.10f),
+        new Keyframe(0.5f,  0.90f),
+        new Keyframe(0.75f, 0.75f),
+        new Keyframe(1f,   0.60f)
     );
 
     [Header("Engine Volume Envelope")]
@@ -37,20 +38,22 @@ public class EngineAudio : MonoBehaviour
     [Range(0f, 3f)] public float engineVolumeMultiplier = 3f;
 
     [Header("Engine RPM")]
-    public float idleRPM = 800f;
-    public float redlineRPM = 4200f;
+    public float idleRPM = 850f;
+    public float redlineRPM = 6500f;
     public float rpmInertia = 4f;
-    public float throttleBlipAmount = 800f;
+    public float throttleBlipAmount = 900f;
 
-    [Header("Gears")]
-    public float[] gearRatios = { 4.2f, 3.2f, 2f, 1f, 0.3f };
-    public float finalDrive = 5f;
-    public float shiftUpRPM = 4000f;
-    public float shiftDownRPM = 2000f;
+    [Header("Gears (Rebalanced - More Realistic)")]
+    public float[] gearRatios = { 3.8f, 2.2f, 1.5f, 1.15f, 0.92f };
+    [SerializeField] private float[] downshiftSpeedThresholds = new float[] { 0f, 20f, 45f, 75f, 100f };
+    public float finalDrive = 3.7f;
+
+    public float shiftUpRPM = 5200f;
+    public float shiftDownRPM = 2800f;
 
     [Header("Pitch & Tone")]
-    public float pitchMin = 0.7f;
-    public float pitchMax = 1.45f;
+    public float pitchMin = 0.70f;
+    public float pitchMax = 1.65f;
     public float lowpassCutoffMin = 3000f;
     public float lowpassCutoffMax = 10000f;
 
@@ -75,6 +78,15 @@ public class EngineAudio : MonoBehaviour
     private EnvelopeState envelopeState = EnvelopeState.Normal;
     private float envelopeTimer = 0f;
     private float volumeEnvelope = 1f;
+
+    [Header("Gear Exhaust Particles")]
+    public float duration = 0.06f;
+    public ParticleSystem orangePS;
+    public ParticleSystem yellowPS;
+    public ParticleSystem blackPS;
+    public ParticleSystem orangePS2;
+    public ParticleSystem yellowPS2;
+    public ParticleSystem blackPS2;
 
     void Start()
     {
@@ -118,15 +130,27 @@ public class EngineAudio : MonoBehaviour
 
         float speedKPH = car.currentSpeedKPH;
 
-        if (engineRPM > shiftUpRPM && currentGear < gearRatios.Length - 1 && speedKPH > 18f)
+        if (engineRPM > shiftUpRPM && currentGear < gearRatios.Length - 1 && speedKPH > 20f)
         {
             StartShift(currentGear + 1);
+            StartCoroutine(exhaustParticle());
+            StartCoroutine(carShiftUp());
         }
-        else if (engineRPM < shiftDownRPM && currentGear > 0 && speedKPH < 50f)
+        else
         {
-            StartShift(currentGear - 1);
+            float downshiftSpeedLimit = downshiftSpeedThresholds[currentGear];
+
+            // اگر سرعت زیر آستانه مخصوص این دنده است → کاهش دنده
+            if (speedKPH < downshiftSpeedLimit && currentGear > 0)
+            {
+                StartShift(currentGear - 1);
+                StartCoroutine(carShiftDown());
+            }
         }
+
+
     }
+
 
     private void StartShift(int newGear)
     {
@@ -172,6 +196,7 @@ public class EngineAudio : MonoBehaviour
                 }
                 volumeEnvelope = Mathf.Lerp(1f, dipPercent, Mathf.SmoothStep(0f, 1f, dipT));
                 break;
+
             case EnvelopeState.Recovering:
                 envelopeTimer += Time.deltaTime;
                 float recT = envelopeTimer / recoveryDuration;
@@ -182,12 +207,12 @@ public class EngineAudio : MonoBehaviour
                 }
                 volumeEnvelope = Mathf.Lerp(dipPercent, 1f, Mathf.SmoothStep(0f, 1f, recT));
                 break;
+
             default:
                 volumeEnvelope = 1f;
                 break;
         }
 
-        // <-- APPLY MASTER VOLUME MULTIPLIER
         engineSource.volume = baseVolume * volumeEnvelope * engineVolumeMultiplier;
     }
 
@@ -237,5 +262,46 @@ public class EngineAudio : MonoBehaviour
     {
         if (gearRatios != null && gearRatios.Length > 0)
             currentGear = Mathf.Clamp(currentGear, 0, gearRatios.Length - 1);
+    }
+
+    private IEnumerator carShiftUp()
+    {
+        car.isShiftingUp = true;
+        yield return new WaitForSeconds(0.5f);
+        car.isShiftingUp = false;
+    }
+
+    private IEnumerator carShiftDown()
+    {
+        car.isShiftingDown = true;
+        yield return new WaitForSeconds(0.5f);
+        car.isShiftingDown = false;
+    }
+
+    private IEnumerator exhaustParticle()
+    {
+        HandleParticle(orangePS, true);
+        HandleParticle(blackPS, true);
+        HandleParticle(yellowPS, true);
+        HandleParticle(orangePS2, true);
+        HandleParticle(blackPS2, true);
+        HandleParticle(yellowPS2, true);
+
+        yield return new WaitForSeconds(duration);
+
+        HandleParticle(orangePS, false);
+        HandleParticle(blackPS, false);
+        HandleParticle(yellowPS, false);
+        HandleParticle(orangePS2, false);
+        HandleParticle(blackPS2, false);
+        HandleParticle(yellowPS2, false);
+    }
+
+    private void HandleParticle(ParticleSystem ps, bool enable)
+    {
+        if (enable)
+            ps.Play();
+        else
+            ps.Stop(true, ParticleSystemStopBehavior.StopEmitting);
     }
 }

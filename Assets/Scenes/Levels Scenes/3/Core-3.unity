@@ -48563,6 +48563,18 @@ PrefabInstance:
     serializedVersion: 2
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 5411794254173547891, guid: d3631120a8772da41ac0a07b6ee0b9e6, type: 3}
+      propertyPath: focusDistance
+      value: 10
+      objectReference: {fileID: 0}
+    - target: {fileID: 5411794254173547891, guid: d3631120a8772da41ac0a07b6ee0b9e6, type: 3}
+      propertyPath: focusConeAngle
+      value: 45
+      objectReference: {fileID: 0}
+    - target: {fileID: 5411794254173547891, guid: d3631120a8772da41ac0a07b6ee0b9e6, type: 3}
+      propertyPath: focusSteerStrength
+      value: 3
+      objectReference: {fileID: 0}
     - target: {fileID: 5411794254173547900, guid: d3631120a8772da41ac0a07b6ee0b9e6, type: 3}
       propertyPath: m_Name
       value: Truck (Player)

@@ -13,6 +13,7 @@ public class EngineAudio : MonoBehaviour
 
     [Header("Gear Shift")]
     public AudioSource shiftSource;
+    public AudioSource exhaustBurst;
     [Range(0f, 1f)] public float shiftVolume = 0.5f;
     public float shiftRPMDrop = 0.65f;
     public float shiftRPMFlare = 1.15f;
@@ -134,23 +135,20 @@ public class EngineAudio : MonoBehaviour
         {
             StartShift(currentGear + 1);
             StartCoroutine(exhaustParticle());
+            exhaustBurst.PlayOneShot(exhaustBurst.clip);
             StartCoroutine(carShiftUp());
         }
         else
         {
             float downshiftSpeedLimit = downshiftSpeedThresholds[currentGear];
 
-            // اگر سرعت زیر آستانه مخصوص این دنده است → کاهش دنده
             if (speedKPH < downshiftSpeedLimit && currentGear > 0)
             {
                 StartShift(currentGear - 1);
                 StartCoroutine(carShiftDown());
             }
         }
-
-
     }
-
 
     private void StartShift(int newGear)
     {

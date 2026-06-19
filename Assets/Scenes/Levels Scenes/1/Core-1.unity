@@ -65339,6 +65339,14 @@ PrefabInstance:
     serializedVersion: 2
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 5411794254173547891, guid: d3631120a8772da41ac0a07b6ee0b9e6, type: 3}
+      propertyPath: focusDistance
+      value: 3
+      objectReference: {fileID: 0}
+    - target: {fileID: 5411794254173547891, guid: d3631120a8772da41ac0a07b6ee0b9e6, type: 3}
+      propertyPath: focusConeAngle
+      value: 45
+      objectReference: {fileID: 0}
     - target: {fileID: 5411794254173547900, guid: d3631120a8772da41ac0a07b6ee0b9e6, type: 3}
       propertyPath: m_Name
       value: Truck (Player)
@@ -65386,6 +65394,22 @@ PrefabInstance:
     - target: {fileID: 5411794254173547901, guid: d3631120a8772da41ac0a07b6ee0b9e6, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5411794254833060199, guid: d3631120a8772da41ac0a07b6ee0b9e6, type: 3}
+      propertyPath: offRoadFriction
+      value: 0.3
+      objectReference: {fileID: 0}
+    - target: {fileID: 5411794255476032459, guid: d3631120a8772da41ac0a07b6ee0b9e6, type: 3}
+      propertyPath: offRoadFriction
+      value: 0.3
+      objectReference: {fileID: 0}
+    - target: {fileID: 5411794255841012849, guid: d3631120a8772da41ac0a07b6ee0b9e6, type: 3}
+      propertyPath: offRoadFriction
+      value: 0.3
+      objectReference: {fileID: 0}
+    - target: {fileID: 5411794256129419669, guid: d3631120a8772da41ac0a07b6ee0b9e6, type: 3}
+      propertyPath: offRoadFriction
+      value: 0.3
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_AddedGameObjects:
@@ -81787,8 +81811,8 @@ Transform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1262020872}
-  m_LocalRotation: {x: 0.20985529, y: 0, z: 0, w: 0.9777325}
-  m_LocalPosition: {x: 967.35, y: 1.01, z: 50.450535}
+  m_LocalRotation: {x: 0.31851217, y: 0, z: 0, w: 0.9479188}
+  m_LocalPosition: {x: 967.35, y: 6.1099997, z: 47.950535}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:

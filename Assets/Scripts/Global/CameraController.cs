@@ -41,6 +41,14 @@ public class CameraController : MonoBehaviour
 
     private float nextSwitchCam = 0f;
 
+    [Header("Focus Effect")]
+    public CarController focusCar;
+
+    public float normalFOV = 60f;
+    public float focusFOV = 54f;
+    public float focusZoomSpeed = 8f;
+
+
     private void Awake()
     {  
         var vcam = Cameras[0].GetComponent<CinemachineVirtualCamera>();
@@ -89,6 +97,8 @@ public class CameraController : MonoBehaviour
 
         if (!boostActive && !isTransitioning)
             UpdateCameraBasedOnCar();
+
+        UpdateFocusEffect();
     }
 
     private void UpdateCameraBasedOnCar()
@@ -120,6 +130,62 @@ public class CameraController : MonoBehaviour
             isGoingReverse = false;
         }
 
+    }
+
+    private void UpdateFocusEffect()
+    {
+        if (focusCar == null)
+            return;
+
+        bool focusActive = focusCar.IsFocusing();
+
+        float targetFOV =
+            focusActive
+            ? focusFOV
+            : normalFOV;
+
+        float targetAmplitude =
+            focusActive
+            ? 0.25f
+            : 0f;
+
+        float targetFrequency =
+            focusActive
+            ? 1.8f
+            : 0f;
+
+        for (int i = 0; i < Cameras.Length; i++)
+        {
+            CinemachineVirtualCamera vcam =
+                Cameras[i].GetComponent<CinemachineVirtualCamera>();
+
+            if (vcam == null)
+                continue;
+
+            vcam.m_Lens.FieldOfView =
+                Mathf.Lerp(
+                    vcam.m_Lens.FieldOfView,
+                    targetFOV,
+                    Time.deltaTime * focusZoomSpeed);
+
+            CinemachineBasicMultiChannelPerlin noise =
+                vcam.GetCinemachineComponent<CinemachineBasicMultiChannelPerlin>();
+
+            if (noise != null)
+            {
+                noise.m_AmplitudeGain =
+                    Mathf.Lerp(
+                        noise.m_AmplitudeGain,
+                        targetAmplitude,
+                        Time.deltaTime * 8f);
+
+                noise.m_FrequencyGain =
+                    Mathf.Lerp(
+                        noise.m_FrequencyGain,
+                        targetFrequency,
+                        Time.deltaTime * 8f);
+            }
+        }
     }
 
     private int DetermineCamera(float forwardSpeed, float throttle)

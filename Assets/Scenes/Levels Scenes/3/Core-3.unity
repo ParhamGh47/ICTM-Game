@@ -974,6 +974,28 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 146832994749379846, guid: 3dff6c25b42d39344869abddc0c89153, type: 3}
   m_PrefabInstance: {fileID: 27384790}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &27584873 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 7263926945803184721, guid: 9de7ea8ebea5b664bb865e6f78009de3, type: 3}
+  m_PrefabInstance: {fileID: 208287291}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &27584878
+MonoBehaviour:
+  m_ObjectHideFlags: 3
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 27584873}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 68bb026fafb42b14791938953eaace77, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_NoiseProfile: {fileID: 11400000, guid: 69ce8388f6785dd4c8c39915efece2f4, type: 2}
+  m_PivotOffset: {x: 0, y: 0, z: 0}
+  m_AmplitudeGain: 0.25
+  m_FrequencyGain: 2
+  mNoiseOffsets: {x: 0, y: 0, z: 0}
 --- !u!1 &28516962
 GameObject:
   m_ObjectHideFlags: 0
@@ -5030,6 +5052,10 @@ PrefabInstance:
       propertyPath: cmb
       value: 
       objectReference: {fileID: 1262020876}
+    - target: {fileID: 5259838745441529802, guid: 9de7ea8ebea5b664bb865e6f78009de3, type: 3}
+      propertyPath: focusCar
+      value: 
+      objectReference: {fileID: 1932669416}
     - target: {fileID: 5259838745441529802, guid: 9de7ea8ebea5b664bb865e6f78009de3, type: 3}
       propertyPath: reverseSound
       value: 
@@ -23050,6 +23076,28 @@ Mesh:
     offset: 0
     size: 0
     path: 
+--- !u!1 &802713367 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 8989369918820824547, guid: 9de7ea8ebea5b664bb865e6f78009de3, type: 3}
+  m_PrefabInstance: {fileID: 208287291}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &802713372
+MonoBehaviour:
+  m_ObjectHideFlags: 3
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 802713367}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 68bb026fafb42b14791938953eaace77, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_NoiseProfile: {fileID: 11400000, guid: 69ce8388f6785dd4c8c39915efece2f4, type: 2}
+  m_PivotOffset: {x: 0, y: 0, z: 0}
+  m_AmplitudeGain: 0.25
+  m_FrequencyGain: 2
+  mNoiseOffsets: {x: 0, y: 0, z: 0}
 --- !u!43 &810538212
 Mesh:
   m_ObjectHideFlags: 0
@@ -29283,6 +29331,28 @@ Mesh:
     offset: 0
     size: 0
     path: 
+--- !u!1 &1071245928 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 5259838745534448278, guid: 9de7ea8ebea5b664bb865e6f78009de3, type: 3}
+  m_PrefabInstance: {fileID: 208287291}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1071245933
+MonoBehaviour:
+  m_ObjectHideFlags: 3
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1071245928}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 68bb026fafb42b14791938953eaace77, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_NoiseProfile: {fileID: 11400000, guid: 69ce8388f6785dd4c8c39915efece2f4, type: 2}
+  m_PivotOffset: {x: 0, y: 0, z: 0}
+  m_AmplitudeGain: 0.25
+  m_FrequencyGain: 2
+  mNoiseOffsets: {x: 0, y: 0, z: 0}
 --- !u!134 &1077201455
 PhysicMaterial:
   m_ObjectHideFlags: 0
@@ -42099,6 +42169,28 @@ PhysicMaterial:
   bounciness: 0
   frictionCombine: 0
   bounceCombine: 0
+--- !u!1 &1657831565 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 5259838745146982037, guid: 9de7ea8ebea5b664bb865e6f78009de3, type: 3}
+  m_PrefabInstance: {fileID: 208287291}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1657831570
+MonoBehaviour:
+  m_ObjectHideFlags: 3
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1657831565}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 68bb026fafb42b14791938953eaace77, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_NoiseProfile: {fileID: 11400000, guid: 69ce8388f6785dd4c8c39915efece2f4, type: 2}
+  m_PivotOffset: {x: 0, y: 0, z: 0}
+  m_AmplitudeGain: 0.25
+  m_FrequencyGain: 2
+  mNoiseOffsets: {x: 0, y: 0, z: 0}
 --- !u!1 &1666027625
 GameObject:
   m_ObjectHideFlags: 0
@@ -45151,6 +45243,28 @@ Mesh:
     offset: 0
     size: 0
     path: 
+--- !u!1 &1770442512 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 6183576784011053705, guid: 9de7ea8ebea5b664bb865e6f78009de3, type: 3}
+  m_PrefabInstance: {fileID: 208287291}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1770442517
+MonoBehaviour:
+  m_ObjectHideFlags: 3
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1770442512}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 68bb026fafb42b14791938953eaace77, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_NoiseProfile: {fileID: 11400000, guid: 69ce8388f6785dd4c8c39915efece2f4, type: 2}
+  m_PivotOffset: {x: 0, y: 0, z: 0}
+  m_AmplitudeGain: 0.25
+  m_FrequencyGain: 2
+  mNoiseOffsets: {x: 0, y: 0, z: 0}
 --- !u!1001 &1780095455
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -46287,6 +46401,28 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1833189577}
   m_Mesh: {fileID: 1156580315}
+--- !u!1 &1836995512 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 5259838746839298748, guid: 9de7ea8ebea5b664bb865e6f78009de3, type: 3}
+  m_PrefabInstance: {fileID: 208287291}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1836995517
+MonoBehaviour:
+  m_ObjectHideFlags: 3
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1836995512}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 68bb026fafb42b14791938953eaace77, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_NoiseProfile: {fileID: 11400000, guid: 69ce8388f6785dd4c8c39915efece2f4, type: 2}
+  m_PivotOffset: {x: 0, y: 0, z: 0}
+  m_AmplitudeGain: 0.25
+  m_FrequencyGain: 2
+  mNoiseOffsets: {x: 0, y: 0, z: 0}
 --- !u!134 &1838403661
 PhysicMaterial:
   m_ObjectHideFlags: 0
@@ -49719,6 +49855,7 @@ GameObject:
   - component: {fileID: 1973741040}
   - component: {fileID: 1973741039}
   - component: {fileID: 1973741038}
+  - component: {fileID: 1973741041}
   m_Layer: 0
   m_Name: cm
   m_TagString: Untagged
@@ -49804,6 +49941,23 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ac0b09e7857660247b1477e93731de29, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+--- !u!114 &1973741041
+MonoBehaviour:
+  m_ObjectHideFlags: 3
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1973741036}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 68bb026fafb42b14791938953eaace77, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_NoiseProfile: {fileID: 11400000, guid: 69ce8388f6785dd4c8c39915efece2f4, type: 2}
+  m_PivotOffset: {x: 0, y: 0, z: 0}
+  m_AmplitudeGain: 0.25
+  m_FrequencyGain: 2
+  mNoiseOffsets: {x: 0, y: 0, z: 0}
 --- !u!1 &1974832315
 GameObject:
   m_ObjectHideFlags: 0

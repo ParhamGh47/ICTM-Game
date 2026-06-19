@@ -219,6 +219,13 @@ void Update()
         return percent;
     }
 
+    public bool IsFocusing()
+    {
+        return Input.GetKey(KeyCode.Space)
+            && enableFocus
+            && currentFocusTarget != null;
+    }
+
 
     private void FixedUpdate()
     {

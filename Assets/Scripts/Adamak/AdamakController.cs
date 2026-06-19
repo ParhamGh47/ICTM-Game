@@ -74,6 +74,8 @@ public class AdamakController : MonoBehaviour
         isDead = true;
         isFleeing = false;
 
+        gameObject.tag = "Untagged";
+
         if (particlePrefab != null)
         {
             Vector3 spawnPos = transform.position + Vector3.up * particleYOffset;

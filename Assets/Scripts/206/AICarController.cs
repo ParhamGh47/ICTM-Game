@@ -5,6 +5,13 @@ public class AICarController : MonoBehaviour
 {
     [Header("Waypoints")]
     public Transform waypointsRoot;
+
+    // Which waypoint this car starts from. A car placed mid-path must start
+    // at its own waypoint, otherwise it turns around and drives back to
+    // waypoint[0] (ramming cars ahead of it). Default 0 keeps manually placed
+    // cars behaving exactly as before.
+    public int startingWaypoint = 0;
+
     private Transform[] waypoints;
     private int currentWaypoint;
 
@@ -48,6 +55,8 @@ public class AICarController : MonoBehaviour
 
         for (int i = 0; i < count; i++)
             waypoints[i] = waypointsRoot.GetChild(i);
+
+        currentWaypoint = Mathf.Clamp(startingWaypoint, 0, Mathf.Max(0, count - 1));
     }
 
     void FixedUpdate()

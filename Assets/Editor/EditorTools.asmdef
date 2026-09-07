@@ -4,6 +4,7 @@
         "Editor"
     ],
     "references": [
-        "RoadArchitect"
+        "RoadArchitect",
+        "AICars"
     ]
-}
+}

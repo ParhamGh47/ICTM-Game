@@ -23,6 +23,9 @@ using System.Collections.Generic;
 ///    rightmost lane), so cars stay on the asphalt for any road width.
 ///  - Body paint is randomized from the CarColor materials found under
 ///    Assets/Prefabs/Cars (applied to the same slots the prefab already paints).
+///  - "Lights On" decides whether spawned cars drive with their headlights on:
+///    the LightL/LightR spotlights are enabled and the lens material is swapped
+///    to its emissive "lit" variant (206: LightOff206 -> Light206).
 ///
 /// Usage: open a scene with a RoadArchitect road, then:
 ///   Tools > Road Tools > Paint Passing Cars
@@ -43,6 +46,7 @@ public class PassingCarsSpawner : EditorWindow
     private bool laneOffsetAuto = true;
     private float minSpeedKPH = 25f;
     private float maxSpeedKPH = 35f;
+    private bool lightsOn = true;
 
     private GameObject[] carPrefabs = new GameObject[0];
     private Material[] carColors = new Material[0];
@@ -193,6 +197,18 @@ public class PassingCarsSpawner : EditorWindow
         maxSpeedKPH = EditorGUILayout.Slider("Max Speed (KPH)", maxSpeedKPH, minSpeedKPH, 60f);
         EditorGUILayout.LabelField(
             "All cars in a lane share one random speed in this range.",
+            EditorStyles.miniLabel);
+
+        EditorGUILayout.Space();
+
+        // ---- Headlights -----------------------------------------------------
+        lightsOn = EditorGUILayout.Toggle(new GUIContent("Lights On",
+            "Spawned cars drive with headlights on: LightL/LightR spotlights " +
+            "enabled and the lens material swapped to its emissive variant."), lightsOn);
+        EditorGUILayout.LabelField(
+            "Enables the LightL/LightR spotlights and the emissive lens material " +
+            "(206: Light206). The 911 has no separate off-material, so it only " +
+            "gets the spotlights.",
             EditorStyles.miniLabel);
 
         EditorGUILayout.Space();
@@ -359,6 +375,7 @@ public class PassingCarsSpawner : EditorWindow
             }
 
             ApplyRandomColor(carObj, rng);
+            ApplyLightState(carObj, lightsOn);
             created++;
         }
 
@@ -407,6 +424,90 @@ public class PassingCarsSpawner : EditorWindow
     bool IsPaintable(Material mat)
     {
         return mat.name.StartsWith("CarColor") || mat.name.StartsWith("Material.005");
+    }
+
+    // Turns the car's headlights on/off after painting. Matches the manual
+    // level-1 setup: LightL/LightR spotlights plus an emissive lens material
+    // when available (206 ships Light206 / LightOff206).
+    void ApplyLightState(GameObject carObj, bool on)
+    {
+        // 1) Real spotlight components (LightL / LightR).
+        var lights = carObj.GetComponentsInChildren<Light>(true);
+        foreach (var l in lights)
+        {
+            if (l == null) continue;
+            Undo.RecordObject(l, "Set Passing Car Lights");
+            l.enabled = on;
+        }
+
+        // 2) Lens material with an "off" twin (206: Light206 <-> LightOff206).
+        // The twin is a separate asset sitting next to the lit one, so it is
+        // derived by name through the AssetDatabase instead of being searched
+        // on the car (the prefab only ever carries one of the two).
+        Material lens = FindLensMaterial(carObj);
+        if (lens == null) return; // e.g. the 911 has no separate lens material
+
+        string litName = lens.name.StartsWith("LightOff")
+            ? "Light" + lens.name.Substring("LightOff".Length)
+            : lens.name;
+        string offName = "LightOff" + litName.Substring("Light".Length);
+        string targetName = on ? litName : offName;
+
+        if (lens.name == targetName) return; // already in the requested state
+
+        Material target = null;
+        string lensPath = AssetDatabase.GetAssetPath(lens);
+        if (!string.IsNullOrEmpty(lensPath))
+        {
+            string folder = System.IO.Path.GetDirectoryName(lensPath);
+            target = AssetDatabase.LoadAssetAtPath<Material>(
+                System.IO.Path.Combine(folder, targetName + ".mat"));
+        }
+        if (target == null)
+        {
+            Debug.LogWarning($"No '{targetName}' material found next to '{lens.name}' - lens stays as-is.");
+            return;
+        }
+
+        var renderers = carObj.GetComponentsInChildren<MeshRenderer>(true);
+        foreach (var renderer in renderers)
+        {
+            Material[] mats = renderer.sharedMaterials;
+            bool changed = false;
+
+            for (int i = 0; i < mats.Length; i++)
+            {
+                if (mats[i] == null) continue;
+                if (mats[i].name != litName && mats[i].name != offName) continue;
+                if (mats[i].name == targetName) continue;
+
+                mats[i] = target;
+                changed = true;
+            }
+
+            if (changed)
+            {
+                Undo.RecordObject(renderer, "Set Passing Car Lights");
+                renderer.sharedMaterials = mats;
+            }
+        }
+    }
+
+    // First headlight-lens material found on the car (206: "Light206" or
+    // "LightOff206"). Null when the car has none - then only the spotlights
+    // get toggled.
+    Material FindLensMaterial(GameObject carObj)
+    {
+        var renderers = carObj.GetComponentsInChildren<MeshRenderer>(true);
+        foreach (var renderer in renderers)
+        {
+            foreach (Material mat in renderer.sharedMaterials)
+            {
+                if (mat != null && mat.name.StartsWith("Light"))
+                    return mat;
+            }
+        }
+        return null;
     }
 
     GameObject FindOrCreateParent(string parentName)

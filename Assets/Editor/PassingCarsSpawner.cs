@@ -146,7 +146,7 @@ public class PassingCarsSpawner : EditorWindow
 
         // ---- Amount of cars -------------------------------------------------
         EditorGUILayout.LabelField("Amount of Cars", EditorStyles.boldLabel);
-        carsPerDirection = EditorGUILayout.IntSlider("Cars per Direction", carsPerDirection, 1, 20);
+        carsPerDirection = EditorGUILayout.IntSlider("Cars per Direction", carsPerDirection, 1, 30);
         EditorGUILayout.LabelField(
             $"Total: {carsPerDirection * 2} cars ({carsPerDirection} in each lane, " +
             "same speed per lane so they never catch each other)",
@@ -196,7 +196,8 @@ public class PassingCarsSpawner : EditorWindow
         minSpeedKPH = EditorGUILayout.Slider("Min Speed (KPH)", minSpeedKPH, 10f, 60f);
         maxSpeedKPH = EditorGUILayout.Slider("Max Speed (KPH)", maxSpeedKPH, minSpeedKPH, 60f);
         EditorGUILayout.LabelField(
-            "All cars in a lane share one random speed in this range.",
+            "All cars in a lane share one random speed; forward cars use the " +
+            "lower half of the range, reverse cars the upper half.",
             EditorStyles.miniLabel);
 
         EditorGUILayout.Space();
@@ -327,7 +328,11 @@ public class PassingCarsSpawner : EditorWindow
 
         // One speed for the whole direction: cars keep their spacing forever,
         // so they never catch up and ram each other (same as the manual setup).
-        float speedKPH = (float)(rng.NextDouble() * (maxSpeedKPH - minSpeedKPH) + minSpeedKPH);
+        // Forward cars get the lower half of the speed range, reverse cars the
+        // upper half, so the oncoming lane is always at least as fast.
+        float speedLo = minSpeedKPH;
+        float speedHi = forward ? (minSpeedKPH + maxSpeedKPH) * 0.5f : maxSpeedKPH;
+        float speedKPH = (float)(rng.NextDouble() * (speedHi - speedLo) + speedLo);
 
         // Section of the loop the cars are spread across. Waypoint index i on
         // the reverse path sits at param 1 - i/(n-1), so mirror the section.

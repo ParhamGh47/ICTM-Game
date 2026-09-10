@@ -8,10 +8,12 @@ using System.Collections.Generic;
 /// replicating the manual passing-car setup used in Level 1 (Core-1).
 ///
 /// How it behaves:
-///  - One shared waypoint path per direction ("Path_Forward" / "Path_Reverse"),
-///    following the FULL road spline loop (param 0 -> 1). Because the path
-///    covers the whole loop, cars wrap around along the road itself instead of
-///    cutting a straight line across a gap.
+///  - One waypoint path per direction ("Path_Forward" / "Path_Reverse") that
+///    is a closed shuttle loop: drive out along one side of the road to the
+///    turnaround point, cross the road, drive back along the other side, cross
+///    again. Cars follow the loop forever, so none ever reaches the end of the
+///    path and dies. Forward cars turn at "Turnaround %", reverse cars at
+///    100 - Turnaround %.
 ///  - Each car is placed EXACTLY on its own waypoint and gets
 ///    AICarController.startingWaypoint = that waypoint's index, so it starts
 ///    by advancing to the NEXT waypoint and drives forward. (Without this,
@@ -41,6 +43,7 @@ public class PassingCarsSpawner : EditorWindow
     private Road targetRoad;
     private float startParam = 0.05f;
     private float endParam = 0.95f;
+    private float turnParam = 0.9f; // forward cars turn here; reverse cars at 100-%
     private int carsPerDirection = 5;
     private float laneOffset = -1f; // auto-computed from the road when < 0
     private bool laneOffsetAuto = true;
@@ -155,12 +158,14 @@ public class PassingCarsSpawner : EditorWindow
         EditorGUILayout.Space();
 
         // ---- Placement ------------------------------------------------------
-        EditorGUILayout.LabelField("Placement (road loop)", EditorStyles.boldLabel);
+        EditorGUILayout.LabelField("Placement (road section)", EditorStyles.boldLabel);
         startParam = EditorGUILayout.Slider("Start %", startParam, 0f, 1f);
         endParam = EditorGUILayout.Slider("End %", endParam, 0f, 1f);
+        turnParam = EditorGUILayout.Slider("Turnaround %", turnParam, 0.55f, 0.98f);
         EditorGUILayout.LabelField(
-            "Cars are spread between Start % and End % of the loop. The waypoint " +
-            "path always covers the whole loop so cars never drive off the road.",
+            $"Forward cars turn around at {turnParam * 100f:F0}% and come back on " +
+            $"the other side; reverse cars turn at {(1f - turnParam) * 100f:F0}%. " +
+            "Each direction drives a closed loop, so no car reaches the end of the path.",
             EditorStyles.miniLabel);
 
         EditorGUILayout.Space();
@@ -255,6 +260,10 @@ public class PassingCarsSpawner : EditorWindow
             endParam = tmp;
         }
 
+        // Keep the turnaround inside the driving section (mirrored, so the
+        // reverse lane's turnaround stays on the road too).
+        turnParam = Mathf.Clamp(turnParam, startParam + 0.05f, endParam - 0.05f);
+
         float splineDistance = targetRoad.spline.distance;
         if (splineDistance <= 0f)
         {
@@ -267,8 +276,11 @@ public class PassingCarsSpawner : EditorWindow
         int total = carsPerDirection * 2;
         if (!EditorUtility.DisplayDialog("Paint Passing Cars",
             $"Place {total} passing cars along the road " +
-            $"(spread from {startParam * 100f:F0}% to {endParam * 100f:F0}% of the loop, " +
+            $"(forward lane drives {startParam * 100f:F0}% -> {turnParam * 100f:F0}% and back, " +
+            $"reverse lane {endParam * 100f:F0}% -> {(1f - turnParam) * 100f:F0}% and back, " +
             $"{laneOffset:F1} m from the centerline each way).\n\n" +
+            "Each direction turns around and comes back on the other side of the road, " +
+            "so no car reaches the end of the path.\n\n" +
             "This action can be undone (Ctrl+Z).",
             "Paint", "Cancel"))
         {
@@ -280,9 +292,9 @@ public class PassingCarsSpawner : EditorWindow
         GameObject parent = FindOrCreateParent(ParentName);
         int created = 0;
 
-        // Forward lane: drives around the loop in spline direction on the +right side.
+        // Forward lane: shuttles out along the spline (+right side) to the turnaround.
         created += PaintDirection(parent.transform, "Path_Forward", true, +laneOffset, splineDistance, rng);
-        // Reverse lane: drives around the loop against spline direction on the -right side.
+        // Reverse lane: shuttles out against the spline (-right side) to its turnaround.
         created += PaintDirection(parent.transform, "Path_Reverse", false, -laneOffset, splineDistance, rng);
 
         Debug.Log($"Painted {created} passing cars ({carsPerDirection} per direction)");
@@ -290,37 +302,86 @@ public class PassingCarsSpawner : EditorWindow
 
     int PaintDirection(Transform parent, string pathName, bool forward, float offset, float splineDistance, System.Random rng)
     {
-        // Waypoints span the FULL loop (param 0 -> 1) so the path wraps around
-        // along the road. A path that stops at End % would force the last car
-        // to cut a straight line back to Start % across the loop.
-        int numWaypoints = Mathf.Max(12, Mathf.CeilToInt(splineDistance / WaypointSpacing));
-
-        // Recreate the path so re-painting doesn't stack duplicate paths.
-        GameObject pathObj = CreateOrReplacePath(parent, pathName);
-        Transform[] waypoints = new Transform[numWaypoints];
+        // Build a closed "shuttle" loop for this direction instead of a path
+        // that runs off the end of the road:
+        //   outbound leg  - drive out along this direction's side of the road,
+        //   U-turn arc    - cross over to the other side,
+        //   inbound leg   - drive back along the other side,
+        //   U-turn arc    - cross back, closing the loop.
+        // Cars follow the loop forever, so none ever reaches the end of the
+        // path. Forward cars turn at Turnaround %; reverse cars at 100 - %.
+        //   Forward:  outbound +side startParam -> turnParam,
+        //             U-turn at turnParam, inbound -side turnParam -> startParam.
+        //   Reverse:  outbound -side endParam -> (1-turnParam),
+        //             U-turn there, inbound +side (1-turnParam) -> endParam.
+        float legStart = forward ? startParam : endParam;
+        float legEnd = forward ? turnParam : (1f - turnParam);
 
         var spline = targetRoad.spline;
 
-        for (int i = 0; i < numWaypoints; i++)
+        // Position on the road at param t, shifted `side` meters across the
+        // road from the centerline (side is the signed lane offset).
+        Vector3 PointOnLane(float t, float side)
         {
-            // "forward" paths run param 0->1, "reverse" paths run param 1->0,
-            // so waypoint i+1 is always the NEXT point in driving order.
-            float t = (float)i / (numWaypoints - 1);
-            float param = forward ? t : (1f - t);
-
             Vector3 pos, tangent;
-            spline.GetSplineValueBoth(param, out pos, out tangent);
-
-            if (tangent == Vector3.zero) continue;
-
-            // Right vector of the car's travel direction, flattened to XZ.
+            spline.GetSplineValueBoth(t, out pos, out tangent);
             Vector3 right = new Vector3(tangent.z, 0f, -tangent.x).normalized;
+            return pos + right * side;
+        }
+
+        // Waypoints along one leg, driving from param a to param b on side s.
+        // The list order IS the driving order (b may be lower than a).
+        void AddLeg(List<Vector3> points, float a, float b, float s)
+        {
+            int n = Mathf.Max(8, Mathf.CeilToInt(Mathf.Abs(b - a) * splineDistance / WaypointSpacing));
+            for (int i = 0; i < n; i++)
+            {
+                float t = Mathf.Lerp(a, b, (float)i / (n - 1));
+                points.Add(PointOnLane(t, s));
+            }
+        }
+
+        // A U-turn at param t: cross the road from one side to the other,
+        // bulging a few meters forward so the car sweeps a natural arc.
+        void AddUTurn(List<Vector3> points, float t, float fromSide, float toSide)
+        {
+            float[] sides = { fromSide, fromSide * 0.6f, 0f, toSide * 0.6f, toSide };
+            float[] bulge = { 0f, 3.5f, 5f, 3.5f, 0f };
+            for (int k = 0; k < sides.Length; k++)
+            {
+                Vector3 pos, tangent;
+                spline.GetSplineValueBoth(t, out pos, out tangent);
+                Vector3 right = new Vector3(tangent.z, 0f, -tangent.x).normalized;
+                points.Add(pos + right * sides[k] + tangent.normalized * bulge[k]);
+            }
+        }
+
+        // Recreate the path so re-painting doesn't stack duplicate paths.
+        GameObject pathObj = CreateOrReplacePath(parent, pathName);
+
+        // Build the closed loop in driving order. The last U-turn ends exactly
+        // where the first leg started, so the car wraps around seamlessly.
+        List<Vector3> points = new List<Vector3>();
+        AddLeg(points, legStart, legEnd, offset);
+        AddUTurn(points, legEnd, offset, -offset);
+        AddLeg(points, legEnd, legStart, -offset);
+        AddUTurn(points, legStart, -offset, offset);
+
+        Transform[] waypoints = new Transform[points.Count];
+        for (int i = 0; i < points.Count; i++)
+        {
+            // Face the next point in the chain so spawned cars point the right way.
+            Vector3 here = points[i];
+            Vector3 next = points[(i + 1) % points.Count];
+            Vector3 dir = next - here;
+            dir.y = 0f;
+            Quaternion rot = dir.sqrMagnitude > 0.0001f
+                ? Quaternion.LookRotation(dir.normalized, Vector3.up)
+                : Quaternion.identity;
 
             GameObject wp = new GameObject($"WP_{i:D3}");
-            wp.transform.position = pos + right * offset;
-            wp.transform.rotation = Quaternion.LookRotation(
-                (forward ? tangent.normalized : -tangent.normalized),
-                Vector3.up);
+            wp.transform.position = here;
+            wp.transform.rotation = rot;
             Undo.RegisterCreatedObjectUndo(wp, "Create Passing Car Waypoint");
             Undo.SetTransformParent(wp.transform, pathObj.transform, "Create Passing Car Waypoint");
             waypoints[i] = wp.transform;
@@ -334,16 +395,9 @@ public class PassingCarsSpawner : EditorWindow
         float speedHi = forward ? (minSpeedKPH + maxSpeedKPH) * 0.5f : maxSpeedKPH;
         float speedKPH = (float)(rng.NextDouble() * (speedHi - speedLo) + speedLo);
 
-        // Section of the loop the cars are spread across. Waypoint index i on
-        // the reverse path sits at param 1 - i/(n-1), so mirror the section.
-        float secStart = forward ? startParam : (1f - endParam);
-        float secEnd = forward ? endParam : (1f - startParam);
-
-        int firstWp = Mathf.RoundToInt(secStart * (numWaypoints - 1));
-        int lastWp = Mathf.Max(firstWp + 1, Mathf.RoundToInt(secEnd * (numWaypoints - 1)));
-        int span = lastWp - firstWp;
-
-        int toPlace = Mathf.Min(carsPerDirection, span + 1);
+        // Spread the cars along the outbound leg (waypoints 0 .. perLeg-1).
+        int perLeg = Mathf.Max(8, Mathf.CeilToInt(Mathf.Abs(legEnd - legStart) * splineDistance / WaypointSpacing));
+        int toPlace = Mathf.Min(carsPerDirection, perLeg);
 
         int created = 0;
         for (int i = 0; i < toPlace; i++)
@@ -351,7 +405,7 @@ public class PassingCarsSpawner : EditorWindow
             // Sit each car exactly on its own waypoint and tell the controller
             // to start there - it advances to the NEXT waypoint and drives
             // forward with the platoon instead of turning back to waypoint[0].
-            int wpIndex = firstWp + Mathf.RoundToInt((float)i * span / Mathf.Max(1, toPlace - 1));
+            int wpIndex = Mathf.RoundToInt((float)i * (perLeg - 1) / Mathf.Max(1, toPlace - 1));
             if (waypoints[wpIndex] == null) continue;
 
             GameObject prefab = carPrefabs[rng.Next(carPrefabs.Length)];
@@ -386,7 +440,7 @@ public class PassingCarsSpawner : EditorWindow
 
         if (toPlace < carsPerDirection)
         {
-            Debug.LogWarning($"{pathName}: only {toPlace} waypoints fit in the Start %-End % section " +
+            Debug.LogWarning($"{pathName}: only {perLeg} waypoints fit between the section start and the turnaround " +
                              $"- reduce the car count or widen the section.");
         }
 

@@ -161,11 +161,12 @@ public class PassingCarsSpawner : EditorWindow
         EditorGUILayout.LabelField("Placement (road section)", EditorStyles.boldLabel);
         startParam = EditorGUILayout.Slider("Start %", startParam, 0f, 1f);
         endParam = EditorGUILayout.Slider("End %", endParam, 0f, 1f);
-        turnParam = EditorGUILayout.Slider("Turnaround %", turnParam, 0.55f, 0.98f);
-        EditorGUILayout.LabelField(
-            $"Forward cars turn around at {turnParam * 100f:F0}% and come back on " +
-            $"the other side; reverse cars turn at {(1f - turnParam) * 100f:F0}%. " +
-            "Each direction drives a closed loop, so no car reaches the end of the path.",
+        turnParam = EditorGUILayout.Slider("Forward Turnaround %", turnParam, 0.55f, 0.98f);
+        EditorGUILayout.LabelField(                $"Forward cars drive {startParam * 100f:F0}% -> {turnParam * 100f:F0}% on one side, " +
+            $"turn around at that end, cross the road, and come back. " +
+            $"Reverse cars drive {endParam * 100f:F0}% -> {(1f - turnParam) * 100f:F0}% on the other side, " +
+            $"turn around at ITS end, cross back. Each direction turns around at the " +
+            $"end of its OWN stretch (not the same middle point), and shuttles forever.",
             EditorStyles.miniLabel);
 
         EditorGUILayout.Space();
@@ -260,9 +261,11 @@ public class PassingCarsSpawner : EditorWindow
             endParam = tmp;
         }
 
-        // Keep the turnaround inside the driving section (mirrored, so the
-        // reverse lane's turnaround stays on the road too).
+        // Keep the forward turnaround inside the forward stretch so both
+        // directions' turnarounds sit on the road (not necessarily in the middle).
         turnParam = Mathf.Clamp(turnParam, startParam + 0.05f, endParam - 0.05f);
+        // Reverse turnaround is the mirrored end of the reverse stretch.
+        float revTurnParam = 1f - turnParam;
 
         float splineDistance = targetRoad.spline.distance;
         if (splineDistance <= 0f)
@@ -276,11 +279,12 @@ public class PassingCarsSpawner : EditorWindow
         int total = carsPerDirection * 2;
         if (!EditorUtility.DisplayDialog("Paint Passing Cars",
             $"Place {total} passing cars along the road " +
-            $"(forward lane drives {startParam * 100f:F0}% -> {turnParam * 100f:F0}% and back, " +
-            $"reverse lane {endParam * 100f:F0}% -> {(1f - turnParam) * 100f:F0}% and back, " +
+            $"(forward lane: {startParam * 100f:F0}% -> {turnParam * 100f:F0}% then back, " +
+            $"reverse lane: {endParam * 100f:F0}% -> {revTurnParam * 100f:F0}% then back, " +
             $"{laneOffset:F1} m from the centerline each way).\n\n" +
-            "Each direction turns around and comes back on the other side of the road, " +
-            "so no car reaches the end of the path.\n\n" +
+            "Each direction turns around at the END of its own stretch (not the same " +
+            "point in the middle) and shuttles back and forth forever - no car gets " +
+            "stuck at the end of the path.\n\n" +
             "This action can be undone (Ctrl+Z).",
             "Paint", "Cancel"))
         {
@@ -292,30 +296,28 @@ public class PassingCarsSpawner : EditorWindow
         GameObject parent = FindOrCreateParent(ParentName);
         int created = 0;
 
-        // Forward lane: shuttles out along the spline (+right side) to the turnaround.
-        created += PaintDirection(parent.transform, "Path_Forward", true, +laneOffset, splineDistance, rng);
-        // Reverse lane: shuttles out against the spline (-right side) to its turnaround.
-        created += PaintDirection(parent.transform, "Path_Reverse", false, -laneOffset, splineDistance, rng);
+        // Forward lane: shuttles out along the spline (+right side) to its turnaround.
+        created += PaintDirection(parent.transform, "Path_Forward", true, +laneOffset, splineDistance, rng, turnParam);
+        // Reverse lane: shuttles out against the spline (-right side) to its own turnaround.
+        created += PaintDirection(parent.transform, "Path_Reverse", false, -laneOffset, splineDistance, rng, revTurnParam);
 
         Debug.Log($"Painted {created} passing cars ({carsPerDirection} per direction)");
     }
 
-    int PaintDirection(Transform parent, string pathName, bool forward, float offset, float splineDistance, System.Random rng)
+    int PaintDirection(Transform parent, string pathName, bool forward, float offset, float splineDistance, System.Random rng, float turnParam)
     {
-        // Build a closed "shuttle" loop for this direction instead of a path
-        // that runs off the end of the road:
-        //   outbound leg  - drive out along this direction's side of the road,
-        //   U-turn arc    - cross over to the other side,
-        //   inbound leg   - drive back along the other side,
-        //   U-turn arc    - cross back, closing the loop.
-        // Cars follow the loop forever, so none ever reaches the end of the
-        // path. Forward cars turn at Turnaround %; reverse cars at 100 - %.
+        // Build a closed "shuttle" loop for THIS direction. The turnaround is at
+        // the END of this direction's own stretch (some percent before the end of
+        // the real road - not a shared middle point). Cars follow the loop forever,
+        // so none ever reaches the end of the path.
         //   Forward:  outbound +side startParam -> turnParam,
-        //             U-turn at turnParam, inbound -side turnParam -> startParam.
-        //   Reverse:  outbound -side endParam -> (1-turnParam),
-        //             U-turn there, inbound +side (1-turnParam) -> endParam.
+        //             U-turn at turnParam (THE END of the forward stretch),
+        //             inbound -side turnParam -> startParam.
+        //   Reverse:  outbound -side endParam -> turnParam,
+        //             U-turn at turnParam (THE END of the reverse stretch, opposite end of the road),
+        //             inbound +side turnParam -> endParam.
         float legStart = forward ? startParam : endParam;
-        float legEnd = forward ? turnParam : (1f - turnParam);
+        float legEnd = turnParam;
 
         var spline = targetRoad.spline;
 

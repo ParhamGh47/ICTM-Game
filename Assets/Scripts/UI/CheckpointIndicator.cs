@@ -39,6 +39,23 @@ public class CheckpointIndicator : MonoBehaviour
         //     wrongWayUI.gameObject.SetActive(isWrongWay);
     }
 
+    /// <summary>
+    /// The checkpoint the player is currently being sent to. Null when no
+    /// checkpoints are wired up yet.
+    /// </summary>
+    public Transform GetNextCheckpoint()
+    {
+        if (checkpoints == null || checkpoints.Length == 0)
+            return null;
+
+        return checkpoints[Mathf.Clamp(currentIndex, 0, checkpoints.Length - 1)];
+    }
+
+    public int GetCurrentIndex()
+    {
+        return currentIndex;
+    }
+
     public void NextCheckpoint()
     {
         if (checkpoints == null || checkpoints.Length == 0) return;

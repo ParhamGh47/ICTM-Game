@@ -1,4 +1,5 @@
 using UnityEngine;
+using RoadArchitect;
 
 public class CarController : MonoBehaviour
 {
@@ -33,6 +34,24 @@ public class CarController : MonoBehaviour
     [Header("Reset Cooldown")]
     public float resetCooldown = 2f;
     private float lastResetTime = -999f;
+
+    [Header("Reset Onto Road")]
+    [Tooltip("Drop the car back onto the nearest road instead of leaving it wherever it ended up.")]
+    public bool resetOntoRoad = true;
+
+    [Tooltip("Only snap to a road closer than this. 0 = no limit.")]
+    public float resetMaxRoadDistance = 0f;
+
+    [Tooltip("How strongly a road is preferred for pointing the same way as the car " +
+             "rather than being a crossing road (metres of lead).")]
+    public float resetAlignmentWeight = 25f;
+
+    [Tooltip("Face the car down the road towards the next checkpoint, so a reset " +
+             "never leaves it pointing sideways across the tarmac.")]
+    public bool resetFacesForward = true;
+
+    private Road[] cachedRoads;
+    private CheckpointIndicator cachedCompass;
 
     [Header("Focus System")]
     public bool enableFocus = true;
@@ -246,16 +265,193 @@ void Update()
         rb.velocity = Vector3.zero;
         rb.angularVelocity = Vector3.zero;
 
+        float yaw = transform.eulerAngles.y;
+
+        // Land the car on the road instead of wherever it got stuck: find the
+        // closest road that runs the way the level needs and drop it into the
+        // matching lane. The lift keeps the old "reset from above" feel, it just
+        // comes down over asphalt now, facing the way the level goes.
+        Vector3 resetPosition = transform.position;
+
+        if (resetOntoRoad)
+        {
+            Vector3 onRoad, roadForward;
+
+            if (TryGetRoadResetPosition(resetPosition, yaw, out onRoad, out roadForward))
+            {
+                resetPosition = onRoad;
+
+                if (resetFacesForward && roadForward.sqrMagnitude > 0.0001f)
+                    yaw = Quaternion.LookRotation(roadForward, Vector3.up).eulerAngles.y;
+            }
+        }
+
         Vector3 uprightEuler =
             new Vector3(
                 0f,
-                transform.eulerAngles.y,
+                yaw,
                 2.6f);
 
         transform.rotation =
             Quaternion.Euler(uprightEuler);
 
-        transform.position += Vector3.up * 1.6f;
+        transform.position = resetPosition + Vector3.up * 1.6f;
+    }
+
+
+    private bool TryGetRoadResetPosition(Vector3 from, float yaw, out Vector3 result, out Vector3 roadForward)
+    {
+        result = from;
+        roadForward = Vector3.zero;
+
+        if (cachedRoads == null || cachedRoads.Length == 0)
+            cachedRoads = FindObjectsOfType<Road>();
+
+        if (cachedRoads == null || cachedRoads.Length == 0)
+            return false;
+
+        Vector3 heading =
+            Quaternion.Euler(0f, yaw, 0f) * Vector3.forward;
+
+        heading.y = 0f;
+
+        if (heading.sqrMagnitude < 0.0001f)
+            heading = Vector3.forward;
+        else
+            heading.Normalize();
+
+        // Which way counts as progressing? The compass already knows - it points
+        // at the next checkpoint the player has to reach. Without checkpoints
+        // (playground scenes) fall back to the way the car is pointing.
+        Transform nextCheckpoint = GetNextCheckpoint();
+        Vector3 progressDirection = heading;
+
+        if (nextCheckpoint != null)
+        {
+            Vector3 toNext = nextCheckpoint.position - from;
+            toNext.y = 0f;
+
+            if (toNext.sqrMagnitude > 1f)
+                progressDirection = toNext.normalized;
+        }
+
+        Road bestRoad = null;
+        float bestParam = 0f;
+        float bestDistance = float.MaxValue;
+        float bestScore = float.MaxValue;
+
+        foreach (Road road in cachedRoads)
+        {
+            if (road == null || road.spline == null)
+                continue;
+
+            // Unbuilt / broken roads make GetClosestParam misbehave, skip them.
+            if (road.spline.distance <= 0.01f || road.spline.GetNodeCount() < 2)
+                continue;
+
+            float param =
+                road.spline.GetClosestParam(from, false, true);
+
+            Vector3 roadPosition, roadTangent;
+            road.spline.GetSplineValueBoth(param, out roadPosition, out roadTangent);
+
+            roadTangent.y = 0f;
+
+            if (roadTangent.sqrMagnitude < 0.0001f)
+                continue;
+
+            roadTangent.Normalize();
+
+            float distance =
+                Vector2.Distance(
+                    new Vector2(from.x, from.z),
+                    new Vector2(roadPosition.x, roadPosition.z));
+
+            // |dot| ~ 1 means the road runs the way we need to go (either
+            // direction), ~ 0 means it crosses it. Crossing roads are pushed
+            // away so the car does not get parked on a road it was not on.
+            float alignment =
+                Mathf.Abs(Vector3.Dot(progressDirection, roadTangent));
+
+            float score =
+                distance + resetAlignmentWeight * (1f - alignment);
+
+            if (score < bestScore)
+            {
+                bestScore = score;
+                bestRoad = road;
+                bestParam = param;
+                bestDistance = distance;
+            }
+        }
+
+        if (bestRoad == null)
+            return false;
+
+        if (resetMaxRoadDistance > 0f && bestDistance > resetMaxRoadDistance)
+            return false;
+
+        Vector3 position, tangent;
+        bestRoad.spline.GetSplineValueBoth(bestParam, out position, out tangent);
+
+        tangent.y = 0f;
+
+        if (tangent.sqrMagnitude < 0.0001f)
+            return false;
+
+        tangent.Normalize();
+
+        // Pick the side of the road that leads to the next checkpoint. If the
+        // checkpoint sits almost straight across (hairpin), that chord is not
+        // reliable, so keep the direction the car was already travelling.
+        float alongRoad =
+            Vector3.Dot(tangent, progressDirection);
+
+        if (Mathf.Abs(alongRoad) < 0.25f)
+            alongRoad = Vector3.Dot(tangent, heading);
+
+        float direction =
+            alongRoad >= 0f ? 1f : -1f;
+
+        roadForward =
+            tangent * direction;
+
+        Vector3 right =
+            new Vector3(tangent.z, 0f, -tangent.x);
+
+        // Drive in the lane that matches the way the car will be facing.
+        float laneOffset =
+            GetLaneCenterOffset(bestRoad);
+
+        result =
+            position + right * (direction > 0f ? laneOffset : -laneOffset);
+
+        return true;
+    }
+
+
+    private Transform GetNextCheckpoint()
+    {
+        if (cachedCompass == null)
+            cachedCompass = FindObjectOfType<CheckpointIndicator>(true);
+
+        return cachedCompass != null ? cachedCompass.GetNextCheckpoint() : null;
+    }
+
+
+    // Centre of a driving lane, measured from the road centreline. Clamped so
+    // the car can never be placed off the asphalt.
+    private static float GetLaneCenterOffset(Road road)
+    {
+        float halfRoad =
+            road.RoadWidth() * 0.5f;
+
+        float offset =
+            road.laneAmount >= 2
+                ? (road.laneAmount / 2f - 0.5f) * road.laneWidth
+                : 0f;
+
+        return Mathf.Clamp(offset, 0f, Mathf.Max(0f, halfRoad - 0.5f));
     }
 
 

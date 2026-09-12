@@ -1,5 +1,4 @@
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 public class gameOver : MonoBehaviour
 {
@@ -71,7 +70,7 @@ public class gameOver : MonoBehaviour
         if (PauseTracker.Instance != null)
             PauseTracker.Instance.isPaused = false;
 
-        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+        SceneLoader.Reload();
     }
 
     public void ExitToMenu()
@@ -85,7 +84,7 @@ public class gameOver : MonoBehaviour
         if (PauseTracker.Instance != null)
             PauseTracker.Instance.isPaused = false;
 
-        SceneManager.LoadScene("Menu");
+        SceneLoader.Load("Menu");
     }
 
 }

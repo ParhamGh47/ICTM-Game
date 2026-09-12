@@ -1,19 +1,18 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 public class menuBTN : MonoBehaviour
 {
 
     public void backBtn()
     {
-        SceneManager.LoadScene("Menu");
+        SceneLoader.Load("Menu");
     }
 
     public void optionBtn()
     {
-        SceneManager.LoadScene("Option");
+        SceneLoader.Load("Option");
     }
 
     #region MainMenu
@@ -25,7 +24,7 @@ public class menuBTN : MonoBehaviour
     
     public void playBtn()
     {
-        SceneManager.LoadScene("Levels");
+        SceneLoader.Load("Levels");
     }
     #endregion
 
@@ -33,22 +32,22 @@ public class menuBTN : MonoBehaviour
 
     public void levelOne()
     {
-        SceneManager.LoadScene("TW-Start-1");
+        SceneLoader.Load("TW-Start-1");
     }
 
     public void levelTwo()
     {
-        SceneManager.LoadScene("TW-Start-2");
+        SceneLoader.Load("TW-Start-2");
     }
 
     public void levelThree()
     {
-        SceneManager.LoadScene("TW-Start-3");
+        SceneLoader.Load("TW-Start-3");
     }
 
     public void levelFour()
     {
-        SceneManager.LoadScene("TW-Start-4");
+        SceneLoader.Load("TW-Start-4");
     }
 
     #endregion

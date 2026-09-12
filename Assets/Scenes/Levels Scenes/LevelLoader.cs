@@ -1,7 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 public class LevelLoader : MonoBehaviour
 {
@@ -10,19 +9,19 @@ public class LevelLoader : MonoBehaviour
 
     public void Menu()
     {
-        SceneManager.LoadScene("Menu");
+        SceneLoader.Load("Menu");
     }
 
     public void Gameplay()
     {
-        SceneManager.LoadScene(gameplaySceneName);
+        SceneLoader.Load(gameplaySceneName);
     }
 
     public void LoadEnd()
     {
         if (!string.IsNullOrEmpty(endScene))
         {
-            SceneManager.LoadScene(endScene);
+            SceneLoader.Load(endScene);
         }
     }
 }

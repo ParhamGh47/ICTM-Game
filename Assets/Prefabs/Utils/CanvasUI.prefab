@@ -601,6 +601,7 @@ GameObject:
   - component: {fileID: 6890820110232687939}
   - component: {fileID: 6890820110232687938}
   - component: {fileID: 6890820110232687941}
+  - component: {fileID: 7100000001}
   m_Layer: 0
   m_Name: Pause
   m_TagString: Untagged
@@ -887,6 +888,7 @@ GameObject:
   - component: {fileID: 6890820110302793908}
   - component: {fileID: 6890820110302793906}
   - component: {fileID: 6890820110302793909}
+  - component: {fileID: 7100000002}
   m_Layer: 0
   m_Name: controls
   m_TagString: Untagged
@@ -5491,3 +5493,37 @@ MonoBehaviour:
   m_EffectColor: {r: 1, g: 1, b: 1, a: 0.5}
   m_EffectDistance: {x: 4, y: -2}
   m_UseGraphicAlpha: 1
+--- !u!114 &7100000001
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6890820110232687943}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5e2f8a1c9b6d4e37a0c5b8d21f4e6a93, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  buttons: []
+  firstButtonName: 
+  selectOnEnable: 1
+  keepSelectionAlive: 1
+  rememberLast: 1
+--- !u!114 &7100000002
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6890820110302793911}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5e2f8a1c9b6d4e37a0c5b8d21f4e6a93, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  buttons: []
+  firstButtonName: 
+  selectOnEnable: 1
+  keepSelectionAlive: 1
+  rememberLast: 1

@@ -1045,6 +1045,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1833373472}
   - component: {fileID: 1833373471}
+  - component: {fileID: 9100000100}
   m_Layer: 0
   m_Name: Manger
   m_TagString: Untagged
@@ -1571,3 +1572,20 @@ MonoBehaviour:
   m_EffectColor: {r: 0, g: 0, b: 0, a: 1}
   m_EffectDistance: {x: 8, y: -8}
   m_UseGraphicAlpha: 1
+--- !u!114 &9100000100
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1833373470}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5e2f8a1c9b6d4e37a0c5b8d21f4e6a93, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  buttons: []
+  firstButtonName: play
+  selectOnEnable: 1
+  keepSelectionAlive: 1
+  rememberLast: 1

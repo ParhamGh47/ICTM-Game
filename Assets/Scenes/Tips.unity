@@ -218,7 +218,7 @@ GameObject:
   - component: {fileID: 1001}
   - component: {fileID: 1002}
   m_Layer: 0
-  m_Name: Credits Screen
+  m_Name: Tips Screen
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -248,27 +248,22 @@ MonoBehaviour:
   m_GameObject: {fileID: 100}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9c1f0b4a7e2d4c8fa1b3d5e60718293a, type: 3}
+  m_Script: {fileID: 11500000, guid: 3d7a5e21c4b84f06a9d2c8e51736408b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   font: {fileID: 11400000, guid: 5d9ca5d060d66fc43a47e0cec6e394a6, type: 2}
-  logo: {fileID: 0}
   backgroundColor: {r: 0.012, g: 0.024, b: 0.055, a: 1}
   accentColor: {r: 1, g: 0.64, b: 0.16, a: 1}
   labelColor: {r: 0.86, g: 0.89, b: 0.95, a: 1}
-  logoHeight: 150
-  contentWidth: 1200
+  contentWidth: 1180
   titleSize: 76
   bodySize: 34
-  scrollSpeed: 120
-  startDelay: 1.2
-  endHoldTime: 2.5
-  music: {fileID: 8300000, guid: 5aedd08f86f31bf4a86de37200e7e7db, type: 3}
-  loopMusic: 1
-  musicVolume: 0.7
+  rowGap: 42
+  listTopY: -250
   menuSceneName: Menu
-  skipHint: CLICK  OR  PRESS ESC TO SKIP
-  fadeTime: 0.5
+  titleText: TIPS
+  hintText: ESC  TO  GO  BACK
+  fadeTime: 0.45
 --- !u!1 &3200060
 GameObject:
   m_ObjectHideFlags: 0

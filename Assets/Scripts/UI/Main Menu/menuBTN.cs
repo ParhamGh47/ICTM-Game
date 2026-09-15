@@ -26,6 +26,17 @@ public class menuBTN : MonoBehaviour
     {
         SceneLoader.Load("Levels");
     }
+
+    public void creditsBtn()
+    {
+        SceneLoader.Load("Credits");
+    }
+
+    public void tipsBtn()
+    {
+        SceneLoader.Load("Tips");
+    }
+
     #endregion
 
     #region Levels

@@ -30,6 +30,8 @@ public static class SceneLoader
         "Menu",
         "Levels",
         "Option",
+        "Credits",
+        "Tips",
     };
 
     // Safety nets: never leave the player staring at the overlay forever.

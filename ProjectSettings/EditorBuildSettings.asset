@@ -56,4 +56,10 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/Levels Scenes/3/TW-End-3.unity
     guid: 64443a443fbcdec48afea79acb077f24
+  - enabled: 1
+    path: Assets/Scenes/Credits.unity
+    guid: f1ee788eae613a440943c384ff466c49
+  - enabled: 1
+    path: Assets/Scenes/Tips.unity
+    guid: 2b6c8e4d1a3f47c9b8e05d2617183049
   m_configObjects: {}

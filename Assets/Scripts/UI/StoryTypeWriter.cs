@@ -8,11 +8,17 @@ public class StoryTypeWriter : MonoBehaviour
 {
     [Header("Typing")]
     [Min(1f)] public float charactersPerSecond = 30f;
-    [Min(1f)] public float skipMultiplier = 6f;
+
+    [Tooltip("How much faster the text types while Speed Up is switched on.")]
+    [Min(1f)] public float speedUpMultiplier = 6f;
 
     [Header("UI Buttons (Optional)")]
+    [Tooltip("Advances the story: finishes the page that is being typed, then types the next one.")]
     public Button continueButton;
-    public Button skipButton;
+
+    [Tooltip("Switches fast typing on and off. This is a separate button from the one that " +
+             "skips the story, so neither has to share the other's job.")]
+    public Button speedUpButton;
 
     [Header("Auto Start")]
     [TextArea(3, 10)]
@@ -22,7 +28,7 @@ public class StoryTypeWriter : MonoBehaviour
     private Coroutine typingCo;
 
     private bool isTyping;
-    private bool skipActive;
+    private bool speedUpActive;
 
     private int currentPage = 1;
     private int totalPages = 1;
@@ -35,9 +41,11 @@ public class StoryTypeWriter : MonoBehaviour
         tmp.enableWordWrapping = true;
 
         if (continueButton != null) continueButton.onClick.AddListener(OnContinueClicked);
-        if (skipButton != null) skipButton.onClick.AddListener(OnSkipClicked);
+        if (speedUpButton != null) speedUpButton.onClick.AddListener(OnSpeedUpClicked);
 
-        SetContinueInteractable(false);
+        // Usable from the first frame, so the button can also hold the menu highlight while the
+        // opening page types itself out.
+        SetContinueInteractable(true);
     }
 
     void Start()
@@ -85,7 +93,9 @@ public class StoryTypeWriter : MonoBehaviour
         tmp.maxVisibleCharacters = first;
         isTyping = true;
 
-        SetContinueInteractable(false);
+        // Stays clickable while the page types: pressing it reveals the rest of the page, so the
+        // player is never stuck waiting for the text and the highlight has somewhere to sit.
+        SetContinueInteractable(true);
         typingCo = StartCoroutine(TypePageCoroutine(first, last));
     }
 
@@ -97,7 +107,7 @@ public class StoryTypeWriter : MonoBehaviour
         {
             tmp.maxVisibleCharacters = i + 1;
 
-            float mult = skipActive ? Mathf.Max(1f, skipMultiplier) : 1f;
+            float mult = speedUpActive ? Mathf.Max(1f, speedUpMultiplier) : 1f;
             yield return new WaitForSeconds(baseDelay / mult);
         }
 
@@ -145,9 +155,10 @@ public class StoryTypeWriter : MonoBehaviour
         }
     }
 
-    public void OnSkipClicked()
+    /// <summary>Switches fast typing on and off. Wired to the Speed Up button.</summary>
+    public void OnSpeedUpClicked()
     {
-        skipActive = !skipActive;
+        speedUpActive = !speedUpActive;
     }
 
     private void SetContinueInteractable(bool value)

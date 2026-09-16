@@ -12,7 +12,8 @@ using UnityEngine.SceneManagement;
 ///
 /// Transitions between the light menu scenes (<see cref="InstantScenes"/>) skip the overlay entirely:
 /// they are tiny, so the loading screen would only be a delay. Anything involving a gameplay scene
-/// still gets it.
+/// still gets it. Those menu hops are not left without feedback though - they get the short
+/// <see cref="ScreenFade"/> instead, so every transition in the game is smooth.
 /// </summary>
 public static class SceneLoader
 {
@@ -94,8 +95,13 @@ public static class SceneLoader
 
         bool showScreen = ShouldShowLoadingScreen(sceneName, showLoadingScreen);
 
-        // The overlay survives scene loads, so it doubles as a safe host for the transition coroutine.
+        // Both overlays survive scene loads, so the loading screen doubles as a safe host for the
+        // transition coroutine.
         LoadingScreen screen = LoadingScreen.Ensure();
+
+        // Even a menu hop - which shows no loading screen at all - gets a transition, so nothing in
+        // the game ever cuts straight from one screen to the next.
+        ScreenFade fade = ScreenFade.Ensure();
 
         if (showScreen)
         {
@@ -103,7 +109,7 @@ public static class SceneLoader
             screen.Show();
         }
 
-        screen.StartCoroutine(TransitionRoutine(screen, sceneName, buildIndex, showScreen));
+        screen.StartCoroutine(TransitionRoutine(screen, fade, sceneName, buildIndex, showScreen));
     }
 
     private static bool ShouldShowLoadingScreen(string targetSceneName, bool? overrideValue)
@@ -139,16 +145,22 @@ public static class SceneLoader
         return false;
     }
 
-    private static IEnumerator TransitionRoutine(LoadingScreen screen, string sceneName, int buildIndex, bool showScreen)
+    private static IEnumerator TransitionRoutine(LoadingScreen screen, ScreenFade fade, string sceneName, int buildIndex, bool showScreen)
     {
-        // Get the overlay onto the screen *before* any loading work starts. The frame that kicks off a
-        // load does a large slice of the scene deserialization on the main thread (Core-1..4 are 5-8 MB),
-        // so without these two frames the overlay would be enabled but not drawn yet - the player would
-        // watch the old scene freeze and only then see the loading screen appear, already at 90%.
         if (showScreen)
         {
+            // Get the overlay onto the screen *before* any loading work starts. The frame that kicks off a
+            // load does a large slice of the scene deserialization on the main thread (Core-1..4 are 5-8 MB),
+            // so without these two frames the overlay would be enabled but not drawn yet - the player would
+            // watch the old scene freeze and only then see the loading screen appear, already at 90%.
             yield return null;
             yield return null;
+        }
+        else
+        {
+            // A menu hop: no loading screen to show, so the fade *is* the transition. It has to be seen
+            // before the new scene appears, which is why the load starts only once it is opaque.
+            yield return fade.FadeToOpaque();
         }
 
         AsyncOperation operation = StartLoad(sceneName, buildIndex);
@@ -162,6 +174,7 @@ public static class SceneLoader
             if (string.IsNullOrEmpty(sceneName)) SceneManager.LoadScene(buildIndex, LoadSceneMode.Single);
             else SceneManager.LoadScene(sceneName, LoadSceneMode.Single);
 
+            if (!showScreen) yield return fade.FadeToClear();
             yield break;
         }
 
@@ -179,6 +192,10 @@ public static class SceneLoader
                 }
                 yield return null;
             }
+
+            // The loading screen would have faded out to reveal the new scene; here the black does it,
+            // so the scene is never seen for the first time mid-swap.
+            yield return fade.FadeToClear();
 
             IsLoading = false;
             yield break;

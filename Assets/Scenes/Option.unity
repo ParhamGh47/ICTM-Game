@@ -951,6 +951,8 @@ GameObject:
   - component: {fileID: 473434891}
   - component: {fileID: 473434890}
   - component: {fileID: 473434889}
+  - component: {fileID: 2145890578}
+  - component: {fileID: 2145890579}
   m_Layer: 0
   m_Name: EventSystem
   m_TagString: Untagged
@@ -2936,3 +2938,33 @@ SpriteRenderer:
   m_WasSpriteAssigned: 1
   m_MaskInteraction: 0
   m_SpriteSortPoint: 0
+--- !u!114 &2145890578
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 473434888}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5e2f8a1c9b6d4e37a0c5b8d21f4e6a93, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  buttons: []
+  firstButtonName: back
+  selectOnEnable: 1
+  keepSelectionAlive: 1
+  rememberLast: 1
+--- !u!114 &2145890579
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 473434888}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a7c3d8e25f194b6c9d04e1b83f2a5c71, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  targetScene: Menu

@@ -1123,7 +1123,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   charactersPerSecond: 30
-  speedUpMultiplier: 6
+  speedUpMultiplier: 8
   continueButton: {fileID: 1744959944}
   speedUpButton: {fileID: 2130387249}
   startText: 'The sun rises again, and with it, the world wakes.

@@ -715,7 +715,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   charactersPerSecond: 30
-  speedUpMultiplier: 6
+  speedUpMultiplier: 8
   continueButton: {fileID: 1070969797}
   speedUpButton: {fileID: 2096338727}
   startText: "What is happening? What's wrong with me?\r\nYou ask yourself.\r\n<b>Visions</b>.\r\n<b>Hallucinations</b>.\r\nBut

@@ -10,7 +10,7 @@ public class StoryTypeWriter : MonoBehaviour
     [Min(1f)] public float charactersPerSecond = 30f;
 
     [Tooltip("How much faster the text types while Speed Up is switched on.")]
-    [Min(1f)] public float speedUpMultiplier = 6f;
+    [Min(1f)] public float speedUpMultiplier = 8f;
 
     [Header("UI Buttons (Optional)")]
     [Tooltip("Advances the story: finishes the page that is being typed, then types the next one.")]
@@ -101,15 +101,29 @@ public class StoryTypeWriter : MonoBehaviour
 
     private IEnumerator TypePageCoroutine(int first, int last)
     {
-        float baseDelay = 1f / Mathf.Max(1f, charactersPerSecond);
+        // The reveal is driven by elapsed time rather than by one wait per character. WaitForSeconds can
+        // never wait for less than a frame, so the old per-character loop quietly capped the text at about
+        // one character per frame - at 30 characters per second the normal delay is already two frames, so
+        // a 6x multiplier only bought about 2x in practice and the Speed Up button felt like it barely
+        // did anything. Counting revealed characters off the clock removes that ceiling, so the multiplier
+        // means what it says and any rate works - and it also keeps the typing honest on a slow machine,
+        // where a low frame rate would otherwise stretch the page out.
+        float rate = Mathf.Max(1f, charactersPerSecond);
+        int remaining = last - first + 1;
+        float revealed = 0f;
 
-        for (int i = first; i <= last; i++)
+        while (revealed < remaining)
         {
-            tmp.maxVisibleCharacters = i + 1;
+            // Read every frame, so switching Speed Up on or off takes effect immediately.
+            float multiplier = speedUpActive ? Mathf.Max(1f, speedUpMultiplier) : 1f;
 
-            float mult = speedUpActive ? Mathf.Max(1f, speedUpMultiplier) : 1f;
-            yield return new WaitForSeconds(baseDelay / mult);
+            revealed = Mathf.Min(remaining, revealed + rate * multiplier * Time.deltaTime);
+            tmp.maxVisibleCharacters = first + Mathf.CeilToInt(revealed);
+
+            yield return null;
         }
+
+        tmp.maxVisibleCharacters = last + 1;
 
         isTyping = false;
         typingCo = null;

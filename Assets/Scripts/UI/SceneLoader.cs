@@ -22,7 +22,9 @@ public static class SceneLoader
 
     /// <summary>
     /// Scenes that are pure menus. Moving directly between two of these - menu, level list, controls,
-    /// and back again - happens without the loading screen, because they are tiny and instant.
+    /// customization, and back again - happens without the loading screen, because they are tiny and
+    /// instant. (The customize scene is one of them even though it builds a 3D preview: it holds no level
+    /// content, and the truck is a single object.)
     /// A transition from a level into one of these still shows it, since unloading a level does not
     /// happen instantly. Add or remove scene names here to change the rule.
     /// </summary>
@@ -33,6 +35,7 @@ public static class SceneLoader
         "Option",
         "Credits",
         "Tips",
+        "Customize",
     };
 
     // Safety nets: never leave the player staring at the overlay forever.

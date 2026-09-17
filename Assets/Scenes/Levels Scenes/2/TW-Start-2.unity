@@ -812,7 +812,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   charactersPerSecond: 30
-  speedUpMultiplier: 6
+  speedUpMultiplier: 8
   continueButton: {fileID: 1070969797}
   speedUpButton: {fileID: 2096338727}
   startText: '8:47 AM

@@ -37,6 +37,11 @@ public class menuBTN : MonoBehaviour
         SceneLoader.Load("Tips");
     }
 
+    public void customizeBtn()
+    {
+        SceneLoader.Load("Customize");
+    }
+
     #endregion
 
     #region Levels

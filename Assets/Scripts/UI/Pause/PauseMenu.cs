@@ -60,8 +60,8 @@ public class PauseMenu : MonoBehaviour
         isPaused = true;
         controlsOpen = false;
 
-        if (pausePanel != null)
-            pausePanel.SetActive(true);
+        ShowPanel(pausePanel);
+
         if (controlsPanel != null)
             controlsPanel.SetActive(false);
 
@@ -98,8 +98,25 @@ public class PauseMenu : MonoBehaviour
     public void OpenControls()
     {
         controlsOpen = true;
-        if (controlsPanel != null)
-            controlsPanel.SetActive(true);
+        ShowPanel(controlsPanel);
+    }
+
+    /// <summary>
+    /// Shows a panel, and above the level's HUD rather than under it.
+    ///
+    /// The HUD - the target, the timer, the compass - is authored as a later sibling of these panels in
+    /// the same canvas, and in a canvas a later sibling is drawn on top. Simply switching a panel on
+    /// therefore puts it behind the HUD, which is not what the player asked for when they paused.
+    /// Bringing the panel to the front as it opens keeps the screen that has the player's attention on
+    /// top, whatever order the canvas happens to be authored in. The controls panel does the same, so it
+    /// still comes up over the pause panel it was opened from.
+    /// </summary>
+    private static void ShowPanel(GameObject panel)
+    {
+        if (panel == null) return;
+
+        panel.transform.SetAsLastSibling();
+        panel.SetActive(true);
     }
 
     public void CloseControls()

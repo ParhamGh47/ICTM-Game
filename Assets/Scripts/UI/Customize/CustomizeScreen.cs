@@ -56,10 +56,15 @@ public class CustomizeScreen : MonoBehaviour
     public Color frameColor = new Color(0.42f, 0.47f, 0.58f, 1f);
     [Tooltip("Flat ambient light for the preview, so the paint reads clearly on every side.")]
     public Color ambientColor = new Color(0.34f, 0.37f, 0.44f, 1f);
-    [Tooltip("The faux sky the preview reflects. Chrome and glass need something to reflect; it is " +
-             "never seen, because the preview camera clears to the background colour.")]
-    public Color skyTint = new Color(0.42f, 0.52f, 0.68f, 1f);
-    public Color groundTint = new Color(0.16f, 0.16f, 0.18f, 1f);
+    [Tooltip("The faux sky the preview reflects. Metallic, chrome and glass take their brightness from " +
+             "what is around them, and this stands in for a level's own sky. It is never seen, because " +
+             "the preview camera clears to the background colour.")]
+    public Color skyTint = new Color(0.52f, 0.62f, 0.80f, 1f);
+    public Color groundTint = new Color(0.22f, 0.21f, 0.20f, 1f);
+    [Tooltip("The bright spot in that sky, which a polished finish catches.")]
+    public Color sunTint = new Color(1f, 0.95f, 0.85f, 1f);
+    [Tooltip("How large that bright spot is. Higher is a tighter, hotter highlight.")]
+    public float sunSize = 22f;
 
     // ---------------------------------------------------------------- layout
 
@@ -152,7 +157,7 @@ public class CustomizeScreen : MonoBehaviour
     private Image previewSwatch;
     private Button resetButton;
     private Button backButton;
-    private Material previewSky;
+    private Cubemap previewEnvironment;
 
     private Bounds previewBounds;
     private float columnBottom;
@@ -191,7 +196,7 @@ public class CustomizeScreen : MonoBehaviour
 
     private void OnDestroy()
     {
-        if (previewSky != null) Destroy(previewSky);
+        if (previewEnvironment != null) Destroy(previewEnvironment);
     }
 
     // ---------------------------------------------------------------- rendering
@@ -208,33 +213,92 @@ public class CustomizeScreen : MonoBehaviour
         RenderSettings.ambientLight = ambientColor;
         RenderSettings.fog = false;
 
-        SetUpSky();
+        SetUpEnvironment();
     }
 
     /// <summary>
-    /// Gives the preview a sky to reflect. Chrome, metallic and glass take almost all of their colour
-    /// from their surroundings, and a flat ambient light would leave them looking like dark plastic -
-    /// so a plain procedural sky is stood in for the level's own. The camera clears to a solid colour,
-    /// so the sky itself is never on screen; only the reflections come from it.
+    /// Gives the preview a sky to reflect. A metallic or glass part is lit mostly by its surroundings,
+    /// and a showroom with nothing around it leaves those finishes as a black slab with a hint of the
+    /// paint in it - so a small sky is made here and stood in for the level's own.
+    ///
+    /// It is a handful of colours painted into a cubemap rather than a skybox: it only has to be bright
+    /// and have a sun in it, and making it directly means no shader to find and no sky to look at. The
+    /// camera clears to a solid colour, so the only thing it is used for is reflections.
     /// </summary>
-    private void SetUpSky()
+    private void SetUpEnvironment()
     {
-        if (RenderSettings.skybox != null) return;
+        // A scene that already brings its own environment keeps it.
+        if (RenderSettings.defaultReflectionMode == UnityEngine.Rendering.DefaultReflectionMode.Custom &&
+            RenderSettings.customReflectionTexture != null)
+            return;
 
-        Shader shader = Shader.Find("Skybox/Procedural");
-        if (shader == null) return;
+        // The sun sits where the preview camera is looking from, so a polished surface always has a
+        // highlight to catch on the side the player is watching.
+        Vector3 sunDirection = Quaternion.Euler(previewPitch, previewYaw, 0f) * Vector3.forward;
 
-        previewSky = new Material(shader);
-        previewSky.name = "Customize Sky";
-        previewSky.SetColor("_SkyTint", skyTint);
-        previewSky.SetColor("_GroundColor", groundTint);
-        previewSky.SetFloat("_Exposure", 1.15f);
-        previewSky.SetFloat("_AtmosphereThickness", 0.6f);
+        previewEnvironment = CreateSkyCubemap(16, skyTint, groundTint, sunTint, sunSize, sunDirection);
 
-        RenderSettings.skybox = previewSky;
+        RenderSettings.defaultReflectionMode = UnityEngine.Rendering.DefaultReflectionMode.Custom;
+        RenderSettings.customReflectionTexture = previewEnvironment;
 
-        // Rebuilds the ambient probe the reflections are read from, so the metal sees the new sky.
+        // Rebuilds the probe the reflections are read from, so the finishes see the new sky.
         DynamicGI.UpdateEnvironment();
+    }
+
+    /// <summary>
+    /// Paints a sky into a cubemap: a colour for above, a colour for below, and one bright spot where the
+    /// sun is. It is small and soft on purpose - it is a light source for polished surfaces, not a view.
+    /// </summary>
+    private static Cubemap CreateSkyCubemap(int size, Color sky, Color ground, Color sun, float sunSize,
+                                            Vector3 sunDirection)
+    {
+        Cubemap cubemap = new Cubemap(size, TextureFormat.RGBA32, true);
+        cubemap.name = "Customize Sky";
+        cubemap.hideFlags = HideFlags.HideAndDontSave;
+        cubemap.wrapMode = TextureWrapMode.Clamp;
+        cubemap.filterMode = FilterMode.Bilinear;
+
+        Vector3 sunAxis = sunDirection.normalized;
+
+        for (int face = 0; face < 6; face++)
+        {
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    Vector3 direction = CubemapDirection((CubemapFace)face, x, y, size);
+
+                    // Up is sky, down is ground, and the horizon between them is the mix of the two.
+                    Color colour = Color.Lerp(ground, sky, Mathf.Clamp01(direction.y * 0.5f + 0.5f));
+
+                    float glow = Mathf.Pow(Mathf.Clamp01(Vector3.Dot(direction, sunAxis)), sunSize);
+                    colour = Color.Lerp(colour, sun, glow);
+
+                    colour.a = 1f;
+                    cubemap.SetPixel((CubemapFace)face, x, y, colour);
+                }
+            }
+        }
+
+        cubemap.Apply(true, false);
+        return cubemap;
+    }
+
+    /// <summary>The direction a cubemap texel points at, which is what the sky is painted along.</summary>
+    private static Vector3 CubemapDirection(CubemapFace face, int x, int y, int size)
+    {
+        float u = 2f * (x + 0.5f) / size - 1f;
+        float v = 2f * (y + 0.5f) / size - 1f;
+
+        switch (face)
+        {
+            case CubemapFace.PositiveX: return new Vector3(1f, -v, -u);
+            case CubemapFace.NegativeX: return new Vector3(-1f, -v, u);
+            case CubemapFace.PositiveY: return new Vector3(u, 1f, v);
+            case CubemapFace.NegativeY: return new Vector3(u, -1f, -v);
+            case CubemapFace.PositiveZ: return new Vector3(u, -v, 1f);
+            default: return new Vector3(-u, -v, -1f);
+        }
     }
 
     private Camera CreateCamera()

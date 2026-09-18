@@ -251,16 +251,24 @@ public class TruckPaintApplier : MonoBehaviour
     /// <summary>
     /// One entry per <see cref="PaintStyle"/>. A flat colour with a roughness change is enough to read
     /// as a different material, which keeps the finishes useful on the truck's simple, untextured
-    /// shapes: a matte finish scatters, chrome mirrors the sky, and glass lets the paint through.
+    /// shapes: a matte finish scatters, chrome catches the light, and glass is tinted.
+    ///
+    /// Metallic stays well short of 1 on purpose. At full metal the shader drops the diffuse completely,
+    /// so a part is left showing nothing but what it reflects - which, anywhere the reflections are dim,
+    /// is a black slab with a hint of the chosen colour in it. Chrome is the shiniest of the finishes
+    /// rather than a true mirror, so the colour a player picked is always legible.
+    ///
+    /// Glass is a tinted window rather than a sheet of clear glass: it stays see-through enough to read
+    /// as glass, without turning the back of the doors into a display case.
     /// </summary>
     private static readonly Finish[] Finishes =
     {
-        new Finish { metallic = 0.0f, smoothness = 0.35f, alpha = 1.0f, transparent = false },   // Paint
-        new Finish { metallic = 0.0f, smoothness = 0.75f, alpha = 1.0f, transparent = false },   // Gloss
-        new Finish { metallic = 0.0f, smoothness = 0.06f, alpha = 1.0f, transparent = false },   // Matte
-        new Finish { metallic = 0.75f, smoothness = 0.60f, alpha = 1.0f, transparent = false },  // Metallic
-        new Finish { metallic = 1.0f, smoothness = 0.90f, alpha = 1.0f, transparent = false },   // Chrome
-        new Finish { metallic = 0.10f, smoothness = 0.92f, alpha = 0.42f, transparent = true },  // Glass
+        new Finish { metallic = 0.00f, smoothness = 0.35f, alpha = 1.00f, transparent = false },  // Paint
+        new Finish { metallic = 0.00f, smoothness = 0.75f, alpha = 1.00f, transparent = false },  // Gloss
+        new Finish { metallic = 0.00f, smoothness = 0.06f, alpha = 1.00f, transparent = false },  // Matte
+        new Finish { metallic = 0.55f, smoothness = 0.45f, alpha = 1.00f, transparent = false },  // Metallic
+        new Finish { metallic = 0.65f, smoothness = 0.90f, alpha = 1.00f, transparent = false },  // Chrome
+        new Finish { metallic = 0.10f, smoothness = 0.80f, alpha = 0.80f, transparent = true },   // Glass
     };
 
     // ---------------------------------------------------------------- shader plumbing

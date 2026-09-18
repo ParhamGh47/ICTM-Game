@@ -8,37 +8,61 @@ public enum TruckPart
     Windows = 1,
     Wheels = 2,
     IceCream = 3,
-    BackDoor = 4,
+    Cone = 4,
+    BackDoor = 5,
+    Bumper = 6,
+}
+
+/// <summary>Which of a mesh's material slots a part's colour is written to.</summary>
+public enum SlotRule
+{
+    /// <summary>Every slot of the mesh.</summary>
+    All = 0,
+
+    /// <summary>Only the mesh's first slot - the wheels' hub, with the tyre left as it is.</summary>
+    First = 1,
+
+    /// <summary>Only the slots painted with the model's window material - the glass in the body.</summary>
+    Windows = 2,
+
+    /// <summary>Every slot except the window ones, so the body is painted but its glass is not.</summary>
+    ExceptWindows = 3,
+}
+
+/// <summary>How a painted part is shaded. The colour is the same for all of them.</summary>
+public enum PaintStyle
+{
+    Paint = 0,
+    Gloss = 1,
+    Matte = 2,
+    Metallic = 3,
+    Chrome = 4,
+    Glass = 5,
 }
 
 /// <summary>
-/// The player truck's paint job: which parts can change, which colours they can take, where the choice
-/// is remembered and how it reaches the truck.
+/// The player truck's paint job: which parts can change, which colours and finishes they can take,
+/// where the choice is remembered and how it reaches the truck.
 ///
 /// Parts are found by the name of the model's own objects, which the art gives us for free - the truck
-/// FBX names its meshes <c>body</c>, <c>backWindow</c>, <c>wheelsFront</c>, <c>wheelsBack</c>,
-/// <c>backDoor</c>, and the ice cream model names its two <c>cone</c> and <c>iceCream</c>. Matching is
-/// case-insensitive and by substring, so a part is still found if a name gains a suffix.
+/// FBX names its meshes <c>body</c>, <c>backWindow</c>, <c>backDoor</c>, <c>gelgir</c>,
+/// <c>wheelsFront</c> and <c>wheelsBack</c>, and the ice cream model its <c>cone</c> and
+/// <c>iceCream</c>. Matching is case-insensitive and by substring, so a part is still found if a name
+/// gains a suffix.
 ///
-/// Slots matter: a part is repainted on the slots it names, and an empty slot list means "every slot of
-/// that mesh". The wheels are the only multi-slot mesh here - five slots, of which slot 0 is the hub
-/// and slot 4 is the tyre rubber (the middle three are unused). A wheel colour is expected to change
-/// the wheel, so the whole thing is repainted rather than just the hub, and Black / Graphite in the
-/// palette put the tyres back.
+/// Slots matter: a mesh can carry several materials, and which of them belong to a part is what
+/// <see cref="SlotRule"/> decides. The body is the interesting one - it is painted with its own colour
+/// plus a window material for the glass, so the windows are their own part and the body leaves them
+/// alone. The wheels carry the hub and the tyre in separate slots, and only the hub takes the wheel
+/// colour.
 ///
-/// The choice is stored as an index into <see cref="Palette"/>, or -1 for "leave the model's own
-/// colour alone". Storing the index rather than a colour keeps the palette authoritative and makes the
-/// reset exact.
-///
-/// Nothing is applied unless something has actually been chosen, so an untouched game renders the truck
-/// exactly as the prefab does.
+/// Painting is stored as a colour per part, not as an index into <see cref="Palette"/>: the palette is
+/// only a set of presets, and the player is free to pick any colour they like with the picker. A part
+/// that has never been painted keeps the model's own colour.
 /// </summary>
 public static class TruckPaint
 {
-    public const int PartCount = 5;
-
-    /// <summary>An index of <see cref="ChoiceNone"/> means the part keeps the colour the model came with.</summary>
-    public const int ChoiceNone = -1;
+    public const int PartCount = 7;
 
     // ---------------------------------------------------------------- the parts
 
@@ -48,110 +72,128 @@ public static class TruckPaint
         "Windows",
         "Wheels",
         "Ice Cream",
+        "Cone",
         "Back Door",
+        "Bumper",
     };
 
     // Model object names per part.
     private static readonly string[][] PartObjectNames =
     {
         new[] { "body" },
-        new[] { "backWindow" },
+        new[] { "body" },                                     // the same mesh, its window slots
         new[] { "wheelsFront", "wheelsBack" },
-        new[] { "cone", "iceCream" },
-        new[] { "backDoor" },
+        new[] { "iceCream" },
+        new[] { "cone" },
+        new[] { "backDoor", "backWindow" },                   // the rear door and the glass in it
+        new[] { "gelgir" },                                   // the front grille and its surround
     };
 
-    // Material slots to repaint. Empty means every slot of that mesh.
-    private static readonly int[][] PartSlots =
+    private static readonly SlotRule[] PartSlotRules =
     {
-        new int[0],          // body: the main paint plus its two trim shades
-        new[] { 0 },         // back window: the glass, its only material
-        new int[0],          // wheels: the hub and the tyre rubber
-        new int[0],          // cone and ice cream each carry a single material
-        new[] { 0 },         // back door: its only material
-    };
-
-    // The body is painted with three related shades; keeping their relative brightness means a repaint
-    // still reads as a shaded body rather than one flat slab of colour.
-    private static readonly bool[] PartPreserveShading =
-    {
-        true,
-        false,
-        false,
-        false,
-        false,
+        SlotRule.ExceptWindows,   // body: its paint, not its glass
+        SlotRule.Windows,         // windows: that glass, wherever the model keeps it
+        SlotRule.First,           // wheels: the hub
+        SlotRule.All,             // ice cream
+        SlotRule.All,             // cone
+        SlotRule.All,             // back door and its window
+        SlotRule.All,             // bumper
     };
 
     public static string[] ObjectNamesOf(TruckPart part) { return PartObjectNames[(int)part]; }
-    public static int[] SlotsOf(TruckPart part) { return PartSlots[(int)part]; }
-    public static bool PreservesShading(TruckPart part) { return PartPreserveShading[(int)part]; }
+    public static SlotRule SlotRuleOf(TruckPart part) { return PartSlotRules[(int)part]; }
 
     // ---------------------------------------------------------------- the palette
 
+    /// <summary>
+    /// Presets for the picker rather than the whole vocabulary of colours: enough to tell the trucks
+    /// apart at a glance, all of them legible under the game's lighting, and each one an honest
+    /// representation of its name when the body wears it.
+    /// </summary>
     public static readonly string[] PaletteNames =
     {
-        "Red", "Orange", "Yellow", "Lime", "Green",
-        "Teal", "Sky", "Blue", "Purple", "Pink",
-        "Brown", "Cream", "Silver", "Graphite", "Black",
+        "Red", "Orange", "Amber", "Yellow", "Lime",
+        "Green", "Teal", "Sky", "Blue", "Purple",
+        "Magenta", "Pink", "Brown", "Cream", "White",
+        "Silver", "Grey", "Graphite", "Black",
     };
 
     /// <summary>
-    /// A spread of plain, readable vehicle colours rather than a full picker: enough to tell the trucks
-    /// apart at a glance, and all of them stay legible under the game's lighting.
+    /// The colours themselves. These are written to the truck as they are - the game's own paint is
+    /// flat, so what the swatch shows is what the truck gets.
     /// </summary>
     public static readonly Color[] Palette =
     {
-        new Color(0.80f, 0.15f, 0.13f),   // Red
-        new Color(0.92f, 0.45f, 0.11f),   // Orange
-        new Color(0.95f, 0.78f, 0.15f),   // Yellow
-        new Color(0.42f, 0.72f, 0.15f),   // Lime
-        new Color(0.13f, 0.55f, 0.25f),   // Green
-        new Color(0.08f, 0.60f, 0.62f),   // Teal
-        new Color(0.15f, 0.55f, 0.88f),   // Sky
-        new Color(0.12f, 0.25f, 0.72f),   // Blue
-        new Color(0.48f, 0.24f, 0.70f),   // Purple
-        new Color(0.90f, 0.32f, 0.60f),   // Pink
-        new Color(0.40f, 0.26f, 0.16f),   // Brown
-        new Color(0.93f, 0.90f, 0.80f),   // Cream
-        new Color(0.72f, 0.74f, 0.78f),   // Silver
-        new Color(0.22f, 0.23f, 0.25f),   // Graphite
-        new Color(0.07f, 0.07f, 0.08f),   // Black
+        new Color(0.82f, 0.14f, 0.13f),   // Red
+        new Color(0.95f, 0.45f, 0.10f),   // Orange
+        new Color(0.97f, 0.70f, 0.14f),   // Amber
+        new Color(0.96f, 0.87f, 0.22f),   // Yellow
+        new Color(0.62f, 0.86f, 0.17f),   // Lime
+        new Color(0.19f, 0.63f, 0.28f),   // Green
+        new Color(0.06f, 0.60f, 0.60f),   // Teal
+        new Color(0.24f, 0.62f, 0.92f),   // Sky
+        new Color(0.13f, 0.30f, 0.78f),   // Blue
+        new Color(0.52f, 0.26f, 0.74f),   // Purple
+        new Color(0.82f, 0.22f, 0.66f),   // Magenta
+        new Color(0.96f, 0.55f, 0.72f),   // Pink
+        new Color(0.42f, 0.27f, 0.16f),   // Brown
+        new Color(0.95f, 0.90f, 0.76f),   // Cream
+        new Color(0.93f, 0.95f, 0.97f),   // White
+        new Color(0.73f, 0.76f, 0.81f),   // Silver
+        new Color(0.44f, 0.46f, 0.50f),   // Grey
+        new Color(0.21f, 0.22f, 0.25f),   // Graphite
+        new Color(0.06f, 0.06f, 0.07f),   // Black
     };
 
     public static int PaletteCount { get { return Palette.Length; } }
 
+    /// <summary>The colour the picker starts from before anything has been chosen anywhere.</summary>
+    public static readonly Color FallbackColour = new Color(0.82f, 0.14f, 0.13f);
+
+    // ---------------------------------------------------------------- the finishes
+
+    public static readonly string[] StyleLabels =
+    {
+        "PAINT", "GLOSS", "MATTE", "METALLIC", "CHROME", "GLASS",
+    };
+
+    public static int StyleCount { get { return StyleLabels.Length; } }
+
+    public const int DefaultStyle = (int)PaintStyle.Paint;
+
     // ---------------------------------------------------------------- storage
 
     private const string KeyPrefix = "TruckPaint.";
+    private const string PaintedKey = KeyPrefix + "Painted.";
+    private const string ColourKey = KeyPrefix + "Colour.";
+    private const string StyleKey = KeyPrefix + "Style.";
 
-    private static int[] choices;
+    private static readonly bool[] painted = new bool[PartCount];
+    private static readonly Color[] colours = new Color[PartCount];
+    private static readonly int[] styles = new int[PartCount];
+
     private static bool loaded;
+    private static bool dirty;
 
-    public static int GetChoice(TruckPart part)
+    /// <summary>True when this part has a colour of its own instead of the model's.</summary>
+    public static bool IsPainted(TruckPart part)
     {
         EnsureLoaded();
-        return choices[(int)part];
+        return painted[(int)part];
     }
 
-    /// <summary>Index into <see cref="Palette"/>, or <see cref="ChoiceNone"/> for the model's own colour.</summary>
-    public static void SetChoice(TruckPart part, int paletteIndex)
+    /// <summary>The colour of a painted part, or <see cref="FallbackColour"/> when it has none.</summary>
+    public static Color ColourOf(TruckPart part)
     {
         EnsureLoaded();
-
-        int clamped = (paletteIndex < 0 || paletteIndex >= Palette.Length) ? ChoiceNone : paletteIndex;
-        if (choices[(int)part] == clamped) return;
-
-        choices[(int)part] = clamped;
-        PlayerPrefs.SetInt(KeyPrefix + part, clamped);
-        PlayerPrefs.Save();
+        return painted[(int)part] ? colours[(int)part] : FallbackColour;
     }
 
-    /// <summary>The colour a part should be, or null when it should keep the model's own colour.</summary>
-    public static Color? ColorOf(TruckPart part)
+    /// <summary>The finish of a part. Meaningful whether or not it has been painted.</summary>
+    public static int StyleOf(TruckPart part)
     {
-        int index = GetChoice(part);
-        if (index < 0 || index >= Palette.Length) return null;
-        return Palette[index];
+        EnsureLoaded();
+        return styles[(int)part];
     }
 
     /// <summary>True when at least one part has been repainted.</summary>
@@ -160,10 +202,60 @@ public static class TruckPaint
         get
         {
             EnsureLoaded();
+
             for (int i = 0; i < PartCount; i++)
-                if (choices[i] != ChoiceNone) return true;
+                if (painted[i]) return true;
+
             return false;
         }
+    }
+
+    /// <summary>
+    /// Paints a part. The colour is stored as it is given, so the picker can hand over any colour
+    /// rather than an index into <see cref="Palette"/>.
+    /// </summary>
+    public static void SetColour(TruckPart part, Color colour)
+    {
+        EnsureLoaded();
+
+        colour.a = 1f;
+
+        int index = (int)part;
+        if (painted[index] && colours[index] == colour) return;
+
+        painted[index] = true;
+        colours[index] = colour;
+
+        PlayerPrefs.SetInt(PaintedKey + part, 1);
+        PlayerPrefs.SetString(ColourKey + part, Encode(colour));
+        dirty = true;
+    }
+
+    /// <summary>Changes a part's finish. Painting a part that has not been painted yet does not.</summary>
+    public static void SetStyle(TruckPart part, int style)
+    {
+        EnsureLoaded();
+
+        int clamped = Mathf.Clamp(style, 0, StyleCount - 1);
+        if (styles[(int)part] == clamped) return;
+
+        styles[(int)part] = clamped;
+        PlayerPrefs.SetInt(StyleKey + part, clamped);
+        dirty = true;
+    }
+
+    /// <summary>Puts a part back to the colour the model came with.</summary>
+    public static void Clear(TruckPart part)
+    {
+        EnsureLoaded();
+
+        int index = (int)part;
+        if (!painted[index]) return;
+
+        painted[index] = false;
+        PlayerPrefs.DeleteKey(PaintedKey + part);
+        PlayerPrefs.DeleteKey(ColourKey + part);
+        dirty = true;
     }
 
     /// <summary>Puts every part back to the colour the model came with.</summary>
@@ -173,23 +265,58 @@ public static class TruckPaint
 
         for (int i = 0; i < PartCount; i++)
         {
-            choices[i] = ChoiceNone;
-            PlayerPrefs.DeleteKey(KeyPrefix + (TruckPart)i);
+            painted[i] = false;
+            styles[i] = DefaultStyle;
+
+            TruckPart part = (TruckPart)i;
+            PlayerPrefs.DeleteKey(PaintedKey + part);
+            PlayerPrefs.DeleteKey(ColourKey + part);
+            PlayerPrefs.DeleteKey(StyleKey + part);
         }
 
+        dirty = true;
+        Save();
+    }
+
+    /// <summary>
+    /// Writes the paint job to disk. The player changes colours many times a second while dragging
+    /// through the picker, so the values are only held in memory until something settles; Unity saves
+    /// them on quit as well.
+    /// </summary>
+    public static void Save()
+    {
+        if (!dirty) return;
+
+        dirty = false;
         PlayerPrefs.Save();
+    }
+
+    private static string Encode(Color colour)
+    {
+        return ColorUtility.ToHtmlStringRGB(colour);
+    }
+
+    private static Color Decode(string text, Color fallback)
+    {
+        Color colour;
+        if (!string.IsNullOrEmpty(text) && ColorUtility.TryParseHtmlString("#" + text, out colour)) return colour;
+
+        return fallback;
     }
 
     private static void EnsureLoaded()
     {
         if (loaded) return;
 
-        choices = new int[PartCount];
         for (int i = 0; i < PartCount; i++)
         {
-            string key = KeyPrefix + (TruckPart)i;
-            int stored = PlayerPrefs.GetInt(key, ChoiceNone);
-            choices[i] = (stored < 0 || stored >= Palette.Length) ? ChoiceNone : stored;
+            TruckPart part = (TruckPart)i;
+
+            painted[i] = PlayerPrefs.GetInt(PaintedKey + part, 0) != 0;
+            colours[i] = painted[i]
+                ? Decode(PlayerPrefs.GetString(ColourKey + part, ""), Palette[i % Palette.Length])
+                : FallbackColour;
+            styles[i] = Mathf.Clamp(PlayerPrefs.GetInt(StyleKey + part, DefaultStyle), 0, StyleCount - 1);
         }
 
         loaded = true;

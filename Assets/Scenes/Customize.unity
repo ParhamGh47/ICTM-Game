@@ -465,6 +465,9 @@ MonoBehaviour:
   hintText: ESC  TO  GO  BACK
   noteText: Your paint is saved and used in every level.
   defaultCaption: DEF
+  finishCaption: FINISH
+  colourCaption: COLOUR
+  customCaption: YOUR COLOUR
   font: {fileID: 11400000, guid: 5d9ca5d060d66fc43a47e0cec6e394a6, type: 2}
   backgroundColor: {r: 0.012, g: 0.024, b: 0.055, a: 1}
   accentColor: {r: 1, g: 0.64, b: 0.16, a: 1}
@@ -478,11 +481,22 @@ MonoBehaviour:
   partHeight: 48
   partGap: 10
   partTopY: -156
-  swatchSize: 92
-  swatchGap: 14
-  paletteColumns: 4
-  paletteRightMargin: 60
-  paletteOffsetY: -40
+  captionSize: 22
+  columnTopY: -200
+  swatchSize: 68
+  swatchGap: 10
+  paletteColumns: 5
+  sideMargin: 60
+  styleHeight: 46
+  styleGap: 10
+  styleColumns: 3
+  styleTextSize: 19
+  sectionGap: 24
+  captionGap: 8
+  pickerFieldHeight: 140
+  pickerHueHeight: 22
+  pickerGap: 12
+  previewSwatchHeight: 30
   spinSpeed: 28
   previewHeight: 0.72
   previewWidth: 0.46

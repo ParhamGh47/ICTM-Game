@@ -5,8 +5,9 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// The truck customization screen. The player picks one of the truck's parts on the left and a colour
-/// for it on the right, and the truck in the middle turns so the change can be seen from every side.
+/// The truck customization screen. The player picks one of the truck's parts on the left, and a colour
+/// and a finish for it on the right, while the truck in the middle turns so the change can be seen from
+/// every side.
 ///
 /// Like <see cref="CreditsScreen"/> and <see cref="TipsScreen"/> the whole UI is built in code, so the
 /// scene file only holds a camera, a light, an EventSystem and this component. The look reuses the
@@ -37,6 +38,9 @@ public class CustomizeScreen : MonoBehaviour
     public string noteText = "Your paint is saved and used in every level.";
     [Tooltip("Caption on the swatch that puts a part back to the colour the model came with.")]
     public string defaultCaption = "DEF";
+    public string finishCaption = "FINISH";
+    public string colourCaption = "COLOUR";
+    public string customCaption = "YOUR COLOUR";
 
     [Header("Art (optional)")]
     [Tooltip("Falls back to the project's default TMP font when empty.")]
@@ -52,6 +56,10 @@ public class CustomizeScreen : MonoBehaviour
     public Color frameColor = new Color(0.42f, 0.47f, 0.58f, 1f);
     [Tooltip("Flat ambient light for the preview, so the paint reads clearly on every side.")]
     public Color ambientColor = new Color(0.34f, 0.37f, 0.44f, 1f);
+    [Tooltip("The faux sky the preview reflects. Chrome and glass need something to reflect; it is " +
+             "never seen, because the preview camera clears to the background colour.")]
+    public Color skyTint = new Color(0.42f, 0.52f, 0.68f, 1f);
+    public Color groundTint = new Color(0.16f, 0.16f, 0.18f, 1f);
 
     // ---------------------------------------------------------------- layout
 
@@ -63,12 +71,24 @@ public class CustomizeScreen : MonoBehaviour
     public float partGap = 10f;
     [Tooltip("Distance from the top of the screen down to the first part button.")]
     public float partTopY = -156f;
-    public float swatchSize = 92f;
-    public float swatchGap = 14f;
-    public int paletteColumns = 4;
-    public float paletteRightMargin = 60f;
-    [Tooltip("Vertical offset of the middle of the palette from the middle of the screen.")]
-    public float paletteOffsetY = -40f;
+    public float captionSize = 22f;
+    [Tooltip("Distance from the top of the screen down to the first row of the colour column.")]
+    public float columnTopY = -200f;
+    public float swatchSize = 68f;
+    public float swatchGap = 10f;
+    public int paletteColumns = 5;
+    public float sideMargin = 60f;
+    public float styleHeight = 46f;
+    public float styleGap = 10f;
+    public int styleColumns = 3;
+    public float styleTextSize = 19f;
+    [Tooltip("Space between the caption of one section and the section above it.")]
+    public float sectionGap = 24f;
+    public float captionGap = 8f;
+    public float pickerFieldHeight = 140f;
+    public float pickerHueHeight = 22f;
+    public float pickerGap = 12f;
+    public float previewSwatchHeight = 30f;
 
     // ---------------------------------------------------------------- preview
 
@@ -78,10 +98,10 @@ public class CustomizeScreen : MonoBehaviour
     [Tooltip("How much of the screen's height the truck should span.")]
     public float previewHeight = 0.72f;
     [Tooltip("How much of the screen's width the truck may span when it turns broadside. Keep this " +
-             "inside the gap the parts list and the palette leave between them.")]
+             "inside the gap the parts list and the colour column leave between them.")]
     public float previewWidth = 0.46f;
     [Tooltip("Where the truck sits on screen, as a fraction of the viewport. It is off centre because " +
-             "the parts list and the palette take the two sides.")]
+             "the parts list and the colour column take the two sides.")]
     public Vector2 previewCentre = new Vector2(0.513f, 0.5f);
     [Tooltip("Camera height above the truck, in degrees.")]
     public float previewPitch = 17f;
@@ -106,21 +126,36 @@ public class CustomizeScreen : MonoBehaviour
 
     private sealed class Swatch
     {
-        public int paletteIndex;                 // -1 for the Default swatch
+        public Color colour;                     // the preset it stands for; ignored by the Default swatch
+        public bool isDefault;
+        public Image activeBar;
+        public Button button;
+    }
+
+    private sealed class StyleRow
+    {
+        public int style;
+        public TextMeshProUGUI label;
         public Image activeBar;
     }
 
     private readonly List<PartRow> partRows = new List<PartRow>();
     private readonly List<Swatch> swatches = new List<Swatch>();
+    private readonly List<StyleRow> styleRows = new List<StyleRow>();
 
     private Camera previewCamera;
     private Transform previewRoot;
     private Transform previewPivot;
     private TruckPaintApplier applier;
     private CanvasGroup group;
-    private TextMeshProUGUI colourLabel;
+    private ColourPicker picker;
+    private Image previewSwatch;
+    private Button resetButton;
+    private Button backButton;
+    private Material previewSky;
 
     private Bounds previewBounds;
+    private float columnBottom;
     private bool hasPreviewBounds;
 
     private TruckPart selectedPart = TruckPart.Body;
@@ -147,6 +182,18 @@ public class CustomizeScreen : MonoBehaviour
         previewPivot.Rotate(0f, spinSpeed * Time.unscaledDeltaTime, 0f, Space.World);
     }
 
+    private void OnDisable()
+    {
+        // A colour drag writes many times a second; the values are already in memory, so this is the
+        // moment worth putting them on disk.
+        TruckPaint.Save();
+    }
+
+    private void OnDestroy()
+    {
+        if (previewSky != null) Destroy(previewSky);
+    }
+
     // ---------------------------------------------------------------- rendering
 
     private void SetUpRendering()
@@ -160,6 +207,34 @@ public class CustomizeScreen : MonoBehaviour
         RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
         RenderSettings.ambientLight = ambientColor;
         RenderSettings.fog = false;
+
+        SetUpSky();
+    }
+
+    /// <summary>
+    /// Gives the preview a sky to reflect. Chrome, metallic and glass take almost all of their colour
+    /// from their surroundings, and a flat ambient light would leave them looking like dark plastic -
+    /// so a plain procedural sky is stood in for the level's own. The camera clears to a solid colour,
+    /// so the sky itself is never on screen; only the reflections come from it.
+    /// </summary>
+    private void SetUpSky()
+    {
+        if (RenderSettings.skybox != null) return;
+
+        Shader shader = Shader.Find("Skybox/Procedural");
+        if (shader == null) return;
+
+        previewSky = new Material(shader);
+        previewSky.name = "Customize Sky";
+        previewSky.SetColor("_SkyTint", skyTint);
+        previewSky.SetColor("_GroundColor", groundTint);
+        previewSky.SetFloat("_Exposure", 1.15f);
+        previewSky.SetFloat("_AtmosphereThickness", 0.6f);
+
+        RenderSettings.skybox = previewSky;
+
+        // Rebuilds the ambient probe the reflections are read from, so the metal sees the new sky.
+        DynamicGI.UpdateEnvironment();
     }
 
     private Camera CreateCamera()
@@ -176,8 +251,8 @@ public class CustomizeScreen : MonoBehaviour
     /// Instantiates the player truck and leaves it standing still, scripts asleep. Everything here exists
     /// so the real prefab can be shown in a menu without any of its gameplay running.
     ///
-    /// A failure here costs the preview and nothing else: the parts list, the palette, RESET and BACK are
-    /// all built afterwards and all work without a truck in the middle of the screen.
+    /// A failure here costs the preview and nothing else: the parts list, the palette, the picker, RESET
+    /// and BACK are all built afterwards and all work without a truck in the middle of the screen.
     /// </summary>
     private void BuildPreview()
     {
@@ -385,7 +460,7 @@ public class CustomizeScreen : MonoBehaviour
         previewCamera.transform.rotation = Quaternion.LookRotation(direction, Vector3.up);
 
         // The truck is placed where the UI leaves room for it, not in the middle: the parts list runs down
-        // the left of the screen and the palette down the right, so the truck is nudged to sit between
+        // the left of the screen and the colours down the right, so the truck is nudged to sit between
         // them. Moving the camera moves what is on screen the opposite way, hence the minus signs.
         float distance = previewCamera.orthographicSize * 6f;
         Vector3 shift =
@@ -427,7 +502,7 @@ public class CustomizeScreen : MonoBehaviour
         // canvas and the two read as one surface.
         BuildHeader(root);
         BuildPartList(root);
-        BuildPalette(root);
+        BuildColourColumn(root);
         BuildActions(root);
     }
 
@@ -454,7 +529,7 @@ public class CustomizeScreen : MonoBehaviour
         ruleRect.sizeDelta = new Vector2(240f, 4f);
         ruleRect.anchoredPosition = new Vector2(60f, -124f);
 
-        // Hint line, top-right, kept out of the way of the truck and the palette.
+        // Hint line, top-right, kept out of the way of the truck and the colours.
         TextMeshProUGUI hint = CreateText("Hint", root, 26f, Fade(labelColor, 0.65f), TextAlignmentOptions.TopRight);
         hint.text = hintText;
 
@@ -463,7 +538,7 @@ public class CustomizeScreen : MonoBehaviour
         hintRect.anchorMax = new Vector2(1f, 1f);
         hintRect.pivot = new Vector2(1f, 1f);
         hintRect.sizeDelta = new Vector2(700f, 40f);
-        hintRect.anchoredPosition = new Vector2(-60f, -56f);
+        hintRect.anchoredPosition = new Vector2(-sideMargin, -56f);
     }
 
     private void BuildPartList(Transform root)
@@ -521,34 +596,111 @@ public class CustomizeScreen : MonoBehaviour
         return new PartRow { part = part, label = label, activeBar = bar };
     }
 
-    private void BuildPalette(Transform root)
+    /// <summary>
+    /// The right-hand column: the finish of the selected part, the colour presets, and the picker for
+    /// anything the presets do not cover. It is one stack built downwards from <see cref="columnTopY"/>,
+    /// so the sections cannot drift apart.
+    /// </summary>
+    private void BuildColourColumn(Transform root)
+    {
+        float y = columnTopY;
+
+        y = BuildCaption(root, finishCaption, y);
+        y = BuildFinishRow(root, y);
+
+        y -= sectionGap;
+        y = BuildCaption(root, colourCaption, y);
+        y = BuildPalette(root, y);
+
+        y -= sectionGap;
+        y = BuildCustomRow(root, y);
+        BuildPicker(root, y);
+
+        // The picker is the last thing in the column, so its bottom edge is where the note goes.
+        columnBottom = y - (pickerFieldHeight + pickerGap + pickerHueHeight);
+    }
+
+    /// <summary>Draws a section heading and returns the y the section's own content starts at.</summary>
+    private float BuildCaption(Transform root, string text, float y)
+    {
+        TextMeshProUGUI caption = CreateText("Caption", root, captionSize, Fade(labelColor, 0.7f),
+            TextAlignmentOptions.BottomLeft);
+        caption.text = text;
+        caption.fontStyle = FontStyles.Bold;
+        caption.characterSpacing = 3f;
+
+        RectTransform rect = caption.rectTransform;
+        rect.anchorMin = new Vector2(1f, 1f);
+        rect.anchorMax = new Vector2(1f, 1f);
+        rect.pivot = new Vector2(1f, 1f);
+        rect.sizeDelta = new Vector2(ColumnWidth, captionSize * 1.5f);
+        rect.anchoredPosition = new Vector2(-sideMargin, y);
+
+        return y - rect.sizeDelta.y - captionGap;
+    }
+
+    private float BuildFinishRow(Transform root, float y)
+    {
+        int columns = Mathf.Clamp(styleColumns, 1, TruckPaint.StyleCount);
+        int rows = Mathf.CeilToInt(TruckPaint.StyleCount / (float)columns);
+        float width = (ColumnWidth - (columns - 1) * styleGap) / columns;
+
+        for (int i = 0; i < TruckPaint.StyleCount; i++)
+        {
+            int column = i % columns;
+            int row = i / columns;
+
+            RectTransform rect = CreateRect(TruckPaint.StyleLabels[i], root);
+            rect.anchorMin = new Vector2(1f, 1f);
+            rect.anchorMax = new Vector2(1f, 1f);
+            rect.pivot = new Vector2(1f, 1f);
+            rect.sizeDelta = new Vector2(width, styleHeight);
+            rect.anchoredPosition = new Vector2(
+                -sideMargin - (columns - 1 - column) * (width + styleGap),
+                y - row * (styleHeight + styleGap));
+
+            Image plate = rect.gameObject.AddComponent<Image>();
+            plate.color = panelColor;
+            plate.raycastTarget = true;
+
+            Button button = rect.gameObject.AddComponent<Button>();
+            StyleButton(button, plate);
+
+            Image bar = CreateImage("Selected", rect, accentColor);
+            RectTransform barRect = bar.rectTransform;
+            barRect.anchorMin = new Vector2(0f, 0f);
+            barRect.anchorMax = new Vector2(1f, 0f);
+            barRect.pivot = new Vector2(0.5f, 0f);
+            barRect.sizeDelta = new Vector2(0f, 5f);
+            barRect.anchoredPosition = Vector2.zero;
+
+            TextMeshProUGUI label = CreateText("Label", rect, styleTextSize, labelColor, TextAlignmentOptions.Center);
+            label.text = TruckPaint.StyleLabels[i];
+            label.fontStyle = FontStyles.Bold;
+            label.characterSpacing = 2f;
+            Stretch(label.rectTransform);
+
+            int style = i;
+            button.onClick.AddListener(() => SelectStyle(style));
+
+            styleRows.Add(new StyleRow { style = i, label = label, activeBar = bar });
+        }
+
+        return y - rows * styleHeight - (rows - 1) * styleGap;
+    }
+
+    private float BuildPalette(Transform root, float y)
     {
         int columns = Mathf.Clamp(paletteColumns, 1, TruckPaint.PaletteCount + 1);
         int total = TruckPaint.PaletteCount + 1;                 // the colours, plus Default
         int rows = Mathf.CeilToInt(total / (float)columns);
 
-        float gridWidth = columns * swatchSize + (columns - 1) * swatchGap;
-        float gridHeight = rows * swatchSize + (rows - 1) * swatchGap;
-        float halfGridHeight = gridHeight * 0.5f;
-
-        // Which part, and what colour it currently has.
-        colourLabel = CreateText("Colour", root, 34f, labelColor, TextAlignmentOptions.BottomRight);
-        colourLabel.fontStyle = FontStyles.Bold;
-        colourLabel.characterSpacing = 3f;
-
-        RectTransform colourRect = colourLabel.rectTransform;
-        colourRect.anchorMin = new Vector2(1f, 0.5f);
-        colourRect.anchorMax = new Vector2(1f, 0.5f);
-        colourRect.pivot = new Vector2(1f, 0f);
-        colourRect.sizeDelta = new Vector2(gridWidth + 300f, 46f);
-        colourRect.anchoredPosition = new Vector2(-paletteRightMargin, paletteOffsetY + halfGridHeight + 26f);
-
         RectTransform grid = CreateRect("Palette", root);
-        grid.anchorMin = new Vector2(1f, 0.5f);
-        grid.anchorMax = new Vector2(1f, 0.5f);
-        grid.pivot = new Vector2(1f, 0.5f);
-        grid.sizeDelta = new Vector2(gridWidth, gridHeight);
-        grid.anchoredPosition = new Vector2(-paletteRightMargin, paletteOffsetY);
+        grid.anchorMin = new Vector2(1f, 1f);
+        grid.anchorMax = new Vector2(1f, 1f);
+        grid.pivot = new Vector2(1f, 1f);
+        grid.sizeDelta = new Vector2(ColumnWidth, rows * swatchSize + (rows - 1) * swatchGap);
+        grid.anchoredPosition = new Vector2(-sideMargin, y);
 
         for (int i = 0; i < total; i++)
         {
@@ -568,21 +720,13 @@ public class CustomizeScreen : MonoBehaviour
             // and letting its colour follow the selected part would make the swatch itself a moving target.
             Color colour = isDefault ? frameColor : TruckPaint.Palette[i];
 
-            swatches.Add(CreateSwatch(cell, isDefault ? TruckPaint.ChoiceNone : i, colour, isDefault));
+            swatches.Add(CreateSwatch(cell, colour, isDefault));
         }
 
-        TextMeshProUGUI note = CreateText("Note", root, 24f, Fade(labelColor, 0.5f), TextAlignmentOptions.TopRight);
-        note.text = noteText;
-
-        RectTransform noteRect = note.rectTransform;
-        noteRect.anchorMin = new Vector2(1f, 0.5f);
-        noteRect.anchorMax = new Vector2(1f, 0.5f);
-        noteRect.pivot = new Vector2(1f, 1f);
-        noteRect.sizeDelta = new Vector2(gridWidth + 300f, 34f);
-        noteRect.anchoredPosition = new Vector2(-paletteRightMargin, paletteOffsetY - halfGridHeight - 26f);
+        return y - grid.sizeDelta.y;
     }
 
-    private Swatch CreateSwatch(RectTransform cell, int paletteIndex, Color colour, bool isDefault)
+    private Swatch CreateSwatch(RectTransform cell, Color colour, bool isDefault)
     {
         // A frame with the colour inset inside it, so even Black and Graphite read as a swatch rather than
         // as a hole in the screen.
@@ -617,30 +761,104 @@ public class CustomizeScreen : MonoBehaviour
             Stretch(caption.rectTransform);
         }
 
-        button.onClick.AddListener(() => SelectColour(paletteIndex));
+        button.onClick.AddListener(() => SelectSwatch(colour, isDefault));
 
-        return new Swatch { paletteIndex = paletteIndex, activeBar = bar };
+        return new Swatch { colour = colour, isDefault = isDefault, activeBar = bar, button = button };
+    }
+
+    /// <summary>The heading of the picker, carrying a live swatch of the colour it is standing on.</summary>
+    private float BuildCustomRow(Transform root, float y)
+    {
+        TextMeshProUGUI caption = CreateText("Caption", root, captionSize, Fade(labelColor, 0.7f),
+            TextAlignmentOptions.BottomLeft);
+        caption.text = customCaption;
+        caption.fontStyle = FontStyles.Bold;
+        caption.characterSpacing = 3f;
+
+        RectTransform rect = caption.rectTransform;
+        rect.anchorMin = new Vector2(1f, 1f);
+        rect.anchorMax = new Vector2(1f, 1f);
+        rect.pivot = new Vector2(1f, 1f);
+        rect.sizeDelta = new Vector2(ColumnWidth, captionSize * 1.5f);
+        rect.anchoredPosition = new Vector2(-sideMargin, y);
+
+        previewSwatch = CreateImage("Preview", root, Color.white);
+        RectTransform swatchRect = previewSwatch.rectTransform;
+        swatchRect.anchorMin = new Vector2(1f, 1f);
+        swatchRect.anchorMax = new Vector2(1f, 1f);
+        swatchRect.pivot = new Vector2(1f, 1f);
+        swatchRect.sizeDelta = new Vector2(ColumnWidth * 0.45f, previewSwatchHeight);
+        swatchRect.anchoredPosition = new Vector2(-sideMargin, y - (captionSize * 1.5f - previewSwatchHeight));
+
+        return y - captionSize * 1.5f - captionGap;
+    }
+
+    private void BuildPicker(Transform root, float y)
+    {
+        RectTransform rect = CreateRect("Picker", root);
+        rect.anchorMin = new Vector2(1f, 1f);
+        rect.anchorMax = new Vector2(1f, 1f);
+        rect.pivot = new Vector2(1f, 1f);
+        rect.sizeDelta = new Vector2(ColumnWidth, 0f);
+        rect.anchoredPosition = new Vector2(-sideMargin, y);
+
+        picker = rect.gameObject.AddComponent<ColourPicker>();
+        picker.cursorColor = labelColor;
+        picker.cursorOutlineColor = Fade(backgroundColor, 0.9f);
+        picker.fieldHeight = pickerFieldHeight;
+        picker.hueHeight = pickerHueHeight;
+        picker.gap = pickerGap;
+        picker.onChanged += OnPickedColour;
+        picker.onReleased += TruckPaint.Save;
+
+        picker.Build(rect);
     }
 
     private void BuildActions(Transform root)
     {
-        Button reset = CreateButton("Reset", root, "RESET");
-        RectTransform resetRect = reset.GetComponent<RectTransform>();
+        resetButton = CreateButton("Reset", root, "RESET");
+        RectTransform resetRect = resetButton.GetComponent<RectTransform>();
         resetRect.anchorMin = new Vector2(0f, 0f);
         resetRect.anchorMax = new Vector2(0f, 0f);
         resetRect.pivot = new Vector2(0f, 0f);
         resetRect.sizeDelta = new Vector2(200f, 54f);
         resetRect.anchoredPosition = new Vector2(60f, 46f);
-        reset.onClick.AddListener(ResetPaint);
+        resetButton.onClick.AddListener(ResetPaint);
 
-        Button back = CreateButton("Back", root, "BACK");
-        RectTransform backRect = back.GetComponent<RectTransform>();
+        backButton = CreateButton("Back", root, "BACK");
+        RectTransform backRect = backButton.GetComponent<RectTransform>();
         backRect.anchorMin = new Vector2(0f, 0f);
         backRect.anchorMax = new Vector2(0f, 0f);
         backRect.pivot = new Vector2(0f, 0f);
         backRect.sizeDelta = new Vector2(200f, 54f);
         backRect.anchoredPosition = new Vector2(276f, 46f);
-        back.onClick.AddListener(GoBack);
+        backButton.onClick.AddListener(GoBack);
+
+        // Note under the picker, so the screen says what is stored without a line of labels.
+        TextMeshProUGUI note = CreateText("Note", root, 22f, Fade(labelColor, 0.5f), TextAlignmentOptions.TopRight);
+        note.text = noteText;
+
+        RectTransform noteRect = note.rectTransform;
+        noteRect.anchorMin = new Vector2(1f, 1f);
+        noteRect.anchorMax = new Vector2(1f, 1f);
+        noteRect.pivot = new Vector2(1f, 1f);
+        noteRect.sizeDelta = new Vector2(ColumnWidth + 200f, 30f);
+        noteRect.anchoredPosition = new Vector2(-sideMargin, columnBottom - 26f);
+
+        // The hue bar is the one control here that a gamepad can drive, so leaving it must not be left to
+        // automatic navigation: the picker's own pointer field is not selectable, and the nearest button
+        // to its sides is a part or RESET, which is not where a player wants to go.
+        if (picker != null && picker.HueBar != null)
+        {
+            Navigation navigation = picker.HueBar.navigation;
+            navigation.mode = Navigation.Mode.Explicit;
+            navigation.selectOnLeft = null;
+            navigation.selectOnRight = null;
+            navigation.selectOnUp = swatches.Count > 0 ? swatches[swatches.Count - 1].button : null;
+            navigation.selectOnDown = backButton;
+
+            picker.HueBar.navigation = navigation;
+        }
     }
 
     // ---------------------------------------------------------------- interaction
@@ -651,10 +869,26 @@ public class CustomizeScreen : MonoBehaviour
         Refresh();
     }
 
-    /// <summary><paramref name="paletteIndex"/> is an index into <see cref="TruckPaint.Palette"/>, or -1 for Default.</summary>
-    private void SelectColour(int paletteIndex)
+    private void SelectStyle(int style)
     {
-        TruckPaint.SetChoice(selectedPart, paletteIndex);
+        TruckPaint.SetStyle(selectedPart, style);
+        TruckPaint.Save();
+        Refresh();
+    }
+
+    /// <summary>A preset, or - with <paramref name="isDefault"/> - the colour the model came with.</summary>
+    private void SelectSwatch(Color colour, bool isDefault)
+    {
+        if (isDefault) TruckPaint.Clear(selectedPart);
+        else TruckPaint.SetColour(selectedPart, colour);
+
+        TruckPaint.Save();
+        Refresh();
+    }
+
+    private void OnPickedColour(Color colour)
+    {
+        TruckPaint.SetColour(selectedPart, colour);
         Refresh();
     }
 
@@ -668,13 +902,16 @@ public class CustomizeScreen : MonoBehaviour
     {
         // No fade of its own: SceneLoader covers menu-to-menu hops with the screen fade, so the transition
         // is handled in one place for every scene.
+        TruckPaint.Save();
         SceneLoader.Load(levelsSceneName);
     }
 
     /// <summary>Redraws every piece of state from <see cref="TruckPaint"/>, which is the one source of truth.</summary>
     private void Refresh()
     {
-        int choice = TruckPaint.GetChoice(selectedPart);
+        bool painted = TruckPaint.IsPainted(selectedPart);
+        Color colour = painted ? TruckPaint.ColourOf(selectedPart) : ColourOnModel();
+        int style = TruckPaint.StyleOf(selectedPart);
 
         for (int i = 0; i < partRows.Count; i++)
         {
@@ -685,20 +922,55 @@ public class CustomizeScreen : MonoBehaviour
             row.label.color = active ? accentColor : labelColor;
         }
 
+        // A preset is shown as chosen only while the part actually wears that colour: once the player has
+        // been through the picker the part is on no preset at all, and nothing is ticked.
         for (int i = 0; i < swatches.Count; i++)
-            swatches[i].activeBar.enabled = swatches[i].paletteIndex == choice;
+        {
+            Swatch swatch = swatches[i];
 
-        if (colourLabel != null)
-            colourLabel.text = TruckPaint.PartLabels[(int)selectedPart].ToUpperInvariant() + "   " + NameOf(choice);
+            swatch.activeBar.enabled = swatch.isDefault
+                ? !painted
+                : painted && SameColour(swatch.colour, colour);
+        }
+
+        // A finish does nothing until there is a colour under it, so the row says so rather than looking
+        // like it is being ignored.
+        for (int i = 0; i < styleRows.Count; i++)
+        {
+            StyleRow row = styleRows[i];
+            bool active = painted && row.style == style;
+
+            row.activeBar.enabled = active;
+            row.label.color = painted ? (active ? accentColor : labelColor) : Fade(labelColor, 0.45f);
+        }
+
+        if (previewSwatch != null) previewSwatch.color = colour;
+
+        // The picker follows the selected part, so switching parts shows the colour that part wears.
+        if (picker != null && !picker.IsDragging) picker.SetValue(colour, false);
 
         // The preview repaints itself from the same saved choice, so it never disagrees with the UI.
         if (applier != null) applier.Apply();
     }
 
-    private static string NameOf(int paletteIndex)
+    /// <summary>The colour the selected part has on the model, which is where the picker starts from.</summary>
+    private Color ColourOnModel()
     {
-        if (paletteIndex < 0 || paletteIndex >= TruckPaint.PaletteCount) return "DEFAULT";
-        return TruckPaint.PaletteNames[paletteIndex].ToUpperInvariant();
+        return applier != null ? applier.ModelColourOf(selectedPart) : TruckPaint.FallbackColour;
+    }
+
+    private static bool SameColour(Color a, Color b)
+    {
+        return Mathf.Abs(a.r - b.r) < 0.02f && Mathf.Abs(a.g - b.g) < 0.02f && Mathf.Abs(a.b - b.b) < 0.02f;
+    }
+
+    private float ColumnWidth
+    {
+        get
+        {
+            int columns = Mathf.Clamp(paletteColumns, 1, TruckPaint.PaletteCount + 1);
+            return columns * swatchSize + (columns - 1) * swatchGap;
+        }
     }
 
     private IEnumerator FadeIn()

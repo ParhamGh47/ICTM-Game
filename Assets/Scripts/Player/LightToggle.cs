@@ -36,13 +36,19 @@ public class LightToggle : MonoBehaviour
 
     void Update()
     {
-        if (Input.GetKeyDown(KeyCode.L) && Time.time - lastToggleTime >= toggleCooldown)
+        // L on the keyboard, B / circle on a gamepad.
+        if (GameInput.LightsPressed() && Time.time - lastToggleTime >= toggleCooldown)
         {
             if (PauseTracker.Instance != null && PauseTracker.Instance.isPaused)
             return;
 
             if (toggleSound != null)
                 toggleSound.Play();
+
+            // The truck may have been repainted since the last press, and painting a part swaps its
+            // material for a copy of the paint system's own: follow the lens that is on the truck now,
+            // or the glow would be switched on a material nothing is drawn with.
+            RefreshEmissionMaterial();
 
             headlightsOn = !headlightsOn;
 
@@ -62,6 +68,26 @@ public class LightToggle : MonoBehaviour
             if (l != null)
                 l.enabled = state;
         }
+    }
+
+    /// <summary>
+    /// Points the glow at the material the truck is actually wearing.
+    ///
+    /// The customize screen repaints the truck by swapping this slot for a copy, so the material
+    /// grabbed at startup can end up orphaned - and a lens that no longer answers the light key. This
+    /// takes the slot as it is rather than making yet another copy, because the copy may belong to the
+    /// paint system, and stealing it would leave the truck painted with a material the paint system no
+    /// longer knows about.
+    /// </summary>
+    public void RefreshEmissionMaterial()
+    {
+        if (emissionObject == null) return;
+
+        Material[] materials = emissionObject.sharedMaterials;
+        if (materials.Length < 2 || materials[1] == null) return;
+
+        targetMat = materials[1];
+        UpdateEmission();
     }
 
     private void UpdateEmission()

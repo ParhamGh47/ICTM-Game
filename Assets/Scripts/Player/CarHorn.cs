@@ -16,7 +16,8 @@ public class CarHorn : MonoBehaviour
         if (PauseTracker.Instance != null && PauseTracker.Instance.isPaused)
             return;
 
-        if (Input.GetKeyDown(KeyCode.H) && Time.time >= nextHonkTime)
+        // H on the keyboard, X / square on a gamepad.
+        if (GameInput.HornPressed() && Time.time >= nextHonkTime)
         {
             hornSound.Play();
             nextHonkTime = Time.time + cooldownTime;

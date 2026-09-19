@@ -70,7 +70,8 @@ public class CameraController : MonoBehaviour
 
     private void Update()
     {
-        if (Input.GetKeyDown(KeyCode.C) && Time.time >= nextSwitchCam)
+        // C on the keyboard, Y / triangle on a gamepad.
+        if (GameInput.CameraPressed() && Time.time >= nextSwitchCam)
         {
             switch(mode)
             {

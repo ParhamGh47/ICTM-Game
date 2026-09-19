@@ -38,7 +38,9 @@ public class PauseMenu : MonoBehaviour
         if (gameOver.Instance != null && gameOver.Instance.IsGameOver)
             return;
 
-        if (Input.GetKeyDown(KeyCode.Escape))
+        // Escape on the keyboard, Start / Options on a gamepad. B is left alone here: in a level it
+        // is the headlights, so it cannot also be the way out of the pause menu.
+        if (GameInput.PausePressed())
         {
             if (controlsOpen)
             {

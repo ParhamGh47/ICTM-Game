@@ -20,6 +20,12 @@ using UnityEngine;
 ///     an untouched truck looks exactly like the prefab and allocates nothing at all.
 ///   * Those copies belong to this component, so it is this component's job to destroy them. That keeps
 ///     a level's worth of copies from surviving the scene that created them.
+///
+/// The lights are painted like anything else - the lenses keep the colour, and get an emission colour to
+/// glow in, so the tail and brake lights light up in it too - and because a lens is only half of a light,
+/// the truck's own <c>Light</c> components are tinted to match, so the beam the headlights throw is the
+/// colour the player picked as well. The front and the back are separate parts, so a truck can wear white
+/// lamps in front and red ones behind.
 /// </summary>
 [DisallowMultipleComponent]
 public class TruckPaintApplier : MonoBehaviour
@@ -35,7 +41,15 @@ public class TruckPaintApplier : MonoBehaviour
         public Color modelColour;        // the colour the model has for this slot
     }
 
+    private class LightTarget
+    {
+        public Light light;
+        public Color modelColour;
+        public bool front;              // which end of the truck it shines from
+    }
+
     private readonly List<Target> targets = new List<Target>();
+    private readonly List<LightTarget> lights = new List<LightTarget>();
 
     /// <summary>True once <see cref="Capture"/> has run and at least one slot was found.</summary>
     public bool IsReady { get { return targets.Count > 0; } }
@@ -70,13 +84,26 @@ public class TruckPaintApplier : MonoBehaviour
             string[] names = TruckPaint.ObjectNamesOf(part);
             SlotRule rule = TruckPaint.SlotRuleOf(part);
 
+            // A part with no object names of its own is found by its material instead, wherever on the
+            // model it lives: the lights are spread over several meshes rather than sitting on one.
+            bool anyObject = names == null || names.Length == 0;
+
+            // The brake lens is the one lens the model may not name like a lamp, so the rear part covers
+            // it by identity as well.
+            Renderer brakeLens = part == TruckPart.BrakeLights ? FindBrakeLens() : null;
+
             List<Target> found = new List<Target>();
             List<string> seen = new List<string>();          // for the message, if the search comes up empty
 
             for (int r = 0; r < renderers.Count; r++)
             {
                 Renderer renderer = renderers[r];
-                if (renderer == null || !Matches(renderer.gameObject.name, names)) continue;
+                if (renderer == null) continue;
+                if (!anyObject && !Matches(renderer.gameObject.name, names)) continue;
+
+                // Which half of the truck this mesh is in: a lens at the front is a headlight, a lens at
+                // the back is a tail light, whatever the art called it.
+                bool front = IsFrontOfTruck(renderer);
 
                 Material[] materials = renderer.sharedMaterials;
                 for (int s = 0; s < materials.Length; s++)
@@ -85,7 +112,7 @@ public class TruckPaintApplier : MonoBehaviour
 
                     seen.Add(string.Format("{0}[{1}]={2}", renderer.gameObject.name, s, Label(materials[s])));
 
-                    if (!Allows(rule, s, materials[s])) continue;
+                    if (!Allows(rule, s, materials[s], renderer, brakeLens, front)) continue;
 
                     found.Add(new Target
                     {
@@ -109,6 +136,45 @@ public class TruckPaintApplier : MonoBehaviour
 
             targets.AddRange(found);
         }
+
+        CaptureLights();
+    }
+
+    /// <summary>
+    /// The lights whose colour follows the paint job. The truck's own headlights are the ones the
+    /// player means, so they are used when the truck declares them; a truck without a light toggle
+    /// falls back to every light it has.
+    /// </summary>
+    private void CaptureLights()
+    {
+        lights.Clear();
+
+        LightToggle toggle = GetComponentInChildren<LightToggle>(true);
+        if (toggle != null && toggle.headlights != null)
+            for (int i = 0; i < toggle.headlights.Length; i++)
+                AddLight(toggle.headlights[i]);
+
+        if (lights.Count > 0) return;
+
+        Light[] found = GetComponentsInChildren<Light>(true);
+        for (int i = 0; i < found.Length; i++)
+            AddLight(found[i]);
+    }
+
+    private void AddLight(Light light)
+    {
+        if (light == null) return;
+
+        LightTarget target = new LightTarget();
+        target.light = light;
+        target.modelColour = light.color;
+
+        // The beam belongs to the same end of the truck as the lamp: the headlights are at the front,
+        // and a truck with a rear light (a reversing lamp, say) would follow the rear part instead.
+        Vector3 local = transform.InverseTransformPoint(light.transform.position);
+        target.front = local.z >= 0f;
+
+        lights.Add(target);
     }
 
     private static bool Matches(string objectName, string[] names)
@@ -122,7 +188,8 @@ public class TruckPaintApplier : MonoBehaviour
         return false;
     }
 
-    private static bool Allows(SlotRule rule, int slot, Material material)
+    private static bool Allows(SlotRule rule, int slot, Material material, Renderer renderer,
+                               Renderer brakeLens, bool front)
     {
         switch (rule)
         {
@@ -130,9 +197,39 @@ public class TruckPaintApplier : MonoBehaviour
             case SlotRule.First: return slot == 0;
             case SlotRule.Windows: return IsWindow(material);
             case SlotRule.ExceptWindows: return !IsWindow(material);
+
+            // The two ends of the truck are painted separately. A lens counts for the end it is on, and
+            // the brake lens counts whatever the art called it - it is the lamp the car controller
+            // switches on, so it has to follow the rear part's colour.
+            case SlotRule.Headlights: return front && IsLight(material);
+            case SlotRule.BrakeLights:
+                return !front && (IsLight(material) || (renderer == brakeLens && slot == 0));
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Whether a renderer sits in the front half of the truck. The model's own lenses are named
+    /// <c>lightFront</c>, <c>lightRings</c> and <c>lightBack</c>, but a ring belongs to whichever lamp it
+    /// surrounds rather than to a name of its own, so the position is what decides - which also means a
+    /// model that never names its lenses at all still splits into two sensible parts.
+    /// </summary>
+    private bool IsFrontOfTruck(Renderer renderer)
+    {
+        Vector3 local = transform.InverseTransformPoint(renderer.bounds.center);
+        return local.z >= 0f;
+    }
+
+    /// <summary>
+    /// The renderer the car controller lights up when the driver brakes. It is covered by identity as
+    /// well as by its material, because the back of the truck is lit by lenses rather than by lamps -
+    /// there are no rear Light components on the truck at all, so the lens is the brake light.
+    /// </summary>
+    private Renderer FindBrakeLens()
+    {
+        CarController car = GetComponentInChildren<CarController>(true);
+        return car != null ? car.brakeLightRenderer : null;
     }
 
     /// <summary>
@@ -143,6 +240,29 @@ public class TruckPaintApplier : MonoBehaviour
     private static bool IsWindow(Material material)
     {
         return Label(material).IndexOf("window", System.StringComparison.OrdinalIgnoreCase) >= 0;
+    }
+
+    /// <summary>
+    /// Whether a slot is one of the model's lenses. The truck names them <c>lightFront</c>,
+    /// <c>lights</c>, <c>lightRings</c> and <c>lightBack</c>, and both the material and its texture are
+    /// checked because either one can be the unnamed half of the pair.
+    /// </summary>
+    private static bool IsLight(Material material)
+    {
+        if (material == null) return false;
+
+        Texture texture = material.mainTexture;
+        string textureName = texture != null ? texture.name : string.Empty;
+
+        return ContainsLightWord(material.name) || ContainsLightWord(textureName);
+    }
+
+    private static bool ContainsLightWord(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return false;
+
+        return text.IndexOf("light", System.StringComparison.OrdinalIgnoreCase) >= 0
+            || text.IndexOf("lamp", System.StringComparison.OrdinalIgnoreCase) >= 0;
     }
 
     /// <summary>
@@ -180,6 +300,36 @@ public class TruckPaintApplier : MonoBehaviour
                 else Restore(target);
             }
         }
+
+        // The light the truck actually shines is part of the paint job too, so the lamps are tinted to
+        // match the lenses rather than staying white behind a coloured cover.
+        ApplyLightColour(TruckPart.Headlights);
+        ApplyLightColour(TruckPart.BrakeLights);
+    }
+
+    private void ApplyLightColour(TruckPart part)
+    {
+        bool front = part == TruckPart.Headlights;
+        bool painted = TruckPaint.IsPainted(part);
+        Color colour = TruckPaint.ColourOf(part);
+
+        for (int i = 0; i < lights.Count; i++)
+        {
+            // Only the lamps at that end of the truck: painting the headlights must not touch the lights
+            // behind, and the other way round.
+            if (lights[i].front != front) continue;
+
+            Light light = lights[i].light;
+            if (light == null) continue;
+
+            light.color = painted ? colour : lights[i].modelColour;
+        }
+
+        // The lens material was just swapped for this component's own copy, and the light toggle holds
+        // the material it switches the glow on: tell it to look at the truck again, or it would be
+        // switching a material nothing is drawn with any more.
+        LightToggle toggle = GetComponentInChildren<LightToggle>(true);
+        if (toggle != null) toggle.RefreshEmissionMaterial();
     }
 
     /// <summary>The colour the model itself uses for a part, for the picker's starting point.</summary>
@@ -204,7 +354,9 @@ public class TruckPaintApplier : MonoBehaviour
             target.instance.name = target.original.name + " (Painted)";
         }
 
-        Write(target.instance, colour, style);
+        bool lens = target.part == TruckPart.Headlights || target.part == TruckPart.BrakeLights;
+
+        Write(target.instance, colour, style, lens);
 
         if (target.showingInstance) return;
 
@@ -284,6 +436,14 @@ public class TruckPaintApplier : MonoBehaviour
     private static readonly int SourceBlendId = Shader.PropertyToID("_SrcBlend");
     private static readonly int DestinationBlendId = Shader.PropertyToID("_DstBlend");
     private static readonly int ZWriteId = Shader.PropertyToID("_ZWrite");
+    private static readonly int EmissionColorId = Shader.PropertyToID("_EmissionColor");
+    private static readonly int EmissionMapId = Shader.PropertyToID("_EmissionMap");
+
+    /// <summary>
+    /// How much brighter than the chosen colour a lens glows. Above 1 so it reads as a lamp that is on
+    /// rather than as paint, low enough that it is still the colour the player picked.
+    /// </summary>
+    private const float EmissionBoost = 1.45f;
 
     private static Color ReadColour(Material material)
     {
@@ -293,7 +453,7 @@ public class TruckPaintApplier : MonoBehaviour
         return Color.white;
     }
 
-    private static void Write(Material material, Color colour, int style)
+    private static void Write(Material material, Color colour, int style, bool lens)
     {
         Finish finish = Finishes[Mathf.Clamp(style, 0, Finishes.Length - 1)];
 
@@ -314,7 +474,28 @@ public class TruckPaintApplier : MonoBehaviour
         if (material.HasProperty(GlossinessId)) material.SetFloat(GlossinessId, finish.smoothness);
         if (material.HasProperty(SmoothnessId)) material.SetFloat(SmoothnessId, finish.smoothness);
 
+        if (lens) WriteGlow(material, colour);
+
         SetTransparent(material, finish.transparent);
+    }
+
+    /// <summary>
+    /// Gives a lens the colour it should glow with. The light toggle owns the keyword from here - it is
+    /// what switches the glow off with the headlights - so this only says what colour the glow is, and
+    /// it is re-applied by the toggle every time the lights go on.
+    /// </summary>
+    private static void WriteGlow(Material material, Color colour)
+    {
+        Color glow = colour * EmissionBoost;
+        glow.a = 1f;
+
+        if (material.HasProperty(EmissionColorId)) material.SetColor(EmissionColorId, glow);
+
+        // A lens with an emission texture would otherwise glow in the texture's pattern rather than in
+        // the chosen colour, the same way the model's baked albedo did.
+        if (material.HasProperty(EmissionMapId)) material.SetTexture(EmissionMapId, Texture2D.whiteTexture);
+
+        material.EnableKeyword("_EMISSION");
     }
 
     /// <summary>

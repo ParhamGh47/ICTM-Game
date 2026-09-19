@@ -11,6 +11,18 @@ public enum TruckPart
     Cone = 4,
     BackDoor = 5,
     Bumper = 6,
+
+    /// <summary>
+    /// The front lamps: the glass the player picks the colour of, and the beam the truck shines, which
+    /// is tinted to match it.
+    /// </summary>
+    Headlights = 7,
+
+    /// <summary>
+    /// The rear lamps - the tail and brake lights. A separate part from the headlights, so a truck can
+    /// have white lamps in front and red ones behind, or any other pair.
+    /// </summary>
+    BrakeLights = 8,
 }
 
 /// <summary>Which of a mesh's material slots a part's colour is written to.</summary>
@@ -27,6 +39,19 @@ public enum SlotRule
 
     /// <summary>Every slot except the window ones, so the body is painted but its glass is not.</summary>
     ExceptWindows = 3,
+
+    /// <summary>
+    /// Only the lens slots at the front of the truck - the lamps and the rings around them. Which end a
+    /// lens is on is decided by where it sits on the model, not by its name, so a ring counts as part
+    /// of the lamp it surrounds.
+    /// </summary>
+    Headlights = 4,
+
+    /// <summary>
+    /// Only the lens slots at the back of the truck, plus the brake lens itself - the one the car
+    /// controller switches on when the driver brakes.
+    /// </summary>
+    BrakeLights = 5,
 }
 
 /// <summary>How a painted part is shaded. The colour is the same for all of them.</summary>
@@ -54,7 +79,12 @@ public enum PaintStyle
 /// <see cref="SlotRule"/> decides. The body is the interesting one - it is painted with its own colour
 /// plus a window material for the glass, so the windows are their own part and the body leaves them
 /// alone. The wheels carry the hub and the tyre in separate slots, and only the hub takes the wheel
-/// colour.
+/// colour. The lights are the exception to the object name rule: the model spreads its lenses over
+/// several meshes (<c>lightFront</c>, <c>lights</c>, <c>lightRings</c>, <c>lightBack</c>), so they are
+/// found by their material and by which end of the truck they sit on instead - see
+/// <see cref="SlotRule.Headlights"/> and <see cref="SlotRule.BrakeLights"/> - and the truck's own
+/// <c>Light</c> components are tinted to match, so the beam is the colour the player picked too. The two
+/// ends are separate parts on purpose: white lamps in front and red ones behind is the point.
 ///
 /// Painting is stored as a colour per part, not as an index into <see cref="Palette"/>: the palette is
 /// only a set of presets, and the player is free to pick any colour they like with the picker. A part
@@ -62,7 +92,7 @@ public enum PaintStyle
 /// </summary>
 public static class TruckPaint
 {
-    public const int PartCount = 7;
+    public const int PartCount = 9;
 
     // ---------------------------------------------------------------- the parts
 
@@ -75,6 +105,8 @@ public static class TruckPaint
         "Cone",
         "Back Door",
         "Bumper",
+        "Headlights",
+        "Brake Lights",
     };
 
     // Model object names per part.
@@ -87,6 +119,8 @@ public static class TruckPaint
         new[] { "cone" },
         new[] { "backDoor", "backWindow" },                   // the rear door and the glass in it
         new[] { "gelgir" },                                   // the front grille and its surround
+        new string[0],                                        // headlights: found by material and position
+        new string[0],                                        // brake lights: the same, at the other end
     };
 
     private static readonly SlotRule[] PartSlotRules =
@@ -98,8 +132,15 @@ public static class TruckPaint
         SlotRule.All,             // cone
         SlotRule.All,             // back door and its window
         SlotRule.All,             // bumper
+        SlotRule.Headlights,      // the lamps at the front
+        SlotRule.BrakeLights,     // the lamps at the back
     };
 
+    /// <summary>
+    /// The model objects a part lives on. Empty for a part that has no mesh of its own - each end of the
+    /// truck's lights is spread across the model, so the applier looks for their material anywhere on the
+    /// truck and then works out which end of it they are on.
+    /// </summary>
     public static string[] ObjectNamesOf(TruckPart part) { return PartObjectNames[(int)part]; }
     public static SlotRule SlotRuleOf(TruckPart part) { return PartSlotRules[(int)part]; }
 

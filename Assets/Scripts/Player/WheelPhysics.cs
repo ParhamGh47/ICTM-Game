@@ -68,38 +68,13 @@ public class WheelPhysics : MonoBehaviour
 
     void Update()
     {
-        int speed = Mathf.RoundToInt(car.currentSpeedKPH);
-
-        float steerAngle = 0f;
-
-        if (speed < 10)
-        {
-            steerAngle = car != null ? car.steerInput * maxSteerAngle * 2.8f : 0f;
-        }
-        else if (speed < 20)
-        {
-            steerAngle = car != null ? car.steerInput * maxSteerAngle * 2.4f : 0f;
-        }
-        else if (speed < 35)
-        {
-            steerAngle = car != null ? car.steerInput * maxSteerAngle * 2f : 0f;
-        }
-        else if (speed < 60)
-        {
-            steerAngle = car != null ? car.steerInput * maxSteerAngle : 0f;
-        }
-        else if (speed < 90)
-        {
-            steerAngle = car != null ? car.steerInput * maxSteerAngle * 0.8f: 0f;
-        }
-        else if (speed < 120)
-        {
-            steerAngle = car != null ? car.steerInput * maxSteerAngle * 0.5f : 0f;
-        }
-        else
-        {
-            steerAngle = car != null ? car.steerInput * maxSteerAngle * 0.3f : 0f;
-        }
+        // The wheels are what steer the truck, so how far they are allowed to turn is what makes a
+        // fast truck feel planted and a slow one nimble. The car owns that curve (it holds the speed
+        // based steering settings), and it is applied to whatever the input was - keyboard, stick or
+        // trigger - so the handling is the same on every device.
+        float steerAngle = car != null
+            ? car.steerInput * maxSteerAngle * car.GetSpeedAdjustedSteer()
+            : 0f;
 
         if (isFrontLeft || isFrontRight)
         {

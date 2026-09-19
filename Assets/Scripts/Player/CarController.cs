@@ -6,6 +6,7 @@ public class CarController : MonoBehaviour
     public Rigidbody rb { get; private set; }
 
     [Header("Input")]
+    [Tooltip("Filled in every frame from the keyboard and the gamepad, both normalised to -1..1.")]
     public float throttleInput;
     public float steerInput;
 
@@ -22,8 +23,17 @@ public class CarController : MonoBehaviour
     public float currentSpeedKPH;
 
     [Header("Speed-Based Steering")]
+    [Tooltip("How much of its steering the truck keeps at top speed. 0.2 = a fifth of the lock " +
+             "available at a crawl, so a nudge at 120 km/h does not throw the truck across the road.")]
     public float minSteerPercent = 0.2f;
+
+    [Tooltip("Speed (km/h) up to which the truck steers with its full lock. Above it the steering " +
+             "fades away, reaching Min Steer Percent at top speed.")]
     public float steerFadeSpeed = 30f;
+
+    [Tooltip("Extra steering the truck gets when it is barely moving, so it can be turned around on " +
+             "the spot. Fades to 1 by the steer fade speed.")]
+    public float lowSpeedSteerBoost = 1.6f;
 
     [Header("Brake Lights")]
     public Renderer brakeLightRenderer;
@@ -89,15 +99,22 @@ public class CarController : MonoBehaviour
 
 void Update()
 {
-    throttleInput = Input.GetAxis("Vertical");
+    if (IsPaused())
+    {
+        // The wheels take their throttle and steering from these two fields, so a paused car has to
+        // stop asking for any: with a trigger held through the pause menu it would otherwise be
+        // quietly building speed up behind the frozen truck.
+        throttleInput = 0f;
+        steerInput = 0f;
+        currentFocusTarget = null;
+        return;
+    }
+
+    throttleInput = GameInput.Throttle();
+    steerInput = GameInput.Steer();
 
 
-    float playerSteerInput = Input.GetAxis("Horizontal");
-
-    steerInput = playerSteerInput;
-
-
-    if (Input.GetKey(KeyCode.Space))
+    if (GameInput.FocusHeld())
     {
         if (!enableFocus)
         {
@@ -202,6 +219,16 @@ void Update()
 
     private void UpdateBrakeLights()
     {
+        if (brakeLightRenderer == null)
+            return;
+
+        // The customize screen repaints the truck by swapping a part's material for a copy of its own,
+        // which would leave the brake lens this car grabbed at startup orphaned - and a repainted truck
+        // with brake lights that never come on. So the lens is taken from the renderer whenever it is
+        // no longer the material this car is holding.
+        if (brakeMat == null || brakeLightRenderer.sharedMaterial != brakeMat)
+            brakeMat = brakeLightRenderer.sharedMaterial;
+
         if (brakeMat == null)
             return;
 
@@ -216,12 +243,30 @@ void Update()
     }
 
 
+    /// <summary>
+    /// How much of the wheels' lock the truck is allowed to use right now, as a multiplier on the
+    /// wheel angle: a little more than 1 at a standstill so it can be turned around, 1 up to the
+    /// steer fade speed, then progressively less as it goes faster.
+    ///
+    /// This is the whole of the speed based steering. The wheels are what turn the truck, so scaling
+    /// their angle here is what makes a fast truck feel planted while a slow one stays nimble - it is
+    /// the same for a keyboard, a stick and a trigger, because it is applied after the input.
+    /// </summary>
     public float GetSpeedAdjustedSteer()
     {
         float s = currentSpeedKPH;
 
+        float boost =
+            Mathf.Lerp(
+                lowSpeedSteerBoost,
+                1f,
+                Mathf.InverseLerp(
+                    0f,
+                    steerFadeSpeed,
+                    s));
+
         if (s <= steerFadeSpeed)
-            return 1f;
+            return boost;
 
         float t =
             Mathf.InverseLerp(
@@ -235,20 +280,26 @@ void Update()
                 minSteerPercent,
                 t);
 
-        return percent;
+        return boost * percent;
     }
 
     public bool IsFocusing()
     {
-        return Input.GetKey(KeyCode.Space)
+        return GameInput.FocusHeld()
             && enableFocus
             && currentFocusTarget != null;
     }
 
 
+    private static bool IsPaused()
+    {
+        return PauseTracker.Instance != null && PauseTracker.Instance.isPaused;
+    }
+
+
     private void FixedUpdate()
     {
-        if (Input.GetKeyDown(KeyCode.R))
+        if (GameInput.ResetPressed())
         {
             if (Time.time - lastResetTime >= resetCooldown)
             {

@@ -23,11 +23,11 @@ using System.Collections.Generic;
 ///    keep their spacing forever and can never catch up and ram each other.
 ///  - Lane offset is derived from the road's own geometry (center of the
 ///    rightmost lane), so cars stay on the asphalt for any road width.
-///  - Body paint is randomized from the CarColor materials found under
-///    Assets/Prefabs/Cars (applied to the same slots the prefab already paints).
-///    Every car prefab dropped in that folder joins the fleet on its own; one
-///    built from a fresh model carries its body material as "BODY", which is
-///    recognised here without any change to this list of prefabs.
+///  - Body paint is randomized from the palette in <see cref="PassingCarPalette"/> - the materials it
+///    writes into Assets/Prefabs/Cars/Colors - plus any CarColor material already in the project. One colour
+///    per car, applied to the same slots the prefab already paints. Every car prefab dropped in
+///    Assets/Prefabs/Cars joins the fleet on its own; one built from a fresh model carries its body material
+///    as "BODY", which is recognised here without any change to this list of prefabs.
 ///  - "Lights On" decides whether spawned cars drive with their headlights on:
 ///    the LightL/LightR spotlights are enabled and the lens material is swapped
 ///    to its emissive "lit" variant (206: LightOff206 -> Light206).
@@ -56,6 +56,10 @@ public class PassingCarsSpawner : EditorWindow
 
     private GameObject[] carPrefabs = new GameObject[0];
     private Material[] carColors = new Material[0];
+
+    // The colour palette as a shuffled deck, so a paint run spreads over it instead of repeating.
+    private List<Material> colorDeck;
+    private int colorDeckIndex;
 
     [MenuItem("Tools/Road Tools/Paint Passing Cars")]
     static void OpenWindow()
@@ -98,13 +102,16 @@ public class PassingCarsSpawner : EditorWindow
 
     void FindCarColors()
     {
-        List<Material> found = new List<Material>();
+        // The palette is the pool: it is written into Assets/Prefabs/Cars/Colors the first time it is asked
+        // for, and any CarColor material already sitting in the project - the original four, or one made by
+        // hand - is picked up alongside it.
+        List<Material> found = new List<Material>(PassingCarPalette.Ensure());
         string[] guids = AssetDatabase.FindAssets("t:Material", new[] { "Assets/Prefabs/Cars" });
         foreach (string guid in guids)
         {
             string path = AssetDatabase.GUIDToAssetPath(guid);
             Material mat = AssetDatabase.LoadAssetAtPath<Material>(path);
-            if (mat != null && mat.name.StartsWith("CarColor"))
+            if (mat != null && mat.name.StartsWith("CarColor") && !found.Contains(mat))
             {
                 found.Add(mat);
             }
@@ -150,7 +157,16 @@ public class PassingCarsSpawner : EditorWindow
         if (carPrefabs.Length > 0)
         {
             EditorGUILayout.LabelField("Car Prefabs Found: " + carPrefabs.Length);
-            EditorGUILayout.LabelField("Paint Colors Found: " + carColors.Length);
+
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField("Paint Colors Found: " + carColors.Length,
+                                       GUILayout.Width(EditorGUIUtility.labelWidth));
+            if (GUILayout.Button("Show Colour Palette", GUILayout.Width(150)))
+            {
+                FindCarColors();
+                EditorGUIUtility.PingObject(AssetDatabase.LoadAssetAtPath<Object>(PassingCarPalette.Folder));
+            }
+            EditorGUILayout.EndHorizontal();
         }
         else
         {
@@ -461,9 +477,40 @@ public class PassingCarsSpawner : EditorWindow
         return created;
     }
 
+    /// <summary>
+    /// The next colour off a shuffled draw of the palette. Drawing from a shuffled deck rather than rolling
+    /// each car independently means the whole palette shows up before any colour repeats, so a fleet reads as
+    /// deliberately varied instead of lurching between three shades of silver.
+    /// </summary>
+    Material NextColor(System.Random rng)
+    {
+        if (carColors.Length == 0) return null;
+
+        if (colorDeck == null || colorDeck.Count != carColors.Length || colorDeckIndex >= colorDeck.Count)
+        {
+            colorDeck = new List<Material>(carColors);
+
+            for (int i = colorDeck.Count - 1; i > 0; i--)
+            {
+                int j = rng.Next(i + 1);
+                Material swap = colorDeck[i];
+                colorDeck[i] = colorDeck[j];
+                colorDeck[j] = swap;
+            }
+
+            colorDeckIndex = 0;
+        }
+
+        return colorDeck[colorDeckIndex++];
+    }
+
     void ApplyRandomColor(GameObject carObj, System.Random rng)
     {
-        if (carColors.Length == 0) return;
+        // One colour for the whole car. A car body is often several meshes - the model in Objects/Cars splits
+        // its own into four - so choosing per slot would hand each panel its own colour and the car would
+        // come out patchwork.
+        Material color = NextColor(rng);
+        if (color == null) return;
 
         var renderers = carObj.GetComponentsInChildren<MeshRenderer>(true);
         foreach (var renderer in renderers)
@@ -475,8 +522,6 @@ public class PassingCarsSpawner : EditorWindow
             {
                 Material mat = mats[i];
                 if (mat == null || !IsPaintable(mat)) continue;
-
-                Material color = carColors[rng.Next(carColors.Length)];
                 if (color == mat) continue;
 
                 mats[i] = color;

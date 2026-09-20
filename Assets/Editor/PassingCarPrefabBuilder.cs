@@ -10,18 +10,19 @@ using UnityEngine;
 ///
 /// Why a builder rather than a prefab written out by hand: a passing car is a Rigidbody, an
 /// <see cref="AICarController"/>, a collider, four wheel transforms, two headlights and an exhaust, all
-/// wrapped around an instance of the model, and everything about it that matters - where the wheels sit, how
-/// big the collider is, how far the exhaust hangs off the back - is measured against the model. The model's
-/// own parts live inside the FBX, and the identifiers that address them are Unity's to hand out: they are not
+/// wrapped around an instance of the model. Everything that matters - where the wheels sit, how big the
+/// collider is, how far the exhaust hangs off the back - is measured against the model, and the model's own
+/// parts live inside the FBX, where the identifiers that address them are Unity's to hand out: they are not
 /// in the file to be read, they exist once Unity has imported it. So this asks Unity, and gets them right
 /// rather than guessing.
 ///
-/// The template is a working car prefab (the 206 unless changed). Its own objects are copied whole, so the
-/// exhaust is the same ParticleSystem, the lights are the same spotlights and the collider is the same box;
-/// they are then placed against the *new* model, each object moved to the same relative spot inside the
-/// model's bounds and the layout scaled by how much bigger the new model is. That matters because the
-/// artist's numbers were never a match for the 206 to begin with - the 911 wears the 206's collider
-/// verbatim - so scaling the relationship is what carries the intent across, not the numbers.
+/// The template is a working car prefab (the 206 unless changed). Its parts are copied whole - the exhaust is
+/// the same ParticleSystem, the lights are the same spotlights, the collider is the same box, and they stay
+/// exactly where the template put them - and the new model is then scaled and moved so it fills the same
+/// space the template's model fills. Fitting the model to the layout is the whole trick: every part was
+/// placed against the template's model, so a model that occupies the same box is driven, lit, exhausted and
+/// collided with exactly as the template's car is. The 911 shows the alternative, wearing the 206's numbers
+/// verbatim, which only works when the two models happen to be the same size.
 ///
 /// The car model in Assets/Objects/Cars is built on first load (once ever, remembered in EditorPrefs), and
 /// can be rebuilt from Tools > Road Tools > Create Car Prefab From Model. The result goes in
@@ -35,17 +36,27 @@ public class PassingCarPrefabBuilder : EditorWindow
     private const string DefaultOutputPath = "Assets/Prefabs/Cars/Car/Car.prefab";
     private const string DefaultBodyMaterialPath = "Assets/Prefabs/Cars/CarColor.mat";
 
-    /// <summary>Set once the car has been built, so deleting it means deleting it.</summary>
-    private const string BuiltOnceKey = "PassingCarPrefabBuilder.BuiltOnce";
+    /// <summary>
+    /// Set once the car has been built, so deleting it means deleting it. Versioned because the first
+    /// version of this builder could not find a model inside a car prefab at all and gave up: bumping the
+    /// key lets the fixed builder have its one automatic go at the same model.
+    /// </summary>
+    private const string BuiltOnceKey = "PassingCarPrefabBuilder.BuiltOnce.v2";
 
     private GameObject template;
     private GameObject model;
     private string outputPath = DefaultOutputPath;
     private Material bodyMaterial;
 
-    [Tooltip("Grow the layout with the model: a car bigger than the template gets a bigger collider and its " +
-             "wheels further apart, in proportion. Off copies the template's numbers exactly.")]
-    private bool scaleToModel = true;
+    [Tooltip("Scale the model so it fills the same space the template's car fills. On, the wheels, collider, " +
+             "lights and exhaust line up on the new model the way they line up on the template's - turn it off " +
+             "only if you want the model at the size it was imported and the template's layout copied verbatim.")]
+    private bool fitModel = true;
+
+    [Tooltip("Some models are exported facing the other way down their own Z axis. Turn this on if the new " +
+             "car comes out with its front where its back should be - it rotates the model 180 degrees before " +
+             "it is fitted, so its front faces the way the template's does.")]
+    private bool flipModel;
 
     [Tooltip("Overwrite an existing prefab at the output path instead of stopping.")]
     private bool overwrite = true;
@@ -92,7 +103,7 @@ public class PassingCarPrefabBuilder : EditorWindow
             string error;
             GameObject built = BuildPrefab(templateAsset, modelAsset, DefaultOutputPath,
                                            AssetDatabase.LoadAssetAtPath<Material>(DefaultBodyMaterialPath),
-                                           true, true, out error);
+                                           true, false, true, out error);
 
             if (built != null) Debug.Log("[CarPrefab] Built '" + DefaultOutputPath +
                                          "' for the '" + modelAsset.name + "' model - the passing cars can " +
@@ -128,7 +139,8 @@ public class PassingCarPrefabBuilder : EditorWindow
         EditorGUILayout.Space();
 
         template = (GameObject)EditorGUILayout.ObjectField(
-            new GUIContent("Template Car", "The prefab to copy the parts and settings from."),
+            new GUIContent("Template Car", "The prefab to copy the parts and settings from. Has to be a car " +
+                                           "prefab built like the 206 and 911 - its model sitting inside it."),
             template, typeof(GameObject), false);
 
         model = (GameObject)EditorGUILayout.ObjectField(
@@ -157,10 +169,17 @@ public class PassingCarPrefabBuilder : EditorWindow
 
         EditorGUILayout.Space();
 
-        scaleToModel = EditorGUILayout.Toggle(
-            new GUIContent("Scale Layout To Model",
-                "Grow the collider, wheels, lights and exhaust in proportion to the new model's size."),
-            scaleToModel);
+        fitModel = EditorGUILayout.Toggle(
+            new GUIContent("Fit Model To The Layout",
+                "Scale the model so it fills the same space the template's car fills, so the template's " +
+                "wheels, collider, lights and exhaust all land on it. Off keeps the model at its imported " +
+                "size and copies the template's layout verbatim."),
+            fitModel);
+
+        flipModel = EditorGUILayout.Toggle(
+            new GUIContent("Model Faces Backwards", "Rotate the model 180 degrees before fitting it. Use it " +
+                                                    "if the built car has its front where its back should be."),
+            flipModel);
 
         overwrite = EditorGUILayout.Toggle(
             new GUIContent("Overwrite Existing", "Replace a prefab that is already at the output path."),
@@ -183,7 +202,8 @@ public class PassingCarPrefabBuilder : EditorWindow
     void BuildFromWindow()
     {
         string error;
-        GameObject built = BuildPrefab(template, model, outputPath, bodyMaterial, scaleToModel, overwrite, out error);
+        GameObject built = BuildPrefab(template, model, outputPath, bodyMaterial, fitModel, flipModel,
+                                       overwrite, out error);
 
         if (built == null)
         {
@@ -196,8 +216,8 @@ public class PassingCarPrefabBuilder : EditorWindow
     }
 
     /// <summary>
-    /// Reports the size of both models, which is what the layout is scaled by. Measured when asked rather
-    /// than every repaint: it has to place an instance to see a template's model.
+    /// Reports the size of both models, which is what the model is fitted by. Measured when asked rather than
+    /// every repaint: it has to place an instance to see a template's model.
     /// </summary>
     void Measure()
     {
@@ -207,18 +227,18 @@ public class PassingCarPrefabBuilder : EditorWindow
             return;
         }
 
-        measurement = "Template's model " + MeasuredSize(template, true) + " m, this model " +
-                      MeasuredSize(model, false) + " m - the layout is scaled by the difference.";
+        measurement = "Template's car " + MeasuredSize(template, true) + " m, this model " +
+                      MeasuredSize(model, false) + " m - the model is scaled to fill the template's car.";
     }
 
     // ---------------------------------------------------------------- building
 
     /// <summary>
     /// Builds the prefab, returning it, or null with the reason in <paramref name="error"/>. Nothing is left
-    /// in the scene: the two measuring instances are hidden from the start and destroyed at the end.
+    /// in the scene: the two working instances are hidden from the start and destroyed at the end.
     /// </summary>
     public static GameObject BuildPrefab(GameObject template, GameObject model, string outputPath,
-                                         Material bodyMaterial, bool scaleToModel, bool overwrite,
+                                         Material bodyMaterial, bool fitModel, bool flipModel, bool overwrite,
                                          out string error)
     {
         error = null;
@@ -256,14 +276,15 @@ public class PassingCarPrefabBuilder : EditorWindow
             return null;
         }
 
-        // Never visited by the undo system or by the scene's save: these are measuring sticks, not scene
+        // Never visited by the undo system or by the scene's save: these are working copies, not scene
         // objects, and they are torn down in the finally below whatever happens.
         templateInstance.hideFlags = HideFlags.HideAndDontSave;
         modelInstance.hideFlags = HideFlags.HideAndDontSave;
 
         try
         {
-            return BuildNow(templateInstance, modelInstance, outputPath, bodyMaterial, scaleToModel, ref error);
+            return BuildNow(templateInstance, modelInstance, outputPath, bodyMaterial, fitModel, flipModel,
+                            ref error);
         }
         finally
         {
@@ -275,14 +296,23 @@ public class PassingCarPrefabBuilder : EditorWindow
     }
 
     private static GameObject BuildNow(GameObject templateInstance, GameObject modelInstance, string outputPath,
-                                       Material bodyMaterial, bool scaleToModel, ref string error)
+                                       Material bodyMaterial, bool fitModel, bool flipModel, ref string error)
     {
+        if (templateInstance.GetComponent<AICarController>() == null)
+        {
+            error = "'" + templateInstance.name + "' is not a passing-car prefab - there is no AICarController on " +
+                    "it, so there is no car to copy. Point the builder at one of the prefabs the painter already " +
+                    "spawns (the 206 or the 911), not at a model.";
+            return null;
+        }
+
         GameObject templateModel = FindModelInstance(templateInstance);
 
         if (templateModel == null)
         {
-            error = "The template prefab does not contain a model, so there is nothing to measure where its " +
-                    "wheels and collider belong.";
+            error = "No model could be found inside '" + templateInstance.name + "'. A passing-car prefab holds " +
+                    "its model as a nested prefab instance - the 206 holds 206fullOption.fbx that way - and the " +
+                    "parts are laid out around it. Point the builder at a car prefab built like the 206 and 911.";
             return null;
         }
 
@@ -293,57 +323,76 @@ public class PassingCarPrefabBuilder : EditorWindow
         Vector3 rootScale = templateInstance.transform.localScale;
 
         templateInstance.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
-        modelInstance.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
+        modelInstance.transform.SetPositionAndRotation(
+            Vector3.zero, flipModel ? Quaternion.Euler(0f, 180f, 0f) : Quaternion.identity);
 
-        Bounds from = BoundsOf(templateModel);
-        Bounds to = BoundsOf(modelInstance);
+        Bounds car = BoundsOf(templateModel);
+        Bounds model = BoundsOf(modelInstance);
 
-        if (from.size.x < 0.0001f || from.size.y < 0.0001f || from.size.z < 0.0001f ||
-            to.size.x < 0.0001f || to.size.y < 0.0001f || to.size.z < 0.0001f)
+        if (IsEmpty(car) || IsEmpty(model))
         {
-            error = "One of the two models measures as nothing - it may have no renderers.";
+            error = "One of the two measures as nothing - it may have no renderers.";
             return null;
         }
 
-        Vector3 ratio = scaleToModel
-            ? new Vector3(to.size.x / from.size.x, to.size.y / from.size.y, to.size.z / from.size.z)
-            : Vector3.one;
-
         GameObject root = new GameObject(Path.GetFileNameWithoutExtension(outputPath));
-
-        // 1. The model itself, as an instance of the FBX - the way the 206 prefab holds its model. Squared up
-        //    on the root, but left the size Unity imported it at: the FBX root carries the exporter's own
-        //    scale, and that is what makes the car the size it is.
-        modelInstance.transform.SetParent(root.transform, false);
-        modelInstance.transform.localPosition = Vector3.zero;
-        modelInstance.transform.localRotation = Quaternion.identity;
-        modelInstance.hideFlags = HideFlags.None;
-
-        // 2. The template's own objects - the wheels, the body collider, the exhaust, the lights - copied
-        //    whole, so their components and materials come with them, then laid out against this model.
         Dictionary<Transform, Transform> pairs = new Dictionary<Transform, Transform>();
         int ported = 0;
 
         foreach (Transform child in templateInstance.transform)
         {
-            if (child.gameObject == templateModel) continue;
+            if (child.gameObject == templateModel)
+            {
+                // The template's model is replaced by this one. Everything else in the prefab was placed
+                // against the template's model, so the new model is scaled and moved to fill the same space
+                // it filled: the wheels, collider, lights and exhaust then sit on the new model exactly where
+                // they sat on the template's car.
+                modelInstance.transform.SetParent(root.transform, false);
+                modelInstance.hideFlags = HideFlags.None;
+                FitModelTo(modelInstance.transform, model, car, fitModel);
 
+                // Anything the artist added inside the template's model - the 206 keeps an extra lens mesh
+                // there, which is where its headlight material lives - comes along in the same place relative
+                // to the model. Fitting scales the model's own root, so a child left exactly where it was
+                // stays on the part of the model it was put on.
+                foreach (Transform extra in templateModel.transform)
+                {
+                    if (PrefabUtility.GetCorrespondingObjectFromSource(extra.gameObject) != null) continue;
+                    if (PrefabUtility.GetCorrespondingObjectFromOriginalSource(extra.gameObject) != null) continue;
+
+                    GameObject extraCopy = Instantiate(extra.gameObject);
+                    extraCopy.name = extra.name;
+                    extraCopy.transform.SetParent(modelInstance.transform, false);
+                    MapHierarchy(extra, extraCopy.transform, pairs);
+                }
+
+                continue;
+            }
+
+            // The template's own objects - the wheels, the body collider, the exhaust, the lights - copied
+            // whole, so their components and materials come with them, and left exactly where they were.
             GameObject copy = Instantiate(child.gameObject);
             copy.name = child.name;
             copy.transform.SetParent(root.transform, false);
 
-            pairs[child] = copy.transform;
-            PortSubtree(child, copy.transform, from, to, ratio, pairs);
+            MapHierarchy(child, copy.transform, pairs);
             ported++;
         }
 
-        // 3. The root's own components: the rigid body and the AI controller, copied with their settings and
-        //    then pointed at the copies rather than at the template they came from.
+        if (modelInstance.transform.parent != root.transform)
+        {
+            error = "The template's model is not a child of the template prefab, so there is nowhere to put " +
+                    "the new one.";
+            return null;
+        }
+
+        // The root's own components: the rigid body and the AI controller, copied with their settings and
+        // then pointed at the copies rather than at the template they came from.
         Component[] components = templateInstance.GetComponents<Component>();
 
         foreach (Component component in components)
         {
-            if (component is Transform) continue;
+            if (component == null || component is Transform) continue;
 
             ComponentUtility.CopyComponent(component);
             ComponentUtility.PasteComponentAsNew(root);
@@ -383,7 +432,7 @@ public class PassingCarPrefabBuilder : EditorWindow
         AssetDatabase.SaveAssets();
 
         // The instance root is not the asset, and only the asset is wanted: the instance goes with the rest of
-        // the measuring sticks.
+        // the working copies.
         DestroyImmediate(root);
 
         if (!saved || prefab == null)
@@ -395,58 +444,35 @@ public class PassingCarPrefabBuilder : EditorWindow
         EditorGUIUtility.PingObject(prefab);
 
         Debug.Log(string.Format(
-            "[CarPrefab] {0}: built from '{1}' on the '{2}' layout - {3} objects ported, model {4} against the " +
+            "[CarPrefab] {0}: built from '{1}' on the '{2}' layout - {3} objects ported, car {4} against the " +
             "template's {5}, {6} body slot(s) wearing {7}. The passing-car painter finds prefabs in " +
             "Assets/Prefabs/Cars by itself.",
-            outputPath, modelInstance.name, templateInstance.name, ported, Size(to), Size(from), bodySlots,
+            outputPath, modelInstance.name, templateInstance.name, ported, Size(car), Size(model), bodySlots,
             bodyMaterial != null ? bodyMaterial.name : "nothing"));
 
         return prefab;
     }
 
     /// <summary>
-    /// Lays a copied object out against the new model: its position moves to the same relative spot inside the
-    /// model's bounds, and anything carrying a size of its own - a collider, a renderer, the exhaust - is
-    /// scaled by how much the new model differs from the template's.
+    /// Scales and moves the model so it occupies the same box the template's car occupies.
     ///
-    /// Every object in the subtree is moved, the wheel transforms included, so the wheels land in the same
-    /// places on the new model. Sizes are scaled only on objects that have one: scaling a parent as well
-    /// would move its children twice.
+    /// Scaling the model's root scales everything inside it about its pivot, so its bounds grow by the same
+    /// ratio, axis for axis: put the scaled bounds back over the template's car and the two line up. That is
+    /// why the model is squared up on the origin first, and why it is fitted by its box rather than by its
+    /// pivot - a model exported with its pivot at the rear axle and one exported with it in the middle still
+    /// end up in the same place on the template's layout.
     /// </summary>
-    private static void PortSubtree(Transform source, Transform copy, Bounds from, Bounds to, Vector3 ratio,
-                                    Dictionary<Transform, Transform> pairs)
+    private static void FitModelTo(Transform model, Bounds modelBounds, Bounds carBounds, bool fit)
     {
-        copy.position = MapPoint(source.position, from, to);
+        if (!fit) return;
 
-        if (HasSizeOfItsOwn(copy)) copy.localScale = Vector3.Scale(source.localScale, ratio);
+        Vector3 ratio = new Vector3(
+            carBounds.size.x / modelBounds.size.x,
+            carBounds.size.y / modelBounds.size.y,
+            carBounds.size.z / modelBounds.size.z);
 
-        for (int i = 0; i < source.childCount && i < copy.childCount; i++)
-        {
-            pairs[source.GetChild(i)] = copy.GetChild(i);
-            PortSubtree(source.GetChild(i), copy.GetChild(i), from, to, ratio, pairs);
-        }
-    }
-
-    private static bool HasSizeOfItsOwn(Transform transform)
-    {
-        return transform.GetComponent<Collider>() != null
-            || transform.GetComponent<Renderer>() != null
-            || transform.GetComponent<ParticleSystem>() != null
-            || transform.GetComponent<Light>() != null;
-    }
-
-    /// <summary>The same place inside one box as a point occupies in another, as a fraction of each axis.</summary>
-    private static Vector3 MapPoint(Vector3 point, Bounds from, Bounds to)
-    {
-        Vector3 fraction;
-        fraction.x = (point.x - from.min.x) / from.size.x;
-        fraction.y = (point.y - from.min.y) / from.size.y;
-        fraction.z = (point.z - from.min.z) / from.size.z;
-
-        return new Vector3(
-            to.min.x + fraction.x * to.size.x,
-            to.min.y + fraction.y * to.size.y,
-            to.min.z + fraction.z * to.size.z);
+        model.localScale = Vector3.Scale(model.localScale, ratio);
+        model.localPosition = carBounds.center - Vector3.Scale(ratio, modelBounds.center);
     }
 
     /// <summary>
@@ -514,24 +540,93 @@ public class PassingCarPrefabBuilder : EditorWindow
 
     // ---------------------------------------------------------------- helpers
 
+    /// <summary>A source transform and the copy of it, for everything under one copied object.</summary>
+    private static void MapHierarchy(Transform source, Transform copy, Dictionary<Transform, Transform> pairs)
+    {
+        pairs[source] = copy;
+
+        for (int i = 0; i < source.childCount && i < copy.childCount; i++)
+        {
+            MapHierarchy(source.GetChild(i), copy.GetChild(i), pairs);
+        }
+    }
+
     /// <summary>
-    /// The instantiated model inside a car prefab, found by what it came from: the one child whose source
-    /// asset is an imported model.
+    /// The instantiated model inside a car prefab. A car prefab holds its model as a nested prefab instance -
+    /// the 206 holds 206fullOption.fbx, the 911 holds another model - so it is the child that came from an
+    /// imported model file rather than from the prefab itself. Three ways to ask, from most to least direct,
+    /// because the answer differs between a model nested in a prefab and one placed directly.
     /// </summary>
     private static GameObject FindModelInstance(GameObject root)
     {
+        // 1. The child whose original source is a model file. The *original* source matters: for a model
+        //    nested inside another prefab, the plain "from source" answer is the outer prefab, not the FBX.
         foreach (Transform child in root.transform)
         {
-            Object source = PrefabUtility.GetCorrespondingObjectFromSource(child.gameObject);
-            if (source == null) continue;
+            if (IsModelObject(child.gameObject)) return child.gameObject;
+        }
 
-            string path = AssetDatabase.GetAssetPath(source);
-            if (!string.IsNullOrEmpty(path) && path.EndsWith(".fbx")) return child.gameObject;
+        // 2. The child that is itself a prefab instance, which is how a model sits in a prefab.
+        foreach (Transform child in root.transform)
+        {
+            if (!PrefabUtility.IsAnyPrefabInstanceRoot(child.gameObject)) continue;
+            if (AssetDatabase.GetAssetPath(PrefabUtility.GetCorrespondingObjectFromSource(child.gameObject)) != "")
+                return child.gameObject;
+        }
+
+        // 3. The child the car's own renderers hang off. The artist's parts - wheels, collider, exhaust,
+        //    lights - carry no renderer of their own, so this still picks the model out.
+        foreach (Transform child in root.transform)
+        {
+            if (HasRenderers(child.gameObject)) return child.gameObject;
         }
 
         return null;
     }
 
+    private static bool IsModelObject(GameObject go)
+    {
+        Object[] sources =
+        {
+            PrefabUtility.GetCorrespondingObjectFromSource(go),
+            PrefabUtility.GetCorrespondingObjectFromOriginalSource(go),
+        };
+
+        for (int i = 0; i < sources.Length; i++)
+        {
+            if (sources[i] == null) continue;
+
+            string path = AssetDatabase.GetAssetPath(sources[i]);
+            if (!string.IsNullOrEmpty(path) && path.EndsWith(".fbx", System.StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool HasRenderers(GameObject go)
+    {
+        Renderer[] renderers = go.GetComponentsInChildren<Renderer>(true);
+
+        for (int i = 0; i < renderers.Length; i++)
+        {
+            if (renderers[i] is ParticleSystemRenderer || renderers[i] is TrailRenderer) continue;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsEmpty(Bounds bounds)
+    {
+        return bounds.size.x < 0.0001f || bounds.size.y < 0.0001f || bounds.size.z < 0.0001f;
+    }
+
+    /// <summary>
+    /// The box a model fills, as Unity would draw it: the exhaust and any trails are effects hanging off the
+    /// car rather than the car itself, and anything switched off - a model often arrives with leftovers the
+    /// artist disabled - is not part of what the car needs to fit into.
+    /// </summary>
     private static Bounds BoundsOf(GameObject go)
     {
         Renderer[] renderers = go.GetComponentsInChildren<Renderer>(true);
@@ -540,8 +635,8 @@ public class PassingCarPrefabBuilder : EditorWindow
 
         for (int i = 0; i < renderers.Length; i++)
         {
-            // The exhaust and any trails are effects hanging off the car, not the car itself.
             if (renderers[i] is ParticleSystemRenderer || renderers[i] is TrailRenderer) continue;
+            if (!renderers[i].gameObject.activeInHierarchy || !renderers[i].enabled) continue;
 
             if (!any) { bounds = renderers[i].bounds; any = true; }
             else bounds.Encapsulate(renderers[i].bounds);

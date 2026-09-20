@@ -5357,6 +5357,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   waypointsRoot: {fileID: 0}
+  startingWaypoint: 0
   speedKPH: 60
   turnSpeed: 6
   maxSteerAngle: 35

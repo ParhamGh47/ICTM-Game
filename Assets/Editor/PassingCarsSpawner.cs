@@ -61,6 +61,12 @@ public class PassingCarsSpawner : EditorWindow
     private List<Material> colorDeck;
     private int colorDeckIndex;
 
+    // How the colouring went on this run, reported once at the end rather than per car.
+    private int shaped;
+    private string shapedSample;
+    private int unpainted;
+    private string unpaintedSample;
+
     [MenuItem("Tools/Road Tools/Paint Passing Cars")]
     static void OpenWindow()
     {
@@ -321,6 +327,11 @@ public class PassingCarsSpawner : EditorWindow
 
         System.Random rng = new System.Random();
 
+        shaped = 0;
+        shapedSample = null;
+        unpainted = 0;
+        unpaintedSample = null;
+
         GameObject parent = FindOrCreateParent(ParentName);
         int created = 0;
 
@@ -330,6 +341,20 @@ public class PassingCarsSpawner : EditorWindow
         created += PaintDirection(parent.transform, "Path_Reverse", false, -laneOffset, splineDistance, rng, revTurnParam);
 
         Debug.Log($"Painted {created} passing cars ({carsPerDirection} per direction)");
+
+        // Said out loud because a car whose body cannot be identified looks exactly like a car that was
+        // skipped: the number here is the one to look at when some prefab stays its own colour.
+        if (shaped > 0)
+        {
+            Debug.Log($"{shaped} car(s) had no body material this tool knows, so the body was taken to be the " +
+                      $"biggest mesh on them - e.g. {shapedSample}");
+        }
+
+        if (unpainted > 0)
+        {
+            Debug.LogWarning($"{unpainted} car(s) had nothing to paint at all - no visible renderer to take a " +
+                             $"colour - and kept their own, e.g. {unpaintedSample}.");
+        }
     }
 
     int PaintDirection(Transform parent, string pathName, bool forward, float offset, float splineDistance, System.Random rng, float turnParam)
@@ -513,27 +538,104 @@ public class PassingCarsSpawner : EditorWindow
         if (color == null) return;
 
         var renderers = carObj.GetComponentsInChildren<MeshRenderer>(true);
+        List<MeshRenderer> visible = new List<MeshRenderer>();
+        int painted = 0;
+
         foreach (var renderer in renderers)
         {
-            Material[] mats = renderer.sharedMaterials;
-            bool changed = false;
+            // Only what is drawn counts. A car model ships leftovers that are switched off - the 911 keeps an
+            // inactive copy of its own body - and recolouring one of those changes nothing on screen while
+            // hiding the fact that the body itself was never touched.
+            if (!renderer.gameObject.activeInHierarchy || !renderer.enabled) continue;
 
-            for (int i = 0; i < mats.Length; i++)
-            {
-                Material mat = mats[i];
-                if (mat == null || !IsPaintable(mat)) continue;
-                if (color == mat) continue;
-
-                mats[i] = color;
-                changed = true;
-            }
-
-            if (changed)
-            {
-                Undo.RecordObject(renderer, "Recolor Passing Car");
-                renderer.sharedMaterials = mats;
-            }
+            visible.Add(renderer);
+            if (PaintBodySlots(renderer, color)) painted++;
         }
+
+        // Then the shape rule, which is what makes the colour land on the CAR rather than on whatever small
+        // panel happened to be named. A model can name one little part the way this tool looks for and leave
+        // the shell itself named something else - the 911's shell is a Circle with two material slots and
+        // nothing in its name to go on - and a name-only pass would quietly recolour the little part and
+        // leave the car looking untouched. The biggest visible mesh on a car is its body shell, and its first
+        // slot is the paint. On a car the names already painted this finds the body already wearing the
+        // colour and does nothing, so nothing previously working changes.
+        if (PaintBodyByShape(visible, color, out string shapeNote))
+        {
+            shapedSample = shapedSample == null ? carObj.name + " -> " + shapeNote : shapedSample;
+            shaped++;
+            return;
+        }
+
+        if (painted > 0) return;
+
+        unpaintedSample = unpaintedSample == null ? carObj.name : unpaintedSample;
+        unpainted++;
+    }
+
+    /// <summary>Repaints every slot of one renderer that is body paint. Returns whether anything changed.</summary>
+    bool PaintBodySlots(MeshRenderer renderer, Material color)
+    {
+        Material[] mats = renderer.sharedMaterials;
+        bool changed = false;
+
+        for (int i = 0; i < mats.Length; i++)
+        {
+            Material mat = mats[i];
+            if (mat == null || !IsPaintable(mat)) continue;
+            if (color == mat) continue;
+
+            mats[i] = color;
+            changed = true;
+        }
+
+        if (!changed) return false;
+
+        Undo.RecordObject(renderer, "Recolor Passing Car");
+        renderer.sharedMaterials = mats;
+        return true;
+    }
+
+    /// <summary>
+    /// Finds the car's body by its shape: the biggest visible renderer whose first slot is not glass, a lens
+    /// or lights is taken to be the shell, and its first slot is painted. Only the first slot, because that
+    /// is the one the body paint sits in - the rest of the array is the glass, the chrome and whatever else
+    /// the model packs onto the same mesh. Returns false when there is no shell or when it is already wearing
+    /// the colour, which is the case on a car whose body the material names found.
+    /// </summary>
+    bool PaintBodyByShape(List<MeshRenderer> visible, Material color, out string note)
+    {
+        MeshRenderer body = null;
+        float biggest = 0f;
+
+        foreach (MeshRenderer renderer in visible)
+        {
+            Material[] mats = renderer.sharedMaterials;
+            if (mats.Length == 0 || mats[0] == null) continue;
+            if (IsNeverBody(mats[0])) continue;
+
+            Vector3 size = renderer.bounds.size;
+            float volume = size.x * size.y * size.z;
+            if (volume <= biggest) continue;
+
+            biggest = volume;
+            body = renderer;
+        }
+
+        // No shell to speak of, or the body is already wearing the colour because the names found it.
+        if (body == null || body.sharedMaterials[0] == color)
+        {
+            note = null;
+            return false;
+        }
+
+        Material[] materials = body.sharedMaterials;
+        note = $"'{body.name}' slot 0 (was '{materials[0].name}')";
+
+        materials[0] = color;
+
+        Undo.RecordObject(body, "Recolor Passing Car");
+        body.sharedMaterials = materials;
+        return true;
     }
 
     // The names a car model gives its body paint, which is the only thing on a car
@@ -548,11 +650,36 @@ public class PassingCarsSpawner : EditorWindow
         "BODY",
     };
 
+    // Never the body, however big the mesh turns out to be.
+    private static readonly string[] NeverBodyNames =
+    {
+        "glass",
+        "window",
+        "windscreen",
+        "windshield",
+        "light",
+        "lamp",
+        "siren",
+    };
+
     bool IsPaintable(Material mat)
     {
         for (int i = 0; i < BodyMaterialNames.Length; i++)
         {
             if (mat.name.StartsWith(BodyMaterialNames[i], System.StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    bool IsNeverBody(Material mat)
+    {
+        for (int i = 0; i < NeverBodyNames.Length; i++)
+        {
+            if (mat.name.IndexOf(NeverBodyNames[i], System.StringComparison.OrdinalIgnoreCase) >= 0)
             {
                 return true;
             }

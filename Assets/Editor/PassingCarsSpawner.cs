@@ -25,6 +25,9 @@ using System.Collections.Generic;
 ///    rightmost lane), so cars stay on the asphalt for any road width.
 ///  - Body paint is randomized from the CarColor materials found under
 ///    Assets/Prefabs/Cars (applied to the same slots the prefab already paints).
+///    Every car prefab dropped in that folder joins the fleet on its own; one
+///    built from a fresh model carries its body material as "BODY", which is
+///    recognised here without any change to this list of prefabs.
 ///  - "Lights On" decides whether spawned cars drive with their headlights on:
 ///    the LightL/LightR spotlights are enabled and the lens material is swapped
 ///    to its emissive "lit" variant (206: LightOff206 -> Light206).
@@ -112,6 +115,15 @@ public class PassingCarsSpawner : EditorWindow
     void OnGUI()
     {
         GUILayout.Label("Paint Passing Cars", EditorStyles.boldLabel);
+        EditorGUILayout.Space();
+
+        // Above the road check on purpose: a car prefab is worth building whether or not the scene in front
+        // of you happens to hold a road.
+        if (GUILayout.Button("Create A Car Prefab From A Model..."))
+        {
+            PassingCarPrefabBuilder.OpenWindow();
+        }
+
         EditorGUILayout.Space();
 
         EditorGUI.BeginChangeCheck();
@@ -479,12 +491,29 @@ public class PassingCarsSpawner : EditorWindow
         }
     }
 
-    // The 206 prefab paints its body with CarColor.mat; the 911 uses
-    // "Material.005 1". Swap those paint slots for a random CarColor material
-    // and leave windows/lights/smoke untouched.
+    // The names a car model gives its body paint, which is the only thing on a car
+    // that gets recoloured. The 206 prefab paints its body with CarColor.mat, the
+    // 911 uses "Material.005 1", and the car model (Objects/Cars/car.fbx) calls
+    // its body material "BODY". Windows, lights, wheels and the engine keep their
+    // own materials - they are not paint.
+    private static readonly string[] BodyMaterialNames =
+    {
+        "CarColor",
+        "Material.005",
+        "BODY",
+    };
+
     bool IsPaintable(Material mat)
     {
-        return mat.name.StartsWith("CarColor") || mat.name.StartsWith("Material.005");
+        for (int i = 0; i < BodyMaterialNames.Length; i++)
+        {
+            if (mat.name.StartsWith(BodyMaterialNames[i], System.StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     // Turns the car's headlights on/off after painting. Matches the manual

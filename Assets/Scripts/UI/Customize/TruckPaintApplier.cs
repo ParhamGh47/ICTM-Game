@@ -21,11 +21,18 @@ using UnityEngine;
 ///   * Those copies belong to this component, so it is this component's job to destroy them. That keeps
 ///     a level's worth of copies from surviving the scene that created them.
 ///
-/// The lights are painted like anything else - the lenses keep the colour, and get an emission colour to
+/// The lights are painted like anything else - the lens keeps the colour, and gets an emission colour to
 /// glow in, so the tail and brake lights light up in it too - and because a lens is only half of a light,
 /// the truck's own <c>Light</c> components are tinted to match, so the beam the headlights throw is the
 /// colour the player picked as well. The front and the back are separate parts, so a truck can wear white
 /// lamps in front and red ones behind.
+///
+/// A lamp is not the whole mesh it sits in, though. The headlight is one mesh carrying three materials -
+/// the lens that lights up, the rings around it and a plain part - so painting every light-ish slot would
+/// turn the chrome around the lamp into body colour. The lens is taken to be the slot the truck's own
+/// <see cref="LightToggle"/> glows, which is the same slot the player sees light up when they press the
+/// key; the rings and bezel are left as the model has them. The brake light works the same way from the
+/// other side: it is the slot the car controller flashes when the driver brakes.
 /// </summary>
 [DisallowMultipleComponent]
 public class TruckPaintApplier : MonoBehaviour
@@ -51,6 +58,11 @@ public class TruckPaintApplier : MonoBehaviour
     private readonly List<Target> targets = new List<Target>();
     private readonly List<LightTarget> lights = new List<LightTarget>();
 
+    // The headlight mesh the truck lights up, and which of its slots is the lamp: the rest of that mesh is
+    // the trim around the lamp and is left alone.
+    private Renderer lensRenderer;
+    private int lensSlot = -1;
+
     /// <summary>True once <see cref="Capture"/> has run and at least one slot was found.</summary>
     public bool IsReady { get { return targets.Count > 0; } }
 
@@ -68,6 +80,8 @@ public class TruckPaintApplier : MonoBehaviour
     public void Capture()
     {
         if (targets.Count > 0) return;
+
+        CaptureLens();
 
         // Mesh renderers only: a ParticleSystemRenderer and a TrailRenderer are Renderers too, and
         // neither should ever be repainted.
@@ -141,6 +155,27 @@ public class TruckPaintApplier : MonoBehaviour
     }
 
     /// <summary>
+    /// Finds the lamp itself: the mesh the truck's light toggle glows, and which of that mesh's slots it
+    /// glows. The toggle already knows both - it is the thing that switches the lens on - so the paint
+    /// system simply agrees with it, and a headlight mesh that carries its rings in another slot does not
+    /// end up with chrome painted body colour.
+    ///
+    /// A truck with no toggle (or one whose emission object is unset) leaves this empty, and the lights
+    /// fall back to being found by their material name.
+    /// </summary>
+    private void CaptureLens()
+    {
+        lensRenderer = null;
+        lensSlot = -1;
+
+        LightToggle toggle = GetComponentInChildren<LightToggle>(true);
+        if (toggle == null || toggle.emissionObject == null) return;
+
+        lensRenderer = toggle.emissionObject;
+        lensSlot = Mathf.Max(0, toggle.LensMaterialIndex);
+    }
+
+    /// <summary>
     /// The lights whose colour follows the paint job. The truck's own headlights are the ones the
     /// player means, so they are used when the truck declares them; a truck without a light toggle
     /// falls back to every light it has.
@@ -188,8 +223,8 @@ public class TruckPaintApplier : MonoBehaviour
         return false;
     }
 
-    private static bool Allows(SlotRule rule, int slot, Material material, Renderer renderer,
-                               Renderer brakeLens, bool front)
+    private bool Allows(SlotRule rule, int slot, Material material, Renderer renderer,
+                        Renderer brakeLens, bool front)
     {
         switch (rule)
         {
@@ -201,12 +236,40 @@ public class TruckPaintApplier : MonoBehaviour
             // The two ends of the truck are painted separately. A lens counts for the end it is on, and
             // the brake lens counts whatever the art called it - it is the lamp the car controller
             // switches on, so it has to follow the rear part's colour.
-            case SlotRule.Headlights: return front && IsLight(material);
+            case SlotRule.Headlights: return front && IsHeadlightLens(slot, material, renderer);
             case SlotRule.BrakeLights:
                 return !front && (IsLight(material) || (renderer == brakeLens && slot == 0));
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Whether a slot of the headlight mesh is the lamp rather than the trim around it.
+    ///
+    /// The truck's headlight is a single mesh with the lens, the rings around it and a plain part in three
+    /// slots, and the toggle glows one of them: that one is the lamp, and the rest is chrome and bezel that
+    /// the model should keep. Where the truck declares no toggle or no emission object, the material's own
+    /// name is the only guide left, and the trim is then told apart by name.
+    /// </summary>
+    private bool IsHeadlightLens(int slot, Material material, Renderer renderer)
+    {
+        if (lensRenderer != null && renderer == lensRenderer) return slot == lensSlot;
+
+        return IsLight(material) && !IsTrim(material);
+    }
+
+    /// <summary>
+    /// Whether a material is the trim around a lamp rather than a lamp: the rings and bezel that surround
+    /// one. The model calls its bezel <c>lightRings</c>, which would otherwise read as a lens.
+    /// </summary>
+    private static bool IsTrim(Material material)
+    {
+        string label = Label(material);
+
+        return label.IndexOf("ring", System.StringComparison.OrdinalIgnoreCase) >= 0
+            || label.IndexOf("bezel", System.StringComparison.OrdinalIgnoreCase) >= 0
+            || label.IndexOf("trim", System.StringComparison.OrdinalIgnoreCase) >= 0;
     }
 
     /// <summary>

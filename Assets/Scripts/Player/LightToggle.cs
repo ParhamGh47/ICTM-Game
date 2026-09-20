@@ -7,7 +7,13 @@ public class LightToggle : MonoBehaviour
     public AudioSource toggleSound;
 
     [Header("Emitting Lights")]
-    public Renderer emissionObject;  
+    public Renderer emissionObject;
+
+    [Tooltip("Which material slot of the emission object is the lamp itself. The headlight is one mesh " +
+             "carrying more than one material - the lens that lights up, and the rings around it - and the " +
+             "lens is the second slot. The paint system reads this too, so a player recolours the lamp and " +
+             "leaves the trim around it alone.")]
+    public int emissionMaterialIndex = 1;
 
     public bool startOn = false;
     private bool headlightsOn;
@@ -23,15 +29,40 @@ public class LightToggle : MonoBehaviour
 
         SetHeadlights(headlightsOn);
 
-        if (emissionObject != null && emissionObject.materials.Length > 1)
+        Material lens = LensMaterial();
+        if (lens != null)
         {
-            targetMat = emissionObject.materials[1];
+            targetMat = lens;
             UpdateEmission();
         }
-        else
+    }
+
+    /// <summary>
+    /// The material slot of the emission object that is the lamp itself. Public so the paint system can
+    /// recolour exactly the lens the truck lights up, rather than every light-ish slot on the mesh.
+    /// </summary>
+    public int LensMaterialIndex { get { return emissionMaterialIndex; } }
+
+    /// <summary>
+    /// The lamp's own material, taken through <c>materials</c> so this truck gets its own copy instead of
+    /// switching the glow on the model's shared material - which would light every truck at once.
+    /// </summary>
+    private Material LensMaterial()
+    {
+        if (emissionObject == null)
         {
-            Debug.LogWarning("Emission object missing or does not have at least 2 materials.");
+            Debug.LogWarning("Emission object missing on '" + name + "'.");
+            return null;
         }
+
+        Material[] materials = emissionObject.materials;
+        if (emissionMaterialIndex < 0 || materials.Length <= emissionMaterialIndex)
+        {
+            Debug.LogWarning("Emission object on '" + name + "' has no material " + emissionMaterialIndex + ".");
+            return null;
+        }
+
+        return materials[emissionMaterialIndex];
     }
 
     void Update()
@@ -84,9 +115,10 @@ public class LightToggle : MonoBehaviour
         if (emissionObject == null) return;
 
         Material[] materials = emissionObject.sharedMaterials;
-        if (materials.Length < 2 || materials[1] == null) return;
+        if (emissionMaterialIndex < 0 || materials.Length <= emissionMaterialIndex) return;
+        if (materials[emissionMaterialIndex] == null) return;
 
-        targetMat = materials[1];
+        targetMat = materials[emissionMaterialIndex];
         UpdateEmission();
     }
 

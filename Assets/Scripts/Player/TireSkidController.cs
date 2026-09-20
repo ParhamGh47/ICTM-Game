@@ -27,6 +27,20 @@ public class TireSkidController : MonoBehaviour
 
     float leftAlpha, rightAlpha;
 
+    /// <summary>
+    /// How hard the left rear tyre is sliding, 0 - 1: the same value the mark is drawn at. The tyre smoke
+    /// reads these so it always comes off a tyre that is actually leaving a mark, rather than working the
+    /// slide out for itself and slowly drifting away from the marks.
+    /// </summary>
+    public float LeftSkid { get { return leftAlpha; } }
+
+    /// <summary>How hard the right rear tyre is sliding, 0 - 1.</summary>
+    public float RightSkid { get { return rightAlpha; } }
+
+    /// <summary>The two tyres' contact patches: where marks and smoke both belong.</summary>
+    public Transform LeftContact { get { return rearLeftTrail != null ? rearLeftTrail.transform : null; } }
+    public Transform RightContact { get { return rearRightTrail != null ? rearRightTrail.transform : null; } }
+
     void Start()
     {
         InitTrail(rearLeftTrail);

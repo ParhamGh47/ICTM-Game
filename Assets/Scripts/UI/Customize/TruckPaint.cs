@@ -41,15 +41,15 @@ public enum SlotRule
     ExceptWindows = 3,
 
     /// <summary>
-    /// Only the lens slots at the front of the truck - the lamps and the rings around them. Which end a
-    /// lens is on is decided by where it sits on the model, not by its name, so a ring counts as part
-    /// of the lamp it surrounds.
+    /// Only the lamp at the front of the truck - the lens itself, not the rings and bezel around it. Which
+    /// end it is at is decided by where it sits on the model, and which slot it is in is taken from the
+    /// truck's own light toggle, which glows that slot.
     /// </summary>
     Headlights = 4,
 
     /// <summary>
-    /// Only the lens slots at the back of the truck, plus the brake lens itself - the one the car
-    /// controller switches on when the driver brakes.
+    /// Only the lamp at the back of the truck, plus the brake lens itself - the slot the car controller
+    /// switches on when the driver brakes.
     /// </summary>
     BrakeLights = 5,
 }
@@ -84,7 +84,9 @@ public enum PaintStyle
 /// found by their material and by which end of the truck they sit on instead - see
 /// <see cref="SlotRule.Headlights"/> and <see cref="SlotRule.BrakeLights"/> - and the truck's own
 /// <c>Light</c> components are tinted to match, so the beam is the colour the player picked too. The two
-/// ends are separate parts on purpose: white lamps in front and red ones behind is the point.
+/// ends are separate parts on purpose: white lamps in front and red ones behind is the point, and only the
+/// lamp itself is recoloured - the headlight is one mesh whose other slots are the rings and bezel around
+/// the lens, and those stay as the model has them.
 ///
 /// Painting is stored as a colour per part, not as an index into <see cref="Palette"/>: the palette is
 /// only a set of presets, and the player is free to pick any colour they like with the picker. A part

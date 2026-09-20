@@ -60,8 +60,31 @@ public class CarController : MonoBehaviour
              "never leaves it pointing sideways across the tarmac.")]
     public bool resetFacesForward = true;
 
+    [Tooltip("When the car is reset somewhere with no road under it - in mid air over the gap before a " +
+             "jump, or down a bank - send it back to the last stretch of road it actually drove on " +
+             "instead of onto whichever road happens to be nearest.")]
+    public bool resetToLastRoad = true;
+
+    [Tooltip("How far below the car to look for road when remembering the last place it was on one. " +
+             "Bigger means a jump counts as \"over the road\" for longer before the car is treated as off it.")]
+    public float roadCheckDistance = 2.5f;
+
+    [Tooltip("How far along the level a reset may still land, in metres, before it counts as having skipped " +
+             "ahead of the last place the car had road under it. A few metres covers the nearest point of a " +
+             "road the car has wandered off the side of; a jump is longer than this.")]
+    public float resetForwardTolerance = 6f;
+
     private Road[] cachedRoads;
     private CheckpointIndicator cachedCompass;
+
+    // The last pose at which the car had road beneath it: what a reset in mid air goes back to.
+    private Vector3 lastRoadPosition;
+    private float lastRoadYaw;
+    private bool hasLastRoadPose;
+
+    // Shared so the check costs no allocation every frame. Several colliders can sit under the car at once
+    // (the car's own body, the road, a bridge deck), so a few slots are needed, not one.
+    private static readonly RaycastHit[] roadHits = new RaycastHit[8];
 
     [Header("Focus System")]
     public bool enableFocus = true;
@@ -299,6 +322,8 @@ void Update()
 
     private void FixedUpdate()
     {
+        TrackLastRoadPose();
+
         if (GameInput.ResetPressed())
         {
             if (Time.time - lastResetTime >= resetCooldown)
@@ -328,8 +353,25 @@ void Update()
         {
             Vector3 onRoad, roadForward;
 
-            if (TryGetRoadResetPosition(resetPosition, yaw, out onRoad, out roadForward))
+            if (TryGetRoadResetPosition(transform.position, yaw, out onRoad, out roadForward))
             {
+                // A reset must never hand the driver ground for free. Over the gap before a jump the
+                // nearest tarmac is the landing road ahead, and dropping the car onto it would skip the
+                // jump it was meant to clear - so when the car is off the road and the search has come up
+                // with a spot further along the level than the last place it had tarmac under it, the
+                // search is run again from that place instead, which finds the ramp it took off from.
+                if (resetToLastRoad && hasLastRoadPose && !HasRoadBeneath() &&
+                    IsAheadOfLastRoad(onRoad, yaw))
+                {
+                    Vector3 onRamp, rampForward;
+
+                    if (TryGetRoadResetPosition(lastRoadPosition, lastRoadYaw, out onRamp, out rampForward))
+                    {
+                        onRoad = onRamp;
+                        roadForward = rampForward;
+                    }
+                }
+
                 resetPosition = onRoad;
 
                 if (resetFacesForward && roadForward.sqrMagnitude > 0.0001f)
@@ -350,6 +392,110 @@ void Update()
     }
 
 
+    /// <summary>
+    /// Whether a road position lies further along the level than the last stretch of road the car drove on.
+    /// Ground like that is ground the driver has not earned: it is a landing ramp, or the far side of the
+    /// jump, and a reset there is a free skip.
+    ///
+    /// The level's own direction is what is measured along - towards the next checkpoint - and the tolerance
+    /// is what keeps an ordinary off-road reset honest, because the nearest point on a road the car has
+    /// merely wandered off the side of is level with the car, not ahead of it.
+    /// </summary>
+    private bool IsAheadOfLastRoad(Vector3 candidate, float yaw)
+    {
+        Vector3 direction = ProgressDirection(lastRoadPosition, yaw);
+
+        Vector3 step = candidate - lastRoadPosition;
+        step.y = 0f;
+
+        return Vector3.Dot(step, direction) > resetForwardTolerance;
+    }
+
+
+    /// <summary>
+    /// Remembers the last pose at which the car had road under it: where a reset goes when the car is
+    /// somewhere without any - in mid air over the gap before a jump, or down a bank.
+    ///
+    /// The pose is the car's own rather than a point on the road: it is the place the driver last remembers
+    /// being, and the reset search turns it into a proper lane position and heading anyway.
+    /// </summary>
+    private void TrackLastRoadPose()
+    {
+        if (!resetOntoRoad || !resetToLastRoad) return;
+
+        if (!HasRoadBeneath()) return;
+
+        lastRoadPosition = transform.position;
+        lastRoadYaw = transform.eulerAngles.y;
+        hasLastRoadPose = true;
+    }
+
+
+    /// <summary>
+    /// Whether the car has road directly below it.
+    ///
+    /// The car's own colliders are skipped by hand rather than by layer: a ray that starts inside a collider
+    /// is only ignored for convex shapes, so which panels of the truck would have swallowed the ray is not
+    /// something to rely on. Any road hit within the check distance will do - a bridge deck and the road
+    /// under it are both road, and both mean the car is on it rather than off in the air.
+    /// </summary>
+    private bool HasRoadBeneath()
+    {
+        int count =
+            Physics.RaycastNonAlloc(
+                transform.position,
+                Vector3.down,
+                roadHits,
+                Mathf.Max(0.5f, roadCheckDistance),
+                ~0,
+                QueryTriggerInteraction.Ignore);
+
+        for (int i = 0; i < count; i++)
+        {
+            Collider collider = roadHits[i].collider;
+
+            if (collider == null) continue;
+            if (collider.transform.IsChildOf(transform)) continue;
+            if (collider.GetComponentInParent<Road>() == null) continue;
+
+            return true;
+        }
+
+        return false;
+    }
+
+
+    /// <summary>The way a heading points, flattened onto the ground plane.</summary>
+    private static Vector3 HeadingOf(float yaw)
+    {
+        Vector3 heading =
+            Quaternion.Euler(0f, yaw, 0f) * Vector3.forward;
+
+        heading.y = 0f;
+
+        return heading.sqrMagnitude < 0.0001f ? Vector3.forward : heading.normalized;
+    }
+
+
+    /// <summary>
+    /// Which way counts as progressing from a given point. The compass already knows - it points at the
+    /// next checkpoint the player has to reach. Without checkpoints (playground scenes) fall back to the
+    /// way the car is pointing.
+    /// </summary>
+    private Vector3 ProgressDirection(Vector3 from, float yaw)
+    {
+        Vector3 heading = HeadingOf(yaw);
+
+        Transform nextCheckpoint = GetNextCheckpoint();
+        if (nextCheckpoint == null) return heading;
+
+        Vector3 toNext = nextCheckpoint.position - from;
+        toNext.y = 0f;
+
+        return toNext.sqrMagnitude > 1f ? toNext.normalized : heading;
+    }
+
+
     private bool TryGetRoadResetPosition(Vector3 from, float yaw, out Vector3 result, out Vector3 roadForward)
     {
         result = from;
@@ -361,30 +507,8 @@ void Update()
         if (cachedRoads == null || cachedRoads.Length == 0)
             return false;
 
-        Vector3 heading =
-            Quaternion.Euler(0f, yaw, 0f) * Vector3.forward;
-
-        heading.y = 0f;
-
-        if (heading.sqrMagnitude < 0.0001f)
-            heading = Vector3.forward;
-        else
-            heading.Normalize();
-
-        // Which way counts as progressing? The compass already knows - it points
-        // at the next checkpoint the player has to reach. Without checkpoints
-        // (playground scenes) fall back to the way the car is pointing.
-        Transform nextCheckpoint = GetNextCheckpoint();
-        Vector3 progressDirection = heading;
-
-        if (nextCheckpoint != null)
-        {
-            Vector3 toNext = nextCheckpoint.position - from;
-            toNext.y = 0f;
-
-            if (toNext.sqrMagnitude > 1f)
-                progressDirection = toNext.normalized;
-        }
+        Vector3 heading = HeadingOf(yaw);
+        Vector3 progressDirection = ProgressDirection(from, yaw);
 
         Road bestRoad = null;
         float bestParam = 0f;

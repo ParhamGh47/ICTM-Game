@@ -380,82 +380,6 @@ public class RoadsidePropsPainter : EditorWindow
         EditorGUILayout.LabelField("  Root object: '" + parentName + "' (replaced on every paint)");
     }
 
-    // ---------------------------------------------------------- surroundings ---
-
-    /// <summary>
-    /// World XZ of every tree the terrain paints. Trees are instances on the terrain data rather than
-    /// objects in the scene, so this is the only way to know where the woods really are.
-    /// </summary>
-    private static List<Vector2> CollectTrees()
-    {
-        List<Vector2> points = new List<Vector2>();
-        Terrain[] terrains = UnityEngine.Object.FindObjectsOfType<Terrain>();
-
-        for (int i = 0; i < terrains.Length; i++)
-        {
-            TerrainData data = terrains[i].terrainData;
-            if (data == null) continue;
-
-            Vector3 origin = terrains[i].transform.position;
-            TreeInstance[] trees = data.treeInstances;
-
-            for (int t = 0; t < trees.Length; t++)
-            {
-                Vector3 world = origin + Vector3.Scale(trees[t].position, data.size);
-                points.Add(new Vector2(world.x, world.z));
-            }
-        }
-
-        return points;
-    }
-
-    /// <summary>
-    /// World XZ of the level's real structures: renderers that are not the road, not the terrain and
-    /// not a prop this tool placed. Density of these is what "built up" means here, so the tool does
-    /// not have to know how any particular building is named.
-    /// </summary>
-    private List<Vector2> CollectStructures()
-    {
-        List<Vector2> points = new List<Vector2>();
-        GameObject propsRoot = RoadRoute.FindRootByName(parentName);
-        MeshRenderer[] renderers = UnityEngine.Object.FindObjectsOfType<MeshRenderer>();
-
-        for (int i = 0; i < renderers.Length; i++)
-        {
-            MeshRenderer renderer = renderers[i];
-            if (renderer == null) continue;
-
-            if (renderer.GetComponentInParent<Road>() != null) continue;
-            if (renderer.GetComponentInParent<Terrain>() != null) continue;
-            if (propsRoot != null && renderer.transform.IsChildOf(propsRoot.transform)) continue;
-
-            // Sky domes, water sheets and other one-mesh backdrops are wider than a road is; they are
-            // scenery, not buildings.
-            Vector3 size = renderer.bounds.size;
-            if (size.x > 60f || size.z > 60f || size.y > 60f) continue;
-
-            points.Add(new Vector2(renderer.bounds.center.x, renderer.bounds.center.z));
-        }
-
-        return points;
-    }
-
-    private static int CountWithin(List<Vector2> points, Vector2 origin, float radius)
-    {
-        if (points == null || points.Count == 0) return 0;
-
-        float squared = radius * radius;
-        int count = 0;
-
-        for (int i = 0; i < points.Count; i++)
-        {
-            Vector2 delta = points[i] - origin;
-            if (delta.sqrMagnitude <= squared) count++;
-        }
-
-        return count;
-    }
-
     // ---------------------------------------------------------------- plan ---
 
     private List<PlanItem> GetPlan()
@@ -481,10 +405,11 @@ public class RoadsidePropsPainter : EditorWindow
         float total = RoadRoute.TotalLength(segments);
         if (total <= 0f) return plan;
 
-        if (trees == null) trees = CollectTrees();
-        if (structures == null) structures = CollectStructures();
-
         GameObject propsRoot = RoadRoute.FindRootByName(parentName);
+
+        if (trees == null) trees = RoadRoute.TreePoints();
+        if (structures == null) structures = RoadRoute.StructurePoints(RoadRoute.PainterRoots());
+
         float from = routeEndTrim;
         float to = total - routeEndTrim;
         if (to <= from) return plan;
@@ -544,8 +469,8 @@ public class RoadsidePropsPainter : EditorWindow
 
             // Surroundings at the spot: how wooded, how built up.
             Vector2 flat = new Vector2(ground.x, ground.z);
-            float forest = Mathf.Clamp01(CountWithin(trees, flat, treeRadius) / Mathf.Max(1f, treeFullCount));
-            float town = Mathf.Clamp01(CountWithin(structures, flat, structureRadius) / Mathf.Max(1f, structureFullCount));
+            float forest = RoadRoute.Density(trees, flat, treeRadius, treeFullCount);
+            float town = RoadRoute.Density(structures, flat, structureRadius, structureFullCount);
 
             PropKind kind = PickKind(forest, town);
             if (kind == null) return false;

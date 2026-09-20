@@ -193,6 +193,113 @@ public static class RoadRoute
         return true;
     }
 
+    // ----------------------------------------------------------- surroundings
+
+    /// <summary>
+    /// World XZ of every tree the terrain paints. Trees are instances on the terrain data rather than
+    /// objects in the scene, so this is the only way to know where the woods really are.
+    /// </summary>
+    public static List<Vector2> TreePoints()
+    {
+        List<Vector2> points = new List<Vector2>();
+        Terrain[] terrains = UnityEngine.Object.FindObjectsOfType<Terrain>();
+
+        for (int i = 0; i < terrains.Length; i++)
+        {
+            TerrainData data = terrains[i].terrainData;
+            if (data == null) continue;
+
+            Vector3 origin = terrains[i].transform.position;
+            TreeInstance[] trees = data.treeInstances;
+
+            for (int t = 0; t < trees.Length; t++)
+            {
+                Vector3 world = origin + Vector3.Scale(trees[t].position, data.size);
+                points.Add(new Vector2(world.x, world.z));
+            }
+        }
+
+        return points;
+    }
+
+    /// <summary>
+    /// World XZ of the level's real structures: renderers that are not the road, not the terrain and not
+    /// anything the given roots own. Density of these is what "built up" means to the painters, so a tool
+    /// does not have to know how any particular building is named.
+    /// </summary>
+    public static List<Vector2> StructurePoints(params GameObject[] excludeRoots)
+    {
+        List<Vector2> points = new List<Vector2>();
+        MeshRenderer[] renderers = UnityEngine.Object.FindObjectsOfType<MeshRenderer>();
+
+        for (int i = 0; i < renderers.Length; i++)
+        {
+            MeshRenderer renderer = renderers[i];
+            if (renderer == null) continue;
+
+            if (renderer.GetComponentInParent<Road>() != null) continue;
+            if (renderer.GetComponentInParent<Terrain>() != null) continue;
+
+            bool excluded = false;
+            for (int r = 0; r < excludeRoots.Length; r++)
+            {
+                if (excludeRoots[r] != null && renderer.transform.IsChildOf(excludeRoots[r].transform))
+                    excluded = true;
+            }
+            if (excluded) continue;
+
+            // Sky domes, water sheets and other one-mesh backdrops are wider than a road is; they are
+            // scenery, not buildings.
+            Vector3 size = renderer.bounds.size;
+            if (size.x > 60f || size.z > 60f || size.y > 60f) continue;
+
+            points.Add(new Vector2(renderer.bounds.center.x, renderer.bounds.center.z));
+        }
+
+        return points;
+    }
+
+    /// <summary>
+    /// The root objects the roadside tools create. Every tool excludes all of them when it reads the
+    /// surroundings, so a level painted once already cannot make the next pass think a town has grown up
+    /// where the tool itself put the signs and bins.
+    /// </summary>
+    public static GameObject[] PainterRoots()
+    {
+        string[] names = { "Roadside Props", "Roadside Signs", "Billboards", "PassingCars" };
+        List<GameObject> roots = new List<GameObject>();
+
+        for (int i = 0; i < names.Length; i++)
+        {
+            GameObject root = FindRootByName(names[i]);
+            if (root != null) roots.Add(root);
+        }
+
+        return roots.ToArray();
+    }
+
+    public static int CountWithin(List<Vector2> points, Vector2 origin, float radius)
+    {
+        if (points == null || points.Count == 0) return 0;
+
+        float squared = radius * radius;
+        int count = 0;
+
+        for (int i = 0; i < points.Count; i++)
+        {
+            Vector2 delta = points[i] - origin;
+            if (delta.sqrMagnitude <= squared) count++;
+        }
+
+        return count;
+    }
+
+    /// <summary>How much of that kind of surroundings a spot has, from 0 to 1.</summary>
+    public static float Density(List<Vector2> points, Vector2 origin, float radius, float fullCount)
+    {
+        return Mathf.Clamp01(CountWithin(points, origin, radius) / Mathf.Max(1f, fullCount));
+    }
+
     // ------------------------------------------------------------------ scene
 
     /// <summary>Every road in the scene that has a built spline, in scene order.</summary>

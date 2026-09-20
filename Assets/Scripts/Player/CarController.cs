@@ -74,6 +74,16 @@ public class CarController : MonoBehaviour
              "road the car has wandered off the side of; a jump is longer than this.")]
     public float resetForwardTolerance = 6f;
 
+    [Tooltip("When a reset sends the car back to the last road it drove on, how many road nodes back to put " +
+             "it - and so on. The car is dropped a little way up the road it took off from rather than on its " +
+             "last centimetre, where the next nudge tips it straight back over the edge.")]
+    public int resetBackOffNodes = 2;
+
+    [Tooltip("The furthest back that may put it, in metres. RoadArchitect nodes on these levels are 15-90 m " +
+             "apart, so two of them is sometimes most of a road; this keeps the reset near the jump the " +
+             "driver fell at rather than a hundred metres up the level.")]
+    public float resetBackOffMetres = 90f;
+
     private Road[] cachedRoads;
     private CheckpointIndicator cachedCompass;
 
@@ -365,7 +375,8 @@ void Update()
                 {
                     Vector3 onRamp, rampForward;
 
-                    if (TryGetRoadResetPosition(lastRoadPosition, lastRoadYaw, out onRamp, out rampForward))
+                    if (TryGetRoadResetPosition(lastRoadPosition, lastRoadYaw, out onRamp,
+                                                out rampForward, true))
                     {
                         onRoad = onRamp;
                         roadForward = rampForward;
@@ -496,7 +507,15 @@ void Update()
     }
 
 
-    private bool TryGetRoadResetPosition(Vector3 from, float yaw, out Vector3 result, out Vector3 roadForward)
+    /// <summary>
+    /// Finds where on a road a reset from <paramref name="from"/> belongs, and which way it should face.
+    ///
+    /// <paramref name="backOff"/> is for the reset that sends a driver back to the road they last drove on:
+    /// that pose is usually right at the lip of a jump, so the spot is walked a little further back up the
+    /// road instead of being dropped on the edge.
+    /// </summary>
+    private bool TryGetRoadResetPosition(Vector3 from, float yaw, out Vector3 result,
+                                         out Vector3 roadForward, bool backOff = false)
     {
         result = from;
         roadForward = Vector3.zero;
@@ -588,6 +607,29 @@ void Update()
         float direction =
             alongRoad >= 0f ? 1f : -1f;
 
+        // A reset that has sent the driver back to the road they took off from should not put them on its
+        // last few centimetres: walk the spot back up the road by whole nodes, so there is run-up between
+        // them and the edge they fell off.
+        if (backOff && resetBackOffNodes > 0)
+        {
+            float backed =
+                BackOffAlongRoad(bestRoad, bestParam, direction, resetBackOffNodes, resetBackOffMetres);
+
+            if (Mathf.Abs(backed - bestParam) > 0.00001f)
+            {
+                bestParam = backed;
+
+                bestRoad.spline.GetSplineValueBoth(bestParam, out position, out tangent);
+
+                tangent.y = 0f;
+
+                if (tangent.sqrMagnitude < 0.0001f)
+                    return false;
+
+                tangent.Normalize();
+            }
+        }
+
         roadForward =
             tangent * direction;
 
@@ -602,6 +644,76 @@ void Update()
             position + right * (direction > 0f ? laneOffset : -laneOffset);
 
         return true;
+    }
+
+
+    /// <summary>
+    /// Walks a point on a road back the way the car came: the given number of whole road nodes, but never
+    /// further than the given distance in metres. Returns a spline param, and never past either end of the
+    /// road.
+    ///
+    /// Node distances are in metres and increase along the spline, and a node's time span is its real length
+    /// over the road's (that is how RoadArchitect builds them), so param times the road's length is the
+    /// distance along it - which is what lets the metric cap and the node walk share one answer.
+    ///
+    /// Nodes are counted against the direction of travel, so "back" means back towards where the car has
+    /// been rather than towards the next corner, and the spline's special end nodes are skipped: the road
+    /// does not visibly have them, and stopping on one is how a car ends up parked on nothing.
+    /// </summary>
+    private static float BackOffAlongRoad(Road road, float param, float direction, int nodes, float metres)
+    {
+        SplineC spline = road != null ? road.spline : null;
+
+        if (spline == null || spline.nodes == null || spline.nodes.Count < 2)
+            return param;
+
+        float length = Mathf.Max(1f, spline.distance);
+        float travelled = Mathf.Clamp01(param) * length;
+
+        int count = spline.nodes.Count;
+        bool ascending = direction >= 0f;
+
+        // The last node the car has reached, walking the way it is going.
+        int at = -1;
+        for (int i = 0; i < count; i++)
+        {
+            SplineN node = spline.nodes[i];
+            if (node != null && node.dist <= travelled + 0.01f) at = i;
+        }
+
+        if (at < 0) at = 0;
+
+        // Then the requested number of nodes further back, which is the opposite index direction to travel.
+        // Against the way the car is going, `at` has just been passed and is already one node behind it;
+        // the other way round it is still ahead, so the node a step further on is the one behind. The first
+        // node behind therefore counts as one of the requested nodes, and the rest are walked from there.
+        int step = ascending ? -1 : 1;
+        int index = at;
+        int remaining = Mathf.Max(0, nodes - (ascending ? 1 : 0));
+
+        while (remaining > 0)
+        {
+            int next = index + step;
+            while (next >= 0 && next < count && !spline.nodes[next].IsLegitimateGrade()) next += step;
+
+            if (next < 0 || next >= count) break;
+
+            index = next;
+            remaining--;
+        }
+
+        float byNodes = spline.nodes[index].dist;
+        float byMetres = ascending ? travelled - metres : travelled + metres;
+
+        // The nearer of the two, so the node walk is what places the car and the metres are what stops it
+        // going too far back on a road whose nodes are far apart.
+        float target = ascending
+            ? Mathf.Max(byNodes, byMetres)
+            : Mathf.Min(byNodes, byMetres);
+
+        target = Mathf.Clamp(target, 0f, length);
+
+        return Mathf.Clamp01(param + (target - travelled) / length);
     }
 
 

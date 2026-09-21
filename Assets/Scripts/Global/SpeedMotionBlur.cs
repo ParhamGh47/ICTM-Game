@@ -17,8 +17,20 @@ using UnityEngine.SceneManagement;
 /// pay nothing for it. The HUD is a Screen Space - Overlay canvas, so it is drawn after the camera and stays
 /// sharp.
 ///
-/// The look is deliberately gentle: a lap at half throttle is almost clean, and top speed smears the corners
-/// by about one percent of the screen. Every number is exposed, so it can be tuned live in play mode.
+/// Three things shape it:
+///
+///  * a near band and a far band. The near band is the tight ramp around the truck - the one that gives the
+///    close sense of speed. The far band (<see cref="wideReach"/>) reaches most of the way into the picture,
+///    so at speed the whole frame streams rather than a ring around the player.
+///  * the camera. Looking steeply down (the "Above" camera mode) there is no sky to leave sharp and nothing
+///    to radiate from, so the smear widens to cover the picture, stretches, and cuts the truck itself out by
+///    its own projected outline (<see cref="truckMargin"/>). The far band and the cut ease in as the camera
+///    tips down, so switching camera never pops.
+///  * colour is held (<see cref="holdColour"/>). A blur is an average, and the average of a large area is a
+///    colour of its own - which is why a heavy smear over a green level in the rain washes the picture
+///    green. Each pixel keeps its own hue and takes only the smeared brightness.
+///
+/// Every number is exposed, so it can be tuned live in play mode.
 /// </summary>
 [RequireComponent(typeof(Camera))]
 [AddComponentMenu("Rendering/Speed Motion Blur")]
@@ -30,10 +42,18 @@ public class SpeedMotionBlur : MonoBehaviour
     [Range(0f, 1f)]
     public float startFraction = 0.16f;
 
-    [Tooltip("How far the sides of the picture streak at top speed, as a fraction of the screen height. " +
-             "0.04 is about 55 pixels on a 1080p picture - unmistakable at speed, and gone by the time the " +
-             "truck is slow. This is the dial for how much blur there is overall.")]
-    public float maxBlur = 0.06f;
+    [Tooltip("How far the streak gets at top speed, as a fraction of the screen height. 0.035 is about 40 " +
+             "pixels out where the streaks are longest on a 1080p picture - a light smear, which is the idea: " +
+             "a little blur over the whole race reads as speed, a heavy one around the player reads as a " +
+             "smudge. This and maxMix are the two dials for how much there is overall.")]
+    public float maxBlur = 0.035f;
+
+    [Tooltip("The most of any one pixel the smear is ever allowed to take over, however far out it is. " +
+             "Under 1 the crisp frame always shows through, so the far reaches of the picture are lightened " +
+             "rather than replaced - which is what lets the effect cover most of the screen without " +
+             "swallowing it. Raising this blurs harder, and is the first thing to try if it feels too faint.")]
+    [Range(0.05f, 1f)]
+    public float maxMix = 0.55f;
 
     [Tooltip("How long the blur takes to follow the speed, in seconds. A little lag stops it flickering " +
              "when the throttle is feathered or the wheels bounce.")]
@@ -43,9 +63,38 @@ public class SpeedMotionBlur : MonoBehaviour
              "impact, a scripted moment. Left at 1 it does nothing.")]
     public float pull = 1f;
 
+    [Header("Reach")]
+    [Tooltip("How far the far band reaches into the picture, on top of the tight band around the truck. 0 " +
+             "leaves only the ring around the player; 1 means the smear is at its cap from fairly close in. " +
+             "This is how even the effect is across the frame - high, and the picture is veiled all over " +
+             "rather than smeared at the edges and clean in the middle.")]
+    [Range(0f, 1f)]
+    public float wideReach = 0.85f;
+
+    [Tooltip("How much longer the streak gets out where the far band is at full strength. The world crosses " +
+             "the screen fastest out there, so that is what should trail the most - but a big difference " +
+             "between the shortest and the longest streak is what makes the middle of the picture look " +
+             "untouched next to the edges. Kept near 1 the smear is much the same length everywhere.")]
+    [Range(1f, 3f)]
+    public float wideStretch = 1.2f;
+
+    [Tooltip("How much of the smear keeps this pixel's own colour instead of the colour it averaged. A blur " +
+             "returns the average colour of a whole area, so a green level under pale rain turns the picture " +
+             "green; holding the colour keeps the motion and drops the wash. 0 is the raw average, 1 keeps " +
+             "hue and saturation exactly and takes only the smeared brightness.")]
+    [Range(0f, 1f)]
+    public float holdColour = 0.45f;
+
+    [Tooltip("How much brighter taps are favoured over darker ones, so lights, wet tarmac and rain leave the " +
+             "trail rather than whatever happens to be there. The streak is still normalised, so this " +
+             "reshapes it instead of brightening it.")]
+    [Range(0f, 1f)]
+    public float highlightBias = 0.3f;
+
     [Header("Shape")]
     [Tooltip("The point the blur radiates from, in screen space. A little above the middle is where the road " +
-             "goes over the horizon, so that stays the sharpest part of the picture.")]
+             "goes over the horizon, so that stays the sharpest part of the picture. In the top-down view the " +
+             "focus moves to the truck itself.")]
     public Vector2 focus = new Vector2(0.5f, 0.52f);
 
     [Tooltip("How much of the middle stays sharp, as a fraction of the half-height. Raise it if the truck " +
@@ -53,10 +102,12 @@ public class SpeedMotionBlur : MonoBehaviour
     [Range(0f, 0.8f)]
     public float clearRadius = 0.2f;
 
-    [Tooltip("How sharply the blur ramps in past that. Higher keeps more of the picture clean and then " +
-             "streaks harder at the very edge.")]
+    [Tooltip("How sharply the near band ramps in past that. Higher keeps more of the picture clean and then " +
+             "streaks harder at the very edge. The ramp is eased at both ends, so lowering this widens the " +
+             "band around the truck without putting a visible ring at the edge of the clear disc, and it is " +
+             "what carries the effect in towards the middle of the picture.")]
     [Range(0.2f, 4f)]
-    public float falloff = 1.2f;
+    public float falloff = 0.85f;
 
     [Tooltip("How much more the sides of the picture streak than the top and bottom. This is the part that " +
              "makes it read as speed - 1 is a plain radial blur.")]
@@ -76,13 +127,55 @@ public class SpeedMotionBlur : MonoBehaviour
     [Tooltip("A touch of darkening at the edges, which keeps the eye on the road. It follows the blur, so a " +
              "slow lap is untouched.")]
     [Range(0f, 0.3f)]
-    public float edgeDarken = 0.2f;
+    public float edgeDarken = 0.15f;
+
+    [Header("Top-Down (Above) Camera")]
+    [Tooltip("How far the camera has to tip from straight down before this counts as a normal chase view. " +
+             "Between the two angles the top-down shaping fades in, so switching camera never pops.")]
+    [Range(0f, 90f)]
+    public float topDownFrom = 48f;
+
+    [Tooltip("Looking down by less than this and it is fully a top-down view; more than it and it is fully a " +
+             "chase view. The level's Above camera looks about 40 degrees down, and the chase cameras about " +
+             "75.")]
+    [Range(0f, 90f)]
+    public float topDownTo = 68f;
+
+    [Tooltip("How long the top-down shaping takes to settle after a camera switch. The camera itself cuts, so " +
+             "this is what keeps the blur from cutting too.")]
+    public float modeSmoothTime = 0.3f;
+
+    [Tooltip("How much longer the streaks are in the top-down view, where the whole frame is moving. Kept " +
+             "low: from above the picture should be veiled all over rather than streaked hard.")]
+    [Range(1f, 3f)]
+    public float topDownBlur = 1.15f;
+
+    [Tooltip("How far the smear reaches in the top-down view, where there is no sky to leave sharp and the " +
+             "frame wants covering evenly.")]
+    [Range(0f, 1f)]
+    public float topDownWide = 0.95f;
+
+    [Tooltip("The clear disc around the truck in the top-down view, as a fraction of the usual one. It can be " +
+             "small there because the truck is cut out of the smear by its own outline instead, which leaves " +
+             "the effect covering the picture right up to the truck.")]
+    [Range(0f, 1f)]
+    public float topDownClear = 0.25f;
+
+    [Tooltip("How much room to leave around the truck's outline in the top-down view, as a fraction of the " +
+             "truck's own size on screen. At 0 the cut hugs the model and can nibble its edges.")]
+    [Range(0f, 1f)]
+    public float truckMargin = 0.12f;
+
+    [Tooltip("How softly the truck's outline fades into the smear. Relative to the truck's size on screen, " +
+             "so it stays right as the camera moves in and out.")]
+    [Range(0f, 1f)]
+    public float truckFeather = 0.18f;
 
     [Header("Quality")]
     [Tooltip("How many taps make up the streak. The taps read a half-resolution copy of the frame, which is " +
              "what keeps a long streak smooth instead of ghosted, so this can stay low.")]
     [Range(2, 24)]
-    public int samples = 10;
+    public int samples = 12;
 
     [Tooltip("Build the streak from a half-resolution copy of the frame. This is the smoothing: without it a " +
              "long streak shows the taps as separate copies of the picture.")]
@@ -95,14 +188,29 @@ public class SpeedMotionBlur : MonoBehaviour
     private const string ShaderName = "Hidden/Freebuff/SpeedMotionBlur";
     private const string ShaderResourcePath = "Shaders/SpeedMotionBlur";
 
+    private Camera cam;
     private CarController car;
+
+    // Only the truck's own meshes: its exhaust is a ParticleSystem and its tire marks are a TrailRenderer,
+    // both of which trail a long way behind it and would drag the outline out into the road.
+    private Renderer[] truckRenderers;
+
     private Material material;
 
     // 0 - 1, how much of the blur is asked for right now: eased towards the speed so it never snaps.
     private float intensity;
 
-    // The steering, eased separately: the eye swings a little slower than the throttle.
-    private float steer;
+    // 0 - 1, how much of a top-down view the camera is giving at the moment. This is the switch between the
+    // chase shaping and the top-down shaping, and it is eased because the camera cuts between the two.
+    private float topDown;
+
+    // The focus the shader is using, eased: the speed and the steering both move it about.
+    private Vector2 focusNow;
+
+    // The truck's place on screen, refreshed each frame while we are in a top-down view.
+    private Vector2 truckCentre;
+    private Vector4 truckRect;
+    private bool truckOnScreen;
 
     // Looking for the truck costs a scene search, so a camera with no truck in sight only looks now and
     // then rather than every frame.
@@ -160,19 +268,16 @@ public class SpeedMotionBlur : MonoBehaviour
     /// </summary>
     private static Camera FindGameplayCamera()
     {
-        Camera main = Camera.main;
-        if (main != null) return main;
-
-        Cinemachine.CinemachineBrain brain = Object.FindObjectOfType<Cinemachine.CinemachineBrain>();
-        if (brain != null) return brain.OutputCamera;
-
-        return null;
+        return CameraView.Gameplay();
     }
 
     // ---------------------------------------------------------------- lifecycle
 
     private void Awake()
     {
+        cam = GetComponent<Camera>();
+        focusNow = focus;
+
         Shader shader = Resources.Load<Shader>(ShaderResourcePath);
 
         if (shader == null) shader = Shader.Find(ShaderName);
@@ -202,14 +307,14 @@ public class SpeedMotionBlur : MonoBehaviour
 
     private void Update()
     {
-        float delta = Mathf.Max(Time.unscaledDeltaTime, 1e-4f);
-
         // The truck can be spawned after the scene loads (a level that builds its player, a respawn), so the
         // effect keeps looking rather than giving up at startup - but only a few times a second.
         if (car == null && Time.unscaledTime >= nextCarSearch)
         {
             nextCarSearch = Time.unscaledTime + 0.5f;
             car = FindObjectOfType<CarController>();
+
+            if (car != null) truckRenderers = car.GetComponentsInChildren<Renderer>(true);
         }
 
         float wanted = 0f;
@@ -228,12 +333,133 @@ public class SpeedMotionBlur : MonoBehaviour
             wantedSteer = Mathf.Clamp(car.steerInput, -1f, 1f);
         }
 
-        float follow = 1f - Mathf.Exp(-delta / Mathf.Max(0.01f, smoothTime));
+        float follow = CameraView.FollowFraction(smoothTime);
 
         intensity = Mathf.Lerp(intensity, wanted, follow);
-        steer = Mathf.Lerp(steer, wantedSteer, follow * 0.6f);
 
         if (intensity < 0.0005f) intensity = 0f;
+
+        UpdateCameraShape();
+
+        // The focus follows the steering - and, in the top-down view, the truck - so it is eased as a whole
+        // rather than only the steering part of it.
+        Vector2 wantedFocus = focus;
+
+        if (truckOnScreen && topDown > 0.001f)
+        {
+            Vector2 onTruck = new Vector2(Mathf.Clamp(truckCentre.x, 0.12f, 0.88f),
+                                          Mathf.Clamp(truckCentre.y, 0.08f, 0.92f));
+
+            wantedFocus = Vector2.Lerp(wantedFocus, onTruck, topDown);
+        }
+
+        wantedFocus.x = Mathf.Clamp01(wantedFocus.x - wantedSteer * steerShift);
+
+        // Slower than the throttle: the eye swings a little behind the wheels.
+        focusNow = Vector2.Lerp(focusNow, wantedFocus, follow * 0.6f);
+    }
+
+    /// <summary>
+    /// How much of a top-down view the camera is giving, and where the truck sits on screen because of it.
+    ///
+    /// This reads the camera's own angle (see <see cref="CameraView.LookingDown"/>) rather than asking the
+    /// CameraController which mode it is in: what the effect cares about is whether the frame is a horizon
+    /// view or a view from above, the Above camera is about 40 degrees off straight down against the chase
+    /// cameras' 75, and a camera blend between the two then passes through the shaping rather than jumping it.
+    /// </summary>
+    private void UpdateCameraShape()
+    {
+        float wanted = CameraView.LookingDown(cam, topDownFrom, topDownTo);
+
+        topDown = CameraView.Follow(topDown, wanted, modeSmoothTime);
+
+        truckOnScreen = false;
+
+        // The outline is only needed where it is used, and it costs a bounds union and eight projections.
+        if (topDown < 0.01f || car == null) return;
+
+        Vector2 min, max;
+
+        if (!ProjectTruck(out min, out max)) return;
+
+        float aspect = cam != null && cam.pixelHeight > 0
+            ? (float)cam.pixelWidth / cam.pixelHeight
+            : 1f;
+
+        Vector2 centre = (min + max) * 0.5f;
+        Vector2 size = (max - min) * (1f + Mathf.Max(0f, truckMargin)) * 0.5f;
+
+        truckCentre = centre;
+        truckOnScreen = true;
+
+        // Half extents, with the x measured in screen shape like the shader's radius is, and capped so a
+        // camera that has ended up inside the truck cannot cut the whole picture out of the smear.
+        truckRect = new Vector4(centre.x * aspect,
+                                centre.y,
+                                Mathf.Min(size.x * aspect, 0.4f),
+                                Mathf.Min(size.y, 0.4f));
+    }
+
+    /// <summary>
+    /// The truck's own outline, as viewport space min and max. False if it cannot be worked out - no meshes, or
+    /// the camera is level with it and part of the box is behind the lens, where there is no outline to speak
+    /// of.
+    /// </summary>
+    private bool ProjectTruck(out Vector2 min, out Vector2 max)
+    {
+        min = Vector2.zero;
+        max = Vector2.zero;
+
+        if (cam == null || truckRenderers == null || truckRenderers.Length == 0) return false;
+
+        Bounds bounds = new Bounds();
+        bool any = false;
+
+        for (int i = 0; i < truckRenderers.Length; i++)
+        {
+            Renderer r = truckRenderers[i];
+
+            if (r == null || !r.enabled || !r.gameObject.activeInHierarchy) continue;
+
+            // Particles and trails belong to the truck but trail far behind it; the outline is the body.
+            if (!(r is MeshRenderer) && !(r is SkinnedMeshRenderer)) continue;
+
+            if (any) bounds.Encapsulate(r.bounds);
+            else
+            {
+                bounds = r.bounds;
+                any = true;
+            }
+        }
+
+        if (!any) return false;
+
+        Vector3 centre = bounds.center;
+        Vector3 extents = bounds.extents;
+
+        float minX = float.MaxValue, minY = float.MaxValue;
+        float maxX = float.MinValue, maxY = float.MinValue;
+
+        for (int corner = 0; corner < 8; corner++)
+        {
+            Vector3 at = centre + new Vector3((corner & 1) == 0 ? -extents.x : extents.x,
+                                              (corner & 2) == 0 ? -extents.y : extents.y,
+                                              (corner & 4) == 0 ? -extents.z : extents.z);
+
+            Vector3 viewport = cam.WorldToViewportPoint(at);
+
+            if (viewport.z <= 0.01f) return false;
+
+            if (viewport.x < minX) minX = viewport.x;
+            if (viewport.x > maxX) maxX = viewport.x;
+            if (viewport.y < minY) minY = viewport.y;
+            if (viewport.y > maxY) maxY = viewport.y;
+        }
+
+        min = new Vector2(minX, minY);
+        max = new Vector2(maxX, maxY);
+
+        return true;
     }
 
     private void OnRenderImage(RenderTexture source, RenderTexture destination)
@@ -258,11 +484,14 @@ public class SpeedMotionBlur : MonoBehaviour
             return;
         }
 
-        float amount = maxBlur * force;
-
-        // Steering moves where the blur radiates from, so the side being turned into streaks a little harder
-        // and the car feels like it is being pushed through the corner.
-        Vector2 centre = new Vector2(Mathf.Clamp01(focus.x - steer * steerShift), focus.y);
+        // Looking down on the race, everything in the picture is travelling: the streaks are longer, the far
+        // band covers the frame rather than hugging the truck, the clear disc can shrink (the truck is cut
+        // out of the smear by its own outline instead) and the sides no longer lead the top and bottom,
+        // because from above there is no sky and no road ahead - it is all ground rushing past.
+        float amount = maxBlur * force * Mathf.Lerp(1f, topDownBlur, topDown);
+        float clear = clearRadius * Mathf.Lerp(1f, topDownClear, topDown);
+        float wide = Mathf.Lerp(wideReach, Mathf.Max(wideReach, topDownWide), topDown);
+        float sides = Mathf.Lerp(Mathf.Max(1f, sideBoost), 1f, topDown);
 
         // The taps read a half-resolution copy of the frame. Sampling the full-resolution frame at a long
         // range shows each tap as its own copy of the picture - a trail of ghosts - where the softened copy
@@ -285,20 +514,32 @@ public class SpeedMotionBlur : MonoBehaviour
             taps = softened;
         }
 
+        float feather = truckOnScreen
+            ? Mathf.Clamp(Mathf.Max(truckRect.z, truckRect.w) * truckFeather, 0.01f, 0.25f)
+            : 0.01f;
+
         material.SetVector("_MainTex_TexelSize",
                            new Vector4(1f / Mathf.Max(1, taps.width), 1f / Mathf.Max(1, taps.height),
                                        taps.width, taps.height));
         material.SetTexture("_SourceTex", source);
         material.SetFloat("_Blur", amount);
-        material.SetVector("_Focus", new Vector4(centre.x, centre.y, 0f, 0f));
-        material.SetFloat("_Clear", clearRadius);
+        material.SetFloat("_Wide", Mathf.Clamp01(wide));
+        material.SetFloat("_Stretch", Mathf.Max(1f, wideStretch));
+        material.SetVector("_Focus", new Vector4(focusNow.x, focusNow.y, 0f, 0f));
+        material.SetFloat("_Clear", Mathf.Clamp(clear, 0f, 0.79f));
         material.SetFloat("_Falloff", falloff);
-        material.SetFloat("_SideBoost", Mathf.Max(1f, sideBoost));
+        material.SetFloat("_SideBoost", sides);
         material.SetFloat("_Outward", Mathf.Clamp(outward, 0f, 0.49f));
         material.SetFloat("_Darken", edgeDarken * force);
         material.SetFloat("_Samples", Mathf.Clamp(samples, 2, 24));
         material.SetFloat("_Mask", force);
+        material.SetFloat("_MaxMix", Mathf.Clamp(maxMix, 0.05f, 1f));
         material.SetFloat("_Tint", debugTint ? 1f : 0f);
+        material.SetFloat("_HoldColour", Mathf.Clamp01(holdColour));
+        material.SetFloat("_Highlight", Mathf.Clamp01(highlightBias));
+        material.SetVector("_TruckRect", truckRect);
+        material.SetFloat("_TruckHole", truckOnScreen ? topDown : 0f);
+        material.SetFloat("_TruckEdge", feather);
 
         Graphics.Blit(taps, destination, material);
 

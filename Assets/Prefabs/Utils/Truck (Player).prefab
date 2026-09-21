@@ -4924,9 +4924,19 @@ MonoBehaviour:
   currentSpeedKPH: 0
   minSteerPercent: 0.2
   steerFadeSpeed: 30
+  lowSpeedSteerBoost: 1.6
   brakeLightRenderer: {fileID: 8263559091470395916}
   brakeThreshold: -0.1
   resetCooldown: 2
+  resetOntoRoad: 1
+  resetMaxRoadDistance: 0
+  resetAlignmentWeight: 25
+  resetFacesForward: 1
+  resetToLastRoad: 1
+  roadCheckDistance: 2.5
+  resetForwardTolerance: 6
+  resetBackOffNodes: 2
+  resetBackOffMetres: 90
   enableFocus: 1
   focusTag: Adamak
   focusDistance: 10
@@ -19538,7 +19548,21 @@ MonoBehaviour:
   rightEffect: {fileID: 5411794255913050419}
   minSpeed: 30
   maxSpeed: 150
-  maxParticles: 50
+  maxParticles: 40
+  topDownFrom: 48
+  topDownTo: 68
+  modeSmoothTime: 0.35
+  topDownEmitters: 10
+  topDownSpread: 1.5
+  topDownDepth: 2.2
+  topDownLead: 0.6
+  topDownInnerSpread: 0.55
+  topDownRate: 1.5
+  topDownFieldRate: 0.25
+  topDownMaxParticles: 40
+  topDownFieldMaxParticles: 24
+  topDownSize: 1.15
+  topDownLifetime: 1.5
 --- !u!1 &5411794254396067246
 GameObject:
   m_ObjectHideFlags: 0
@@ -44668,6 +44692,7 @@ MonoBehaviour:
   - {fileID: 5411794255704832300}
   toggleSound: {fileID: 5411794256020609189}
   emissionObject: {fileID: 4069777842016532289}
+  emissionMaterialIndex: 1
   startOn: 0
   toggleCooldown: 0.5
 --- !u!1 &5411794255476032501

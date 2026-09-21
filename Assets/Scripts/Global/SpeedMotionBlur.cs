@@ -28,16 +28,16 @@ public class SpeedMotionBlur : MonoBehaviour
     [Tooltip("The speed the blur starts at, as a fraction of the truck's own top speed. Below it the picture " +
              "is clean, so crawling through a junction is not a smear.")]
     [Range(0f, 1f)]
-    public float startFraction = 0.18f;
+    public float startFraction = 0.16f;
 
     [Tooltip("How far the sides of the picture streak at top speed, as a fraction of the screen height. " +
              "0.04 is about 55 pixels on a 1080p picture - unmistakable at speed, and gone by the time the " +
              "truck is slow. This is the dial for how much blur there is overall.")]
-    public float maxBlur = 0.04f;
+    public float maxBlur = 0.06f;
 
     [Tooltip("How long the blur takes to follow the speed, in seconds. A little lag stops it flickering " +
              "when the throttle is feathered or the wheels bounce.")]
-    public float smoothTime = 0.18f;
+    public float smoothTime = 0.22f;
 
     [Tooltip("A multiplier for anything that should feel faster than the speed alone suggests - a boost, an " +
              "impact, a scripted moment. Left at 1 it does nothing.")]
@@ -71,18 +71,18 @@ public class SpeedMotionBlur : MonoBehaviour
     [Tooltip("Steering drags the blur's centre with it, so a corner swells on the inside and the car feels " +
              "like it is being pushed through the turn. 0 turns it off.")]
     [Range(0f, 0.06f)]
-    public float steerShift = 0.018f;
+    public float steerShift = 0.02f;
 
     [Tooltip("A touch of darkening at the edges, which keeps the eye on the road. It follows the blur, so a " +
              "slow lap is untouched.")]
     [Range(0f, 0.3f)]
-    public float edgeDarken = 0.1f;
+    public float edgeDarken = 0.2f;
 
     [Header("Quality")]
     [Tooltip("How many taps make up the streak. The taps read a half-resolution copy of the frame, which is " +
              "what keeps a long streak smooth instead of ghosted, so this can stay low.")]
     [Range(2, 24)]
-    public int samples = 8;
+    public int samples = 10;
 
     [Tooltip("Build the streak from a half-resolution copy of the frame. This is the smoothing: without it a " +
              "long streak shows the taps as separate copies of the picture.")]

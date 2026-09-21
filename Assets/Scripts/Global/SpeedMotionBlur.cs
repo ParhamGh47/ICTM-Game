@@ -42,18 +42,18 @@ public class SpeedMotionBlur : MonoBehaviour
     [Range(0f, 1f)]
     public float startFraction = 0.16f;
 
-    [Tooltip("How far the streak gets at top speed, as a fraction of the screen height. 0.035 is about 40 " +
+    [Tooltip("How far the streak gets at top speed, as a fraction of the screen height. 0.04 is about 50 " +
              "pixels out where the streaks are longest on a 1080p picture - a light smear, which is the idea: " +
              "a little blur over the whole race reads as speed, a heavy one around the player reads as a " +
              "smudge. This and maxMix are the two dials for how much there is overall.")]
-    public float maxBlur = 0.035f;
+    public float maxBlur = 0.04f;
 
     [Tooltip("The most of any one pixel the smear is ever allowed to take over, however far out it is. " +
              "Under 1 the crisp frame always shows through, so the far reaches of the picture are lightened " +
              "rather than replaced - which is what lets the effect cover most of the screen without " +
              "swallowing it. Raising this blurs harder, and is the first thing to try if it feels too faint.")]
     [Range(0.05f, 1f)]
-    public float maxMix = 0.55f;
+    public float maxMix = 0.65f;
 
     [Tooltip("How long the blur takes to follow the speed, in seconds. A little lag stops it flickering " +
              "when the throttle is feathered or the wheels bounce.")]

@@ -48,22 +48,41 @@ public class menuBTN : MonoBehaviour
 
     public void levelOne()
     {
-        SceneLoader.Load("TW-Start-1");
+        OpenLevel(1, "TW-Start-1");
     }
 
     public void levelTwo()
     {
-        SceneLoader.Load("TW-Start-2");
+        OpenLevel(2, "TW-Start-2");
     }
 
     public void levelThree()
     {
-        SceneLoader.Load("TW-Start-3");
+        OpenLevel(3, "TW-Start-3");
     }
 
     public void levelFour()
     {
-        SceneLoader.Load("TW-Start-4");
+        OpenLevel(4, "TW-Start-4");
+    }
+
+    /// <summary>
+    /// Opens a level's first scene - unless the player has not reached that level yet.
+    ///
+    /// The level list already switches the locked buttons off and marks them (<see cref="LevelSelectLocks"/>),
+    /// so this is the guard behind that rather than the thing that shows it: however the button is reached -
+    /// a click, a gamepad, or anything that ever calls these methods - a level that is still locked does not
+    /// open.
+    /// </summary>
+    private void OpenLevel(int level, string sceneName)
+    {
+        if (!LevelProgress.IsUnlocked(level))
+        {
+            Debug.Log("[LevelProgress] Level " + level + " has not been reached yet, so it stays locked.");
+            return;
+        }
+
+        SceneLoader.Load(sceneName);
     }
 
     #endregion

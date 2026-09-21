@@ -41,6 +41,11 @@ public class ProgressDisplay : MonoBehaviour
 
     public void FinishGame()
     {
+        // Crossing the line is what finishes a level, so this is where the one after it opens - before the
+        // end scene is entered, so it is entered with the progress already saved. A scene that is not part of
+        // a level (the playground, the template) reports level 0 and finishes nothing.
+        LevelProgress.CompleteCurrentScene();
+
         if (ks != null)
         {
             ks.CheckGameOver();

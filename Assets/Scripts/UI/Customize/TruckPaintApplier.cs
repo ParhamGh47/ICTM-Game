@@ -46,6 +46,7 @@ public class TruckPaintApplier : MonoBehaviour
         public Material instance;        // our own copy, created the first time this slot is painted
         public bool showingInstance;     // whether the renderer currently points at that copy
         public Color modelColour;        // the colour the model has for this slot
+        public Color modelEmission;      // the glow the model has for this slot, for a lens
     }
 
     private class LightTarget
@@ -62,6 +63,11 @@ public class TruckPaintApplier : MonoBehaviour
     // the trim around the lamp and is left alone.
     private Renderer lensRenderer;
     private int lensSlot = -1;
+
+    // The brake lamp is the material the car controller switches on when the driver brakes, which is the
+    // mesh's first material - <c>Renderer.material</c>. It is identified by the renderer rather than by a
+    // position on the model, so a model oriented the other way round still lights its brake lens.
+    private const int BrakeSlot = 0;
 
     /// <summary>True once <see cref="Capture"/> has run and at least one slot was found.</summary>
     public bool IsReady { get { return targets.Count > 0; } }
@@ -135,6 +141,7 @@ public class TruckPaintApplier : MonoBehaviour
                         slot = s,
                         original = materials[s],
                         modelColour = ReadColour(materials[s]),
+                        modelEmission = ReadEmission(materials[s]),
                     });
                 }
             }
@@ -237,8 +244,14 @@ public class TruckPaintApplier : MonoBehaviour
             // the brake lens counts whatever the art called it - it is the lamp the car controller
             // switches on, so it has to follow the rear part's colour.
             case SlotRule.Headlights: return front && IsHeadlightLens(slot, material, renderer);
+            // The brake lamp itself is the slot the car controller switches on, and it is taken by
+            // identity rather than by where it sits: a model authored the other way round, or one whose
+            // rear lamps sit near the middle, still gets its brake lens painted - and lit - instead of
+            // being mistaken for a headlight. The trim around it (the rings) is left as the model has it,
+            // the same way the headlight's bezel is.
             case SlotRule.BrakeLights:
-                return !front && (IsLight(material) || (renderer == brakeLens && slot == 0));
+                if (renderer == brakeLens && slot == BrakeSlot) return true;
+                return !front && IsLight(material) && !IsTrim(material);
         }
 
         return true;
@@ -419,7 +432,7 @@ public class TruckPaintApplier : MonoBehaviour
 
         bool lens = target.part == TruckPart.Headlights || target.part == TruckPart.BrakeLights;
 
-        Write(target.instance, colour, style, lens);
+        Write(target.instance, colour, style, lens, target.modelEmission);
 
         if (target.showingInstance) return;
 
@@ -516,7 +529,18 @@ public class TruckPaintApplier : MonoBehaviour
         return Color.white;
     }
 
-    private static void Write(Material material, Color colour, int style, bool lens)
+    /// <summary>
+    /// The glow the model itself gives this slot, for a lens. Read while the slot is still the model's own
+    /// material, and used later so a painted lamp glows at least as brightly as the lamp it replaces.
+    /// </summary>
+    private static Color ReadEmission(Material material)
+    {
+        if (material.HasProperty(EmissionColorId)) return material.GetColor(EmissionColorId);
+
+        return Color.black;
+    }
+
+    private static void Write(Material material, Color colour, int style, bool lens, Color modelEmission)
     {
         Finish finish = Finishes[Mathf.Clamp(style, 0, Finishes.Length - 1)];
 
@@ -537,7 +561,7 @@ public class TruckPaintApplier : MonoBehaviour
         if (material.HasProperty(GlossinessId)) material.SetFloat(GlossinessId, finish.smoothness);
         if (material.HasProperty(SmoothnessId)) material.SetFloat(SmoothnessId, finish.smoothness);
 
-        if (lens) WriteGlow(material, colour);
+        if (lens) WriteGlow(material, colour, modelEmission);
 
         SetTransparent(material, finish.transparent);
     }
@@ -547,9 +571,15 @@ public class TruckPaintApplier : MonoBehaviour
     /// what switches the glow off with the headlights - so this only says what colour the glow is, and
     /// it is re-applied by the toggle every time the lights go on.
     /// </summary>
-    private static void WriteGlow(Material material, Color colour)
+    private static void WriteGlow(Material material, Color colour, Color modelEmission)
     {
-        Color glow = colour * EmissionBoost;
+        // A lamp only as bright as its albedo does not read as a lamp. The model's own glow is the
+        // reference - the default brake and head lamp emission colour - so the painted lens is at least
+        // that bright, and the colour the player picks glows exactly the way the model's own lamps did.
+        float modelGlow = Mathf.Max(modelEmission.r, Mathf.Max(modelEmission.g, modelEmission.b));
+        float boost = Mathf.Max(EmissionBoost, modelGlow);
+
+        Color glow = colour * boost;
         glow.a = 1f;
 
         if (material.HasProperty(EmissionColorId)) material.SetColor(EmissionColorId, glow);

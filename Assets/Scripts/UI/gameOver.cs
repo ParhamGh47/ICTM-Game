@@ -47,7 +47,18 @@ public class gameOver : MonoBehaviour
         isGameOver = true;
 
         if (gameOverPanel != null)
+        {
+            // Above the level's HUD, the same way the pause panel is brought forward as it opens. The HUD
+            // is authored as a later sibling of these panels in the same canvas, and a later sibling draws
+            // on top - so without this the game over panel opens underneath the target and timer.
+            gameOverPanel.transform.SetAsLastSibling();
             gameOverPanel.SetActive(true);
+
+            // The panel highlights its own Restart button as it opens. Saying so here as well makes the
+            // first thing the player can do a restart, whatever clearing the selection got there first.
+            MenuNavigation navigation = gameOverPanel.GetComponent<MenuNavigation>();
+            if (navigation != null) navigation.SelectDefault();
+        }
 
         Time.timeScale = 0f;
         AudioListener.pause = true;

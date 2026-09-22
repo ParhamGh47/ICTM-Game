@@ -17,8 +17,15 @@ using UnityEngine.SceneManagement;
 /// The puffs are measured against the width of the tyre mark rather than in fixed metres: the truck prefabs
 /// are modelled small and scaled up at the root, so a hard-coded size would be 50 times out on one of them.
 /// The mark is the one real-world width the rig reports for a contact patch (something over 10 cm on the
-/// player truck), so the settings read as multiples of it - <c>sizeFactor 1.7</c> is a puff a little wider
-/// than the tyre, grown to about four tyre-widths by the time it has faded.
+/// player truck), so the settings read as multiples of it - <c>sizeFactor 2</c> is a puff a couple of times
+/// wider than the tyre, grown to about six tyre-widths by the time it has faded.
+///
+/// The plume is thrown to the side of the turn, not just left behind: the emitter is carried out toward the
+/// side the truck is steering into (<see cref="sideReach"/>) and each puff is given a drift that way
+/// (<see cref="sideSpray"/>), so a hard left puts smoke along the truck's left flank as well as at its
+/// tail. Nothing about the plume is uniform either - launch speed, direction, size, life and spin are all
+/// ranges, and a turbulence field curls the puffs as they rise, because a cloud whose particles all leave
+/// at one speed in one direction reads as a straight line rather than as smoke.
 /// </summary>
 [DisallowMultipleComponent]
 public class TireSmokeController : MonoBehaviour
@@ -39,41 +46,62 @@ public class TireSmokeController : MonoBehaviour
     [Header("When it smokes")]
     [Tooltip("How hard a tyre must slide before any smoke shows at all, 0 - 1. The marks start earlier than " +
              "the smoke on purpose: a tyre squealing into life does not yet spit smoke.")]
-    [Range(0f, 1f)] public float smokeThreshold = 0.4f;
+    [Range(0f, 1f)] public float smokeThreshold = 0.3f;
 
     [Tooltip("No smoke below this speed (km/h), however hard the tyres are sliding, and full smoke by 1.6x " +
              "it. A tyre can be made to scrub while barely moving, and a cloud rolling off a crawling truck " +
              "would look wrong.")]
-    public float minSpeed = 30f;
+    public float minSpeed = 22f;
 
     [Tooltip("How quickly the smoke follows the slide. Higher is more immediate.")]
     public float response = 9f;
 
     [Header("Amount")]
     [Tooltip("Particles per second, per tyre, at a full slide.")]
-    public float maxRate = 34f;
+    public float maxRate = 52f;
 
     [Tooltip("How long a puff lives, in seconds. Longer lingers, shorter reads as a sharper, thinner cloud.")]
-    public float lifetime = 1.15f;
+    public float lifetime = 1.3f;
 
     [Tooltip("Upper limit on live particles per tyre.")]
-    public int maxParticles = 90;
+    public int maxParticles = 140;
 
     [Header("Look")]
     [Tooltip("Puff size at birth, as a multiple of the width of the tyre mark: a tyres width is 1.")]
-    public float sizeFactor = 1.7f;
+    public float sizeFactor = 1.9f;
 
     [Tooltip("How much bigger a puff gets by the end of its life.")]
-    public float growth = 2.6f;
+    public float growth = 3f;
 
     [Tooltip("How fast the smoke rises, as a multiple of the mark width per second. The mark is roughly the " +
              "tyre's width, so 5 is half a metre per second on the player truck.")]
     public float riseFactor = 5f;
 
     [Tooltip("How far the smoke drifts off the tyre, as a multiple of the mark width per second.")]
-    public float spreadFactor = 2.5f;
+    public float spreadFactor = 2.8f;
 
-    public Color smokeColour = new Color(0.87f, 0.86f, 0.84f, 0.28f);
+    [Header("Sideways")]
+    [Tooltip("How strongly a hard turn throws the smoke out to that side, as a multiple of the mark " +
+             "width per second. The side follows the steering, so a left turn puts it on the left.")]
+    public float sideSpray = 3.2f;
+
+    [Tooltip("How far the emitter itself is carried out toward the side of the truck during a hard turn, " +
+             "as a multiple of the mark width. This is what puts the plume alongside the truck rather " +
+             "than only behind it.")]
+    public float sideReach = 1.3f;
+
+    [Tooltip("How quickly the plume swings to the side the truck is turning into. Higher is snappier.")]
+    public float sideResponse = 4f;
+
+    [Tooltip("How much each puff's direction is randomised, 0 - 1. A plume whose puffs all leave at the " +
+             "same speed and angle reads as a straight line rather than as smoke.")]
+    [Range(0f, 1f)] public float directionRandomness = 0.7f;
+
+    [Tooltip("How much turbulence the puffs get as they travel, as a multiple of the mark width per " +
+             "second. This is what makes the cloud curl instead of drifting in straight lines.")]
+    public float turbulence = 1.1f;
+
+    public Color smokeColour = new Color(0.87f, 0.86f, 0.84f, 0.3f);
 
     [Header("Softening")]
     [Tooltip("Smoke is hidden for this long after a scene loads, so a truck spawned mid-slide does not " +
@@ -82,6 +110,7 @@ public class TireSmokeController : MonoBehaviour
 
     private float leftAmount;
     private float rightAmount;
+    private float turnSide;              // -1 turning hard left, +1 hard right, smoothed
 
     private Transform leftContact;
     private Transform rightContact;
@@ -233,6 +262,15 @@ public class TireSmokeController : MonoBehaviour
         leftAmount = Mathf.MoveTowards(leftAmount, Slide(skid.LeftSkid) * gate, Time.deltaTime * response);
         rightAmount = Mathf.MoveTowards(rightAmount, Slide(skid.RightSkid) * gate, Time.deltaTime * response);
 
+        // Which side the smoke is thrown to follows the steering, and only while a tyre is actually
+        // sliding: -1 is full left and +1 is full right. It is swept rather than snapped, so the plume
+        // crosses the truck as the wheel goes over instead of jumping from one side to the other.
+        float steer = car != null ? car.steerInput : 0f;
+        bool sliding = Mathf.Max(leftAmount, rightAmount) > 0.01f;
+        float targetSide = sliding ? Mathf.Clamp(steer, -1f, 1f) : 0f;
+
+        turnSide = Mathf.MoveTowards(turnSide, targetSide, Time.deltaTime * sideResponse);
+
         Apply(leftSmoke, leftContact, leftAmount);
         Apply(rightSmoke, rightContact, rightAmount);
     }
@@ -269,16 +307,38 @@ public class TireSmokeController : MonoBehaviour
     {
         if (system == null || contact == null) return;
 
+        // The truck's own axes, so the smoke is thrown to a side of this truck rather than to world right.
+        Vector3 right = car != null ? car.transform.right : transform.right;
+
+        // A hard turn carries the emitter out toward the side it is turning into, so the smoke comes off
+        // the corner of the truck rather than only off the tyres. The reach is a multiple of the mark
+        // width, like everything else here, so it is the same shape whatever scale a rig is modelled at.
+        float side = turnSide * amount;
+        Vector3 offset = right * (side * sideReach * reference);
+
         // The emitter rides on the tyre, but the puffs themselves are simulated in world space so they are
         // left behind by the truck instead of travelling with it.
-        system.transform.position = contact.position + Vector3.up * lift;
+        system.transform.position = contact.position + Vector3.up * lift + offset;
 
         ParticleSystem.EmissionModule emission = system.emission;
         emission.rateOverTime = maxRate * amount;
 
-        // A faint haze stays behind a tyre that is only just sliding; a full slide pours it on.
+        // A spread of launch speeds rather than one speed: puffs that all leave at exactly the same
+        // velocity are what makes a plume read as a straight line.
         ParticleSystem.MainModule main = system.main;
-        main.startSpeed = reference * spreadFactor * (0.35f + 0.65f * amount);
+        main.startSpeed = new ParticleSystem.MinMaxCurve(reference * spreadFactor * 0.2f,
+                                                        reference * spreadFactor * (1f + 0.3f * amount));
+
+        // Drift, randomised per particle around the sideways push: a plume with no two puffs travelling
+        // the same way is what reads as smoke rather than as a beam.
+        float drift = reference * sideSpray * side;
+        float jitter = reference * directionRandomness * (0.5f + amount);
+
+        ParticleSystem.VelocityOverLifetimeModule velocity = system.velocityOverLifetime;
+        velocity.x = new ParticleSystem.MinMaxCurve(drift * right.x - jitter, drift * right.x + jitter);
+        velocity.y = new ParticleSystem.MinMaxCurve(reference * riseFactor * 0.55f,
+                                                    reference * riseFactor * (0.9f + 0.5f * amount));
+        velocity.z = new ParticleSystem.MinMaxCurve(drift * right.z - jitter, drift * right.z + jitter);
     }
 
     // ---------------------------------------------------------------- building
@@ -341,7 +401,7 @@ public class TireSmokeController : MonoBehaviour
         ParticleSystem.MainModule main = system.main;
         main.loop = true;
         main.startLifetime = new ParticleSystem.MinMaxCurve(lifetime * 0.7f, lifetime * 1.25f);
-        main.startSpeed = reference * spreadFactor;
+        main.startSpeed = new ParticleSystem.MinMaxCurve(reference * spreadFactor * 0.2f, reference * spreadFactor);
         main.startSize = new ParticleSystem.MinMaxCurve(reference * sizeFactor * 0.7f,
                                                         reference * sizeFactor * 1.25f);
         main.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
@@ -360,12 +420,26 @@ public class TireSmokeController : MonoBehaviour
         ParticleSystem.ShapeModule shape = system.shape;
         shape.enabled = true;
         shape.shapeType = ParticleSystemShapeType.Hemisphere;
-        shape.radius = reference;
+        shape.radius = reference * 1.4f;
 
         ParticleSystem.VelocityOverLifetimeModule velocity = system.velocityOverLifetime;
         velocity.enabled = true;
         velocity.space = ParticleSystemSimulationSpace.World;
-        velocity.y = new ParticleSystem.MinMaxCurve(reference * riseFactor);
+        velocity.y = new ParticleSystem.MinMaxCurve(reference * riseFactor * 0.55f, reference * riseFactor);
+
+        // Turbulence, so the cloud curls and mixes as it rises rather than drifting in straight lines.
+        ParticleSystem.NoiseModule noise = system.noise;
+        noise.enabled = true;
+        noise.strength = new ParticleSystem.MinMaxCurve(reference * turbulence * 0.5f, reference * turbulence);
+        noise.frequency = 0.6f;
+        noise.damping = true;
+        noise.octaveCount = 2;
+        noise.quality = ParticleSystemNoiseQuality.Medium;
+
+        // A slow tumble per puff, so the billboards do not all stay at the angle they were born at.
+        ParticleSystem.RotationOverLifetimeModule spin = system.rotationOverLifetime;
+        spin.enabled = true;
+        spin.z = new ParticleSystem.MinMaxCurve(-0.9f, 0.9f);
 
         // Grows and thins out over its life, which is what makes smoke read as smoke rather than as dots.
         ParticleSystem.SizeOverLifetimeModule sizeOverLife = system.sizeOverLifetime;

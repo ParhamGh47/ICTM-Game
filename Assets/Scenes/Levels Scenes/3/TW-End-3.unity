@@ -1071,7 +1071,7 @@ MonoBehaviour:
       m_Calls:
       - m_Target: {fileID: 1894850822}
         m_TargetAssemblyTypeName: LevelLoader, Assembly-CSharp
-        m_MethodName: Menu
+        m_MethodName: Levels
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}

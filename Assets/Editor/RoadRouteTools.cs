@@ -266,7 +266,7 @@ public static class RoadRoute
     /// </summary>
     public static GameObject[] PainterRoots()
     {
-        string[] names = { "Roadside Props", "Roadside Signs", "Billboards", "PassingCars" };
+        string[] names = { "Roadside Props", "Roadside Signs", "Billboards", "PassingCars", "Adamaks" };
         List<GameObject> roots = new List<GameObject>();
 
         for (int i = 0; i < names.Length; i++)

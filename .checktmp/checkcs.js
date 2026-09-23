@@ -28,17 +28,41 @@ for (const m of xml.matchAll(/<Compile Include="([^"]+)"\s*\/>/g)) {
 }
 for (const extra of args) {
   if (extra.endsWith('.csproj')) continue;
-  if (!sources.includes(extra)) sources.push(extra);
+  const normalised = extra.replace(/\\/g, '/');
+  if (sources.some((s) => s.replace(/\\/g, '/') === normalised)) continue;
+  sources.push(extra);
 }
 
 // Sibling asmdef assemblies (RoadArchitect and friends) are referenced as already-built DLLs: only the
 // gameplay assembly plus the file being added is under test here.
+// A source added this session may live in another asmdef (the AICars assembly). Then that assembly's
+// stale built DLL must not also be referenced: the sources are being compiled instead.
+const extraSources = args.filter((a) => a.endsWith('.cs'));
+const recompiled = new Set(
+  extraSources.filter((a) => a.startsWith('Assets/Scripts/206/')).map(() => 'AICars.dll')
+);
+
 const scriptAssemblies = path.join(root, 'Library', 'ScriptAssemblies');
 if (fs.existsSync(scriptAssemblies)) {
   for (const f of fs.readdirSync(scriptAssemblies)) {
     if (!f.endsWith('.dll')) continue;
     if (/^Assembly-CSharp/.test(f)) continue;
+    if (recompiled.has(f)) continue;
     refs.push(path.join(scriptAssemblies, f));
+  }
+}
+
+if (recompiled.size) {
+  const sibling = path.join(root, 'AICars.csproj');
+  if (fs.existsSync(sibling)) {
+    const siblingXml = fs.readFileSync(sibling, 'utf8');
+    for (const m of siblingXml.matchAll(/<Compile Include="([^"]+)"\s*\/>/g)) {
+      const p = decode(m[1]);
+      if (p.startsWith('obj/') || p.startsWith('obj\\')) continue;
+      const normalised = p.replace(/\\/g, '/');
+      if (sources.some((s) => s.replace(/\\/g, '/') === normalised)) continue;
+      sources.push(p);
+    }
   }
 }
 

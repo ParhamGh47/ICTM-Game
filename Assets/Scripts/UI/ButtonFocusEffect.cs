@@ -52,6 +52,14 @@ public class ButtonFocusEffect : MonoBehaviour
     /// <summary>Global switch, so a settings screen can turn the effect off.</summary>
     public static bool Enabled = true;
 
+    /// <summary>
+    /// Until this time the pointer is ignored and the selection keeps the highlight.
+    ///
+    /// See <see cref="HoldHighlightOnSelection"/> - it is what stops a mouse left resting on one button
+    /// from making it look like that button is the one a freshly opened panel defaults to.
+    /// </summary>
+    private static float holdHoverUntil;
+
     private static ButtonFocusEffect instance;
 
     private readonly List<Entry> entries = new List<Entry>();
@@ -94,6 +102,35 @@ public class ButtonFocusEffect : MonoBehaviour
         return go.AddComponent<ButtonFocusEffect>();
     }
 
+    /// <summary>
+    /// Keeps the highlight on the selection for a moment, however the pointer is placed.
+    ///
+    /// Called when a menu hands its highlight to a default button as it opens. A pointer that happens to be
+    /// resting on another button would otherwise be followed instead - the panel would open looking as if it
+    /// defaulted to that button, and a player who clicked without moving the mouse would get it - so the
+    /// hover is held off until <paramref name="seconds"/> have passed, or until the pointer is moved, which
+    /// is checked against a stale position rather than a timer and so hands the highlight over at once.
+    /// </summary>
+    public static void HoldHighlightOnSelection(float seconds)
+    {
+        if (seconds <= 0f) return;
+
+        Ensure();
+
+        float until = Time.unscaledTime + seconds;
+        if (until > holdHoverUntil) holdHoverUntil = until;
+
+        // A pointer that has not moved since this call must not count as the mouse being *used*, or the very
+        // position it is resting on would be followed the moment the hold expires. So the frame it was last
+        // seen at is forgotten - any real movement is measured against it and hands the highlight over as it
+        // should, while a pointer left alone keeps the highlight where the panel put it.
+        if (instance != null)
+        {
+            instance.lastPointerPosition = Input.mousePosition;
+            instance.usingMouse = false;
+        }
+    }
+
     private void Awake()
     {
         if (instance != null && instance != this)
@@ -122,7 +159,10 @@ public class ButtonFocusEffect : MonoBehaviour
 
         TrackInputDevice();
 
-        bool pointerMode = usingMouse || !switchWithInputDevice;
+        // The pointer only leads the highlight when it is allowed to, which is everywhere except the moment
+        // a panel has just handed its highlight to a default button.
+        bool hoverAllowed = Time.unscaledTime >= holdHoverUntil;
+        bool pointerMode = (usingMouse || !switchWithInputDevice) && hoverAllowed;
 
         Button hovered = pointerMode ? FindHovered(events) : null;
 

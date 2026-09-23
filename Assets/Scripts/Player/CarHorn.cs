@@ -21,6 +21,11 @@ public class CarHorn : MonoBehaviour
         {
             hornSound.Play();
             nextHonkTime = Time.time + cooldownTime;
+
+            // Tell the traffic. The passing cars cannot reach this script - they are in their own
+            // assembly - so the horn reports itself to them and each car decides whether the player
+            // was behind it and close enough to be worth pulling over for.
+            AICarController.ReportHorn(transform);
         }
     }
 }

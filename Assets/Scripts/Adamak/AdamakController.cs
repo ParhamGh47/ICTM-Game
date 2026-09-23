@@ -20,9 +20,25 @@ public class AdamakController : MonoBehaviour
     private bool isFleeing = false;
     private bool isDead = false;
 
+    // Found once for the whole level: a spawner places scores of targets, and each one looking up the
+    // HUD for itself would be the same answer fetched over and over.
+    private static KillDisplay cachedKillDisplay;
+
     private void Awake()
     {
         EnableRagdoll(false);
+
+        // A target dropped into a level by hand still has to count, so an unwired one finds the
+        // level's own KillDisplay rather than quietly not scoring.
+        if (killDisplay == null)
+        {
+            if (cachedKillDisplay == null)
+            {
+                cachedKillDisplay = FindObjectOfType<KillDisplay>();
+            }
+
+            killDisplay = cachedKillDisplay;
+        }
     }
 
     private void Update()

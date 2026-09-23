@@ -71,7 +71,7 @@ public class MenuNavigation : MonoBehaviour
     private readonly List<Selectable> managed = new List<Selectable>();
     private Selectable lastSelected;
 
-    // The axes Unity's own input module navigates with. They carry W/A/S/D, the thumbs tick and the D-pad,
+    // The axes Unity's own input module navigates with. They carry W/A/S/D, the thumbstick and the D-pad,
     // which is also everything the player drives with - that overlap is the whole reason for the grace below.
     private const string NavHorizontalAxis = "Horizontal";
     private const string NavVerticalAxis = "Vertical";

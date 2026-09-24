@@ -161,6 +161,13 @@ public class TireSmokeController : MonoBehaviour
     {
         readyTime = Time.time + startDelay;
 
+        // Before any system is built, so the smoke this truck makes is already the right amount. The presets
+        // thin the plume rather than switching it off: a hard corner and a hard stop are exactly when the
+        // effect is wanted, so it stays at every setting - the machine it is running on decides how thick it
+        // is, not whether it exists. The values above stay the ones to tune; this only takes a share off them.
+        maxRate = GraphicsQuality.ScaleRate(maxRate, GraphicsQuality.ParticleScale, 4f);
+        maxParticles = GraphicsQuality.ScaleCount(maxParticles, GraphicsQuality.ParticleScale, 8);
+
         if (car == null) car = GetComponentInChildren<CarController>(true);
         if (skid == null) skid = GetComponentInChildren<TireSkidController>(true);
 

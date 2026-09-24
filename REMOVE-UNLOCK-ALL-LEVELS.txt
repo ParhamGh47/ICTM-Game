@@ -1,0 +1,114 @@
+HOW TO REMOVE THE "UNLOCK ALL LEVELS" TEST SWITCH
+=================================================
+
+Written 2026-09-24, against the version in this commit. Everything below was checked
+against the project as it stands now; nothing else has to be touched but is listed so
+that you can confirm it yourself in a minute rather than trusting this file.
+
+
+WHAT IT IS
+----------
+A testing aid, not a game feature. On the level list (the "Levels" scene) it puts a tab
+in the bottom-left corner that reads UNLOCK ALL LEVELS. Clicking it - or pressing the U
+key, or the gamepad's top face button - opens every level immediately, and clicking it
+again (it then reads RESTORE PROGRESS) puts the player's own progress back. It works in
+a plain build: no editor, no debug build, no code change.
+
+The switch itself is remembered between runs, so a testing session is started once.
+
+
+WHERE IT LIVES
+--------------
+  Assets/Scripts/UI/Main Menu/LevelTestUnlock.cs        the whole feature
+  Assets/Scripts/UI/Main Menu/LevelTestUnlock.cs.meta   its asset id
+
+  Script guid: 4b8e21c7a93d4f15be60c7a2d8e93b57
+  - no scene and no prefab references it (checked); it installs its own tab at runtime
+    through [RuntimeInitializeOnLoadMethod] when a scene named "Levels" is loaded, and
+    builds its UI in code, so removing it leaves no broken reference anywhere.
+
+  Assets/Scripts/Global/LevelProgress.cs
+  - one method was added for it: public static void SetProgress(int unlockedUpTo,
+    int clearedUpTo). Nothing else in the project calls it (checked) - the level list's
+    locks listen to the Changed event it raises, which is not part of this feature.
+
+  PlayerPrefs written by it (only ever written while the switch is used):
+    TestUnlock.Active         1 while testing is on
+    TestUnlock.Saved.Unlocked the player's own progress, set aside while it is on
+    TestUnlock.Saved.Cleared  the same for the finished-up-to value
+
+
+BEFORE YOU REMOVE IT: SWITCH IT OFF FIRST
+-----------------------------------------
+Turning it off is what puts the player's real progress back (it was saved aside, not
+overwritten, while the switch was on). If the switch is left ON and the code is removed,
+nothing puts that progress back, and the save simply stays fully unlocked.
+
+  In the level list: click the tab until it reads UNLOCK ALL LEVELS again.
+  If the code is already gone and progress is stuck open: Tools > Save Data > Open Save
+  Editor (Unity menu bar) and set the progress, or delete every saved value there.
+
+If someone finished a level while the switch was on, that finish is dropped along with
+the restored progress - that is how the feature was built and is worth knowing, not a
+bug.
+
+
+OPTION A - LEAVE IT IN THE CODE, TAKE IT OUT OF THE GAME (ONE LINE)
+------------------------------------------------------------------
+In LevelTestUnlock.cs, near the top:
+
+    public static bool Available = true;      ->     public static bool Available = false;
+
+That is the switch the file was written around: with it false the tab is never created
+and the shortcut is ignored, so a build behaves exactly like one that never had it, while
+the feature stays in the project for the next testing session. Everything still compiles;
+nothing else needs changing.
+
+
+OPTION B - REMOVE IT ENTIRELY
+-----------------------------
+1. Delete the script, in Unity rather than outside it, so the .meta goes with it:
+       Project window -> Assets/Scripts/UI/Main Menu/ -> right-click LevelTestUnlock.cs
+       -> Delete
+   (Or delete both LevelTestUnlock.cs and LevelTestUnlock.cs.meta together if you are
+   working on disk. Deleting one without the other leaves a stray .meta, which Unity
+   treats as an asset it cannot find and reports on next import.)
+
+2. Optional, and tidy rather than necessary: remove the method it added to LevelProgress:
+
+       /// <summary>Sets the progress straight ...</summary>
+       public static void SetProgress(int unlockedUpTo, int clearedUpTo) { ... }
+
+   Its doc comment says which feature it was for; nothing else calls it, so the project
+   compiles either way. Leave it if you would rather not edit LevelProgress at all.
+
+3. Nothing else to unlink. No scene, prefab, build setting or asmdef mentions it (checked
+   by searching the project for the script's guid, above).
+
+4. Clear the leftovers, so a machine that was used for testing starts clean:
+
+       Unity's menu bar -> Tools > Save Data > Open Save Editor -> "Delete every saved
+       value"
+
+   or delete just these keys wherever PlayerPrefs live on the machine:
+
+       Windows, a built game:  HKEY_CURRENT_USER\Software\DefaultCompany\ICTM
+       Windows, the editor:    HKEY_CURRENT_USER\Software\Unity\UnityEditor\DefaultCompany\ICTM
+       macOS:                  ~/Library/Preferences/unity.DefaultCompany.ICTM.plist
+
+   (The editor and a build keep their data in different places - editing one does not
+   change the other.) The leftovers are three keys and harmless; this is only so that a
+   test that was left switched on cannot come back.
+
+
+HOW TO TELL IT IS GONE
+----------------------
+  - No "[TestUnlock]" line in the console when the level list opens. That log line is
+    printed by the feature on the first look at the level list, so its absence means the
+    tab was never built.
+  - No tab in the bottom-left corner of the level list, and U (or the gamepad's top face
+    button) does nothing there.
+  - Searching the project for "LevelTestUnlock" turns up nothing outside this file.
+  - Levels start locked again for a fresh save, and unlock one at a time as they are
+    finished - which is the behaviour LevelProgress and the level list's locks give on
+    their own.

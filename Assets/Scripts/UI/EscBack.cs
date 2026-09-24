@@ -3,8 +3,8 @@ using UnityEngine;
 /// <summary>
 /// Leaves a scene with the same input that opens the pause menu: Escape, or the gamepad's "B"
 /// button. The pause menu already owns Escape inside gameplay scenes, so this component is
-/// deliberately only placed in the scenes that have no pause menu - the level list, the controls
-/// page and the story (typewriter) scenes.
+/// deliberately only placed in the scenes that have no pause menu - the level list, the options
+/// screen and the story (typewriter) scenes.
 ///
 /// It uses the project's "Cancel" input axis, which is already bound to both Escape and
 /// joystick button 1, so keyboard and gamepad share one code path.

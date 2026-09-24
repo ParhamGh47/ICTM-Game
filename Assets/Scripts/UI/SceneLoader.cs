@@ -21,7 +21,7 @@ public static class SceneLoader
     public static bool IsLoading { get; private set; }
 
     /// <summary>
-    /// Scenes that are pure menus. Moving directly between two of these - menu, level list, controls,
+    /// Scenes that are pure menus. Moving directly between two of these - menu, level list, options,
     /// customization, and back again - happens without the loading screen, because they are tiny and
     /// instant. (The customize scene is one of them even though it builds a 3D preview: it holds no level
     /// content, and the truck is a single object.)

@@ -136,21 +136,33 @@ public static class LevelProgress
     /// <summary>Locks everything but the first level and forgets what was finished.</summary>
     public static void Reset()
     {
-        loaded = true;
-        unlocked = 1;
-        cleared = 0;
-
-        Save();
-
-        if (Changed != null) Changed();
+        SetProgress(1, 0);
     }
 
     /// <summary>Opens every level but clears none - a shortcut for testing, not a cheat the game offers.</summary>
     public static void UnlockAll()
     {
+        SetProgress(LevelCount, 0);
+    }
+
+    /// <summary>
+    /// Sets progress outright, within the levels that exist.
+    ///
+    /// Everything else here moves progress in the direction the game plays it; this is the way back - restoring
+    /// a player's own progress after a testing session, or putting the saved values right from a tool. Whatever
+    /// changes, an open level list is told about it through <see cref="Changed"/> and redraws its locks.
+    /// </summary>
+    public static void SetProgress(int unlockedUpTo, int clearedUpTo)
+    {
         loaded = true;
-        unlocked = LevelCount;
-        cleared = 0;
+
+        int wantedUnlocked = Mathf.Clamp(unlockedUpTo, 1, LevelCount);
+        int wantedCleared = Mathf.Clamp(clearedUpTo, 0, LevelCount);
+
+        if (wantedUnlocked == unlocked && wantedCleared == cleared) return;
+
+        unlocked = wantedUnlocked;
+        cleared = wantedCleared;
 
         Save();
 

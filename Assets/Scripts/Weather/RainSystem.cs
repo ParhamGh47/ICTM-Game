@@ -177,6 +177,14 @@ public class RainSystem : MonoBehaviour
 
     private readonly RaycastHit[] groundHits = new RaycastHit[16];
 
+    // The rain as it was authored, before any preset took its share - kept so a change of preset scales from
+    // the original rather than from the last reduced value.
+    private bool qualityApplied;
+    private int authoredFarMaxParticles;
+    private float authoredFarRate;
+    private int authoredSplashMaxParticles;
+    private float authoredSplashRate;
+
     private float intensity;
     private float splashGroundY = float.NaN;
     private float nextGroundSample;
@@ -206,6 +214,8 @@ public class RainSystem : MonoBehaviour
 
         if (streaksFar == null && streaksNear == null && splashes == null)
             Rebuild();
+
+        ApplyQualityScale();
 
         intensity = EvaluateIntensity(EvaluateProgress());
         currentIntensity = intensity;
@@ -450,6 +460,42 @@ public class RainSystem : MonoBehaviour
     public void PreviewIntensity(float value)
     {
         ApplyIntensity(value);
+    }
+
+    /// <summary>
+    /// Takes the graphics preset's share off the rain.
+    ///
+    /// Rain is the heaviest thing this game draws - the far layer alone is built for twenty thousand drops, and
+    /// they are all stretched billboards over the whole screen - so it is the first place a smaller machine
+    /// needs help. What it does here is thin the drops and slow them down per second, not stop the rain: the
+    /// streaks keep their size, their colour and their fall, so a rainy level still looks like a rainy level at
+    /// every preset, with less work behind it.
+    ///
+    /// The values on the component are the ones to tune - this only scales them, and only once, so calling it
+    /// again (a preset change, a scene load) never compounds the reduction.
+    /// </summary>
+    public void ApplyQualityScale()
+    {
+        if (!qualityApplied)
+        {
+            authoredFarMaxParticles = farMaxParticles;
+            authoredFarRate = farRate;
+            authoredSplashMaxParticles = splashMaxParticles;
+            authoredSplashRate = splashRate;
+
+            qualityApplied = true;
+        }
+
+        float scale = GraphicsQuality.ParticleScale;
+
+        farMaxParticles = GraphicsQuality.ScaleCount(authoredFarMaxParticles, scale, 300);
+        farRate = GraphicsQuality.ScaleRate(authoredFarRate, scale, 150f);
+        splashMaxParticles = GraphicsQuality.ScaleCount(authoredSplashMaxParticles, scale, 150);
+        splashRate = GraphicsQuality.ScaleRate(authoredSplashRate, scale, 150f);
+
+        // The layers are updated from these fields every frame, so re-applying the strength is what moves the
+        // live systems onto the new numbers - no rebuild, and therefore no visible break in the weather.
+        ApplyIntensity(intensity);
     }
 
     private void ApplyStreakLayer(ParticleSystem system, float amount, float rate, int maxParticles,

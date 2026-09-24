@@ -188,6 +188,11 @@ public class SpeedMotionBlur : MonoBehaviour
     private const string ShaderName = "Hidden/Freebuff/SpeedMotionBlur";
     private const string ShaderResourcePath = "Shaders/SpeedMotionBlur";
 
+    // The tap count and streak length the component was authored with. The graphics preset takes its share off
+    // these rather than replacing them, so what is set in the scene stays the value to tune.
+    private int authoredSamples;
+    private float authoredMaxBlur;
+
     private Camera cam;
     private CarController car;
 
@@ -278,6 +283,11 @@ public class SpeedMotionBlur : MonoBehaviour
         cam = GetComponent<Camera>();
         focusNow = focus;
 
+        authoredSamples = samples;
+        authoredMaxBlur = maxBlur;
+
+        ApplyQuality();
+
         Shader shader = Resources.Load<Shader>(ShaderResourcePath);
 
         if (shader == null) shader = Shader.Find(ShaderName);
@@ -292,6 +302,40 @@ public class SpeedMotionBlur : MonoBehaviour
 
         material = new Material(shader);
         material.hideFlags = HideFlags.HideAndDontSave;
+    }
+
+    /// <summary>
+    /// Takes this machine's share of the blur away, and switches the effect off entirely if the player has
+    /// turned it off in the options.
+    ///
+    /// The taps are what this costs - each one is another read along the streak - so the smallest preset keeps
+    /// half of them and shortens the streaks a little to match. What the effect *does* is never changed: at
+    /// every preset it still smears the sides of the picture as the truck picks up speed, because that is the
+    /// part a racing game cannot do without.
+    /// </summary>
+    public void ApplyQuality()
+    {
+        samples = Mathf.Clamp(Mathf.RoundToInt(authoredSamples * GraphicsQuality.BlurSampleScale), 2, 24);
+        maxBlur = authoredMaxBlur * GraphicsQuality.BlurLengthScale;
+
+        // The player's own switch disables the component outright: switched off this way the frame is never
+        // copied at all, where blitting it through untouched would still pay for the copy every frame.
+        enabled = GraphicsQuality.MotionBlur;
+    }
+
+    /// <summary>Re-applies the settings to every blur in a scene, e.g. after the options screen was used.</summary>
+    public static void RefreshAll(Scene scene)
+    {
+        if (!scene.IsValid() || !scene.isLoaded) return;
+
+        SpeedMotionBlur[] blurs = Object.FindObjectsOfType<SpeedMotionBlur>();
+
+        for (int i = 0; i < blurs.Length; i++)
+        {
+            if (blurs[i] == null || blurs[i].gameObject.scene != scene) continue;
+
+            blurs[i].ApplyQuality();
+        }
     }
 
     private void OnDestroy()

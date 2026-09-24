@@ -55,6 +55,7 @@ GameObject:
   m_Component:
   - component: {fileID: 6530950631188464440}
   - component: {fileID: 6530950631188464441}
+  - component: {fileID: 940000000000000003}
   m_Layer: 0
   m_Name: ShareTheRoad
   m_TagString: Untagged
@@ -197,3 +198,15 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 400000, guid: fd62f89c7487ff744bb624646ac4e767, type: 3}
   m_PrefabInstance: {fileID: 6530950631336026114}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &940000000000000003
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6530950631188464442}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4b7c9e21f8a34d60b5c2e73a91d4f806, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 

@@ -4936,7 +4936,7 @@ MonoBehaviour:
   roadCheckDistance: 2.5
   resetForwardTolerance: 6
   resetBackOffNodes: 2
-  resetBackOffMetres: 300
+  resetBackOffMetres: 150
   enableFocus: 1
   focusTag: Adamak
   focusDistance: 10

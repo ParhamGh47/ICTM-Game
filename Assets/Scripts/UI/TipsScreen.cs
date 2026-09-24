@@ -11,7 +11,9 @@ using UnityEngine.UI;
 /// screen's palette (dark navy background, orange accent, light labels).
 ///
 /// Add or reword entries in the <see cref="tips"/> array - they are numbered automatically.
-/// Escape, a click on BACK or the bottom-right button returns to the main menu.
+/// Escape, the gamepad's B button, or a click on BACK returns to the main menu. The scene's
+/// <see cref="MenuNavigation"/> gives BACK the keyboard and pad highlight, so the one button here can be
+/// reached without a mouse.
 /// </summary>
 [DisallowMultipleComponent]
 public class TipsScreen : MonoBehaviour
@@ -72,8 +74,11 @@ public class TipsScreen : MonoBehaviour
 
     private void Update()
     {
+        // Escape on the keyboard, B / circle on a gamepad - the project's "Cancel" axis carries both - so a
+        // pad has the same way out as the keys, and it leaves through the fade rather than cutting the
+        // scene the way EscBack does elsewhere.
         if (leaving) return;
-        if (Input.GetKeyDown(KeyCode.Escape)) Leave();
+        if (Input.GetKeyDown(KeyCode.Escape) || Input.GetButtonDown("Cancel")) Leave();
     }
 
     // ---------------------------------------------------------------- leaving

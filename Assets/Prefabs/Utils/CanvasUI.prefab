@@ -5205,7 +5205,7 @@ MonoBehaviour:
   firstButtonName: restart
   selectOnEnable: 1
   keepSelectionAlive: 1
-  rememberLast: 1
+  rememberLast: 0
 --- !u!1 &6890820112049706535
 GameObject:
   m_ObjectHideFlags: 0

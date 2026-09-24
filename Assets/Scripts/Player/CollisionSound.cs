@@ -43,12 +43,6 @@ public class CollisionSound : MonoBehaviour
     [Range(0f, 89f)]
     public float undersideAngle = 55f;
 
-    [Header("Targets")]
-    [Tooltip("Tag of the things the truck is meant to run into. A target's own effect is the show when it " +
-             "is hit, so no impact particle is spawned for one. The tag is looked for up the collider's " +
-             "parents, because a target carries it on the prefab's root and its colliders on its parts.")]
-    public string noParticleTag = "Adamak";
-
     private float lastPlayTime = -999f;
     private Vector3 lastVelocity;
 
@@ -117,8 +111,12 @@ public class CollisionSound : MonoBehaviour
             audioSource.PlayOneShot(chosenClip, chosenVolume);
         }
 
+        // The dust is for the world - a kerb, a barrier, a landing - and not for things that bring their
+        // own effect: a target dying, or the roadside signs the truck is not meant to feel crashing into.
+        // Those carry NoImpactParticles, looked for up from the collider that was actually touched, so it
+        // does not matter which part of them the truck caught.
         if (impactParticlePrefab != null && collision.contacts.Length > 0 &&
-            !CarriesTag(collision.collider.transform, noParticleTag))
+            collision.collider.GetComponentInParent<NoImpactParticles>() == null)
         {
             ContactPoint contact = collision.contacts[0];
             GameObject particles = Instantiate(impactParticlePrefab, contact.point, Quaternion.LookRotation(contact.normal));
@@ -165,25 +163,5 @@ public class CollisionSound : MonoBehaviour
         }
 
         return true;
-    }
-
-
-    /// <summary>
-    /// Whether anything up this collider's parents carries the tag. A target keeps its tag on the prefab's
-    /// root and its colliders on its own parts, so the collider the truck actually touched never has it.
-    /// </summary>
-    private static bool CarriesTag(Transform part, string tag)
-    {
-        if (string.IsNullOrEmpty(tag) || part == null)
-            return false;
-
-        Transform current = part;
-        while (current != null)
-        {
-            if (current.CompareTag(tag)) return true;
-            current = current.parent;
-        }
-
-        return false;
     }
 }

@@ -142,7 +142,9 @@ public class CreditsScreen : MonoBehaviour
     {
         if (leaving || roll == null) return;
 
-        if (Input.GetKeyDown(KeyCode.Escape) || Input.GetMouseButtonDown(0))
+        // Escape and the gamepad's B button both come through the project's "Cancel" axis, so a pad has the
+        // same way out as the keys; a click anywhere leaves too, as it always has.
+        if (Input.GetKeyDown(KeyCode.Escape) || Input.GetButtonDown("Cancel") || Input.GetMouseButtonDown(0))
         {
             Leave();
             return;

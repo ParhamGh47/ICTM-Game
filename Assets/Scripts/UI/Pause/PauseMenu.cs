@@ -1,16 +1,41 @@
+using TMPro;
 using UnityEngine;
 
+/// <summary>
+/// The pause menu: the window, the music that plays behind it, and the two screens it holds - the pause
+/// buttons themselves and the options.
+///
+/// The options are built in code and live inside this same window (see <see cref="PauseOptionsPanel"/>): the
+/// pause panel's own buttons are put away while they are open and come back when they close, so there is no
+/// second page and no second background, and nothing in the pause panel's artwork had to change to make room
+/// for them. Whatever the pause window happens to be holding is what gets put away, so a button added to the
+/// pause menu later is handled without touching this script.
+///
+/// The old keyboard-diagram panel is still in the prefab and still referenced here for the case where the
+/// pause window itself is missing, but it is no longer what the pause menu's options button opens - the
+/// options panel holds the same table, read from <see cref="ControlBindings"/> so it cannot drift from the
+/// game.
+/// </summary>
 public class PauseMenu : MonoBehaviour
 {
     [Header("Panels")]
     public GameObject pausePanel;
+
+    [Tooltip("The pre-options keyboard diagram. Kept only as a fallback for a pause panel with no window to " +
+             "build the options in; the options panel is what the button opens.")]
     public GameObject controlsPanel;
+
+    [Header("Options")]
+    [Tooltip("The font the options are written in. Leave empty for the project's default TMP font.")]
+    public TMP_FontAsset optionsFont;
 
     [Header("Pause Music")]
     public AudioSource pauseMusic;
 
     private bool isPaused = false;
     private bool controlsOpen = false;
+
+    private PauseOptionsPanel options;
 
     void Start()
     {
@@ -44,6 +69,7 @@ public class PauseMenu : MonoBehaviour
         {
             if (controlsOpen)
             {
+                // Out of the options first, the way a back button does, and out of the pause menu from there.
                 CloseControls();
             }
             else if (isPaused)
@@ -67,6 +93,10 @@ public class PauseMenu : MonoBehaviour
         if (controlsPanel != null)
             controlsPanel.SetActive(false);
 
+        // If the pause menu was left open on the options, it always comes back to its own buttons.
+        if (options != null)
+            options.Close();
+
         Time.timeScale = 0f;
         AudioListener.pause = true;
 
@@ -81,6 +111,9 @@ public class PauseMenu : MonoBehaviour
     {
         isPaused = false;
         controlsOpen = false;
+
+        if (options != null)
+            options.Close();
 
         if (pausePanel != null)
             pausePanel.SetActive(false);
@@ -97,10 +130,29 @@ public class PauseMenu : MonoBehaviour
             PauseTracker.Instance.isPaused = false;
     }
 
+    /// <summary>
+    /// Opens the options inside the pause window. Named for the button that calls it rather than for what it
+    /// shows, because the pause panel's own button still points at this method.
+    /// </summary>
     public void OpenControls()
     {
         controlsOpen = true;
-        ShowPanel(controlsPanel);
+
+        if (pausePanel == null)
+        {
+            // No window to put them in - this scene's pause menu is the old shape. Show what it has.
+            ShowPanel(controlsPanel);
+            return;
+        }
+
+        if (options == null)
+        {
+            // Built against the window's own frame, so the layout is in the window's coordinates whatever the
+            // canvas scales to.
+            options = PauseOptionsPanel.Create(this, pausePanel.transform as RectTransform, optionsFont);
+        }
+
+        options.Open();
     }
 
     /// <summary>
@@ -121,9 +173,17 @@ public class PauseMenu : MonoBehaviour
         panel.SetActive(true);
     }
 
+    /// <summary>Closes the options, giving the pause window's own buttons back.</summary>
     public void CloseControls()
     {
         controlsOpen = false;
+
+        if (options != null)
+        {
+            options.Close();
+            return;
+        }
+
         if (controlsPanel != null)
             controlsPanel.SetActive(false);
     }

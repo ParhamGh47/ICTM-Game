@@ -15,12 +15,14 @@ using UnityEngine;
 ///    shoulder - which is to its own right on both lanes of both directions - and lets the player past.
 ///    The horn reports itself through <see cref="ReportHorn"/> because it lives in the player's assembly,
 ///    which a car cannot reference.
-///  - <b>Being knocked off its wheels</b>: once it is tipped past <see cref="uprightLimit"/> it stops
-///    being driven and is left to the physics until it comes to rest, then frozen. That is what stops
-///    the old kangaroo hop - the drive used to keep forcing position and rotation onto a body lying on
-///    its side, so every collision resolution threw it into the air again.
-/// </summary>
-[RequireComponent(typeof(Rigidbody))]
+///  - <b>Being knocked about</b>: once it is tipped past <see cref="uprightLimit"/> it stops being driven
+///    and is left to the physics until it comes to rest. That is what stops the old kangaroo hop - the
+///    drive used to keep forcing position and rotation onto a body lying on its side, so every collision
+///    resolution threw it into the air again. When it has settled, a car that is still on its wheels and
+///    has ground under it is put back on the nearest waypoint ahead of it and drives on - being shoved off
+///    the road is not meant to be a life sentence - while one that has ended up on its roof, or resting on
+///    nothing at all, is left standing where it lies.
+/// </summary>    [RequireComponent(typeof(Rigidbody))]
 public class AICarController : MonoBehaviour
 {
     [Header("Waypoints")]
@@ -36,6 +38,11 @@ public class AICarController : MonoBehaviour
     private int currentWaypoint;
 
     [Header("Movement")]
+    [Tooltip("The lightest a car is allowed to be. A prefab's own rigidbody mass is what the car actually " +
+             "weighs - that is the dial to turn for a heavier or lighter car - and this is only a floor under " +
+             "it, so a prefab that was never given one does not behave like a shopping trolley.")]
+    public float minimumMass = 800f;
+
     public float speedKPH = 60f;
     public float turnSpeed = 6f;
     public float maxSteerAngle = 35f;
@@ -96,9 +103,18 @@ public class AICarController : MonoBehaviour
     [Tooltip("How long it must stay that calm before it is frozen where it lies.")]
     public float settleTime = 0.75f;
 
-    [Tooltip("A hard stop on the waiting: a knocked-over car that is somehow still rolling is frozen " +
+    [Tooltip("A hard stop on the waiting: a knocked-over car that is somehow still rolling is looked at " +
              "anyway after this long, so it can never wander off down the level.")]
     public float settleTimeout = 8f;
+
+    [Tooltip("How far below itself a settled car looks for ground before it is allowed to drive again. A " +
+             "car that has come to rest with nothing underneath it - wedged in a tree, hung on a wall - has " +
+             "nowhere to drive from, so it is left where it is.")]
+    public float groundCheckDistance = 2.5f;
+
+    [Tooltip("Stand a recovered car back up on its wheels - keeping the heading it ended up with, dropping " +
+             "the lean the collision gave it - before driving it on.")]
+    public bool levelOnRecovery = true;
 
     Rigidbody rb;
     float speedMS;
@@ -112,14 +128,24 @@ public class AICarController : MonoBehaviour
     float yieldUntil;
     float hornSeen = float.NegativeInfinity;
 
-    // Set once the car is no longer on its wheels, and never cleared: it stays where it fell.
+    // Set while the car is not being driven: tipped past the upright limit, or shoved off its line. Cleared
+    // again once it has come to rest somewhere it can still drive from.
     bool knockedOver;
+
+    // Set when it has settled somewhere it can never drive from - on its roof or side, or resting on nothing
+    // at all. It stays there, and nothing is run on it again.
+    bool stranded;
+
     float settleTimer;
     float knockedTimer;
+
+    // Said once per session rather than once per car, because a scene can hold dozens of them.
+    static bool reportedMissingPath;
 
     // Shared so the probe costs no allocation every step. Used and done with inside one call, so it is
     // safe to share between cars.
     private static readonly Collider[] obstacleHits = new Collider[32];
+    private static readonly RaycastHit[] groundHits = new RaycastHit[8];
 
     // ---------------------------------------------------------------- the horn
 
@@ -146,7 +172,12 @@ public class AICarController : MonoBehaviour
         rb = GetComponent<Rigidbody>();
 
         rb.isKinematic = false;
-        rb.mass = 2000f;
+
+        // The mass is the car prefab's own - a 911 is a light car and a truck is not, and how a car is thrown
+        // by a hit is most of what tells them apart. Only a car left at (or near) Unity's default is brought
+        // up to something drivable, which is what keeps a prefab made in a hurry from flying off the road.
+        if (rb.mass < minimumMass) rb.mass = minimumMass;
+
         rb.drag = 0.5f;
         rb.angularDrag = 5f;
         rb.interpolation = RigidbodyInterpolation.Interpolate;
@@ -160,7 +191,23 @@ public class AICarController : MonoBehaviour
 
     void CacheWaypoints()
     {
-        if (!waypointsRoot) return;
+        if (!waypointsRoot)
+        {
+            // A car with no path is not driven at all - <see cref="MoveCar"/> has nothing to aim at - so it
+            // stands where it was put, which is easy to mistake for a car that simply refuses to move. It is
+            // what an earlier paint run leaves behind: painting rebuilds the waypoint paths, and the cars of
+            // the run before are left pointing at objects that no longer exist.
+            if (!reportedMissingPath)
+            {
+                reportedMissingPath = true;
+                Debug.LogWarning(
+                    $"{name} has no waypoint path, so it cannot be driven and will stand still. Cars left " +
+                    "over from an earlier paint run look like this - painting again (Tools > Road Tools > " +
+                    "Paint Passing Cars) replaces the whole batch and clears them up.", this);
+            }
+
+            return;
+        }
 
         int count = waypointsRoot.childCount;
         waypoints = new Transform[count];
@@ -173,17 +220,17 @@ public class AICarController : MonoBehaviour
 
     void FixedUpdate()
     {
+        if (stranded) return;
+
         if (knockedOver)
         {
-            SettleDown();
+            Recover();
             return;
         }
 
         if (!IsOnItsWheels())
         {
-            knockedOver = true;
-            settleTimer = 0f;
-            knockedTimer = 0f;
+            KnockOffLine();
             return;
         }
 
@@ -396,18 +443,31 @@ public class AICarController : MonoBehaviour
         rb.velocity = velocity;
     }
 
-    // --------------------------------------------------------- knocked over
+    // --------------------------------------------------------- knocked about
 
     bool IsOnItsWheels()
     {
         return Vector3.Angle(transform.up, Vector3.up) <= uprightLimit;
     }
 
+    /// <summary>Stops driving the car and hands it to the physics, which is what makes the hit read.</summary>
+    void KnockOffLine()
+    {
+        knockedOver = true;
+        settleTimer = 0f;
+        knockedTimer = 0f;
+    }
+
     /// <summary>
-    /// A car that is no longer on its wheels is left entirely to the physics until it has come to rest,
-    /// and then frozen where it lies: it stands still instead of being driven along on its side.
+    /// A car that is no longer being driven is left entirely to the physics until it has come to rest - and
+    /// then it is looked at: one that is still the right way up with ground under it is put back on its path
+    /// and drives on, while one that has ended up on its side or on nothing at all is left standing there.
+    ///
+    /// This is the one place the drive is ever re-attached, so it is deliberately slow to judge: the car has
+    /// to be calm (or to have been rolling about for <see cref="settleTimeout"/> seconds) before anything is
+    /// decided, which is what keeps the old kangaroo hop from coming back.
     /// </summary>
-    void SettleDown()
+    void Recover()
     {
         if (rb.isKinematic) return;
 
@@ -420,9 +480,119 @@ public class AICarController : MonoBehaviour
 
         if (settleTimer < settleTime && knockedTimer < settleTimeout) return;
 
+        if (!IsOnItsWheels() || !IsOnTheGround())
+        {
+            Strand();
+            return;
+        }
+
+        ResumeDriving();
+    }
+
+    /// <summary>
+    /// Leaves the car standing where it is for the rest of the level: on its roof or its side, or with
+    /// nothing under it to drive on. Frozen so that nothing - not the drive, not a collision - moves it again.
+    /// </summary>
+    void Strand()
+    {
         rb.velocity = Vector3.zero;
         rb.angularVelocity = Vector3.zero;
         rb.isKinematic = true;
+        stranded = true;
+    }
+
+    /// <summary>
+    /// Puts a settled car back on its path: aim it at the nearest waypoint that is not behind it, stand it
+    /// back up if a collision left it leaning, and let the drive take over again.
+    /// </summary>
+    void ResumeDriving()
+    {
+        knockedOver = false;
+        settleTimer = 0f;
+        knockedTimer = 0f;
+
+        if (waypoints == null || waypoints.Length == 0)
+        {
+            // Nothing to drive along at all: better left standing than shoved around by a drive with no aim.
+            Strand();
+            return;
+        }
+
+        if (levelOnRecovery)
+        {
+            // Its heading is kept and the lean is dropped, so it carries on the way it was pointing rather
+            // than driving on at an angle with its skirts in the road.
+            rb.MoveRotation(Quaternion.Euler(0f, rb.rotation.eulerAngles.y, 0f));
+        }
+
+        currentWaypoint = NearestWaypointAhead();
+
+        // Whatever it was going around before the hit is no longer its business.
+        avoidOffset = 0f;
+    }
+
+    /// <summary>
+    /// The waypoint a car that has been knocked off its line should head for: the nearest one, preferring a
+    /// waypoint it is actually facing so a car that came to rest pointing along the road carries on along it
+    /// instead of turning round. If every waypoint is behind it - it ended up facing the wrong way - the
+    /// nearest one wins and the ordinary steering turns it back onto its path.
+    /// </summary>
+    int NearestWaypointAhead()
+    {
+        Vector3 forward = transform.forward;
+
+        int nearest = currentWaypoint;
+        int nearestFacing = -1;
+        float nearestDistance = float.MaxValue;
+        float nearestFacingDistance = float.MaxValue;
+
+        for (int i = 0; i < waypoints.Length; i++)
+        {
+            Transform waypoint = waypoints[i];
+            if (waypoint == null) continue;
+
+            Vector3 to = waypoint.position - transform.position;
+            to.y = 0f;
+
+            float distance = to.sqrMagnitude;
+            if (distance < nearestDistance)
+            {
+                nearestDistance = distance;
+                nearest = i;
+            }
+
+            if (distance < nearestFacingDistance && Vector3.Dot(to.normalized, forward) > 0.2f)
+            {
+                nearestFacingDistance = distance;
+                nearestFacing = i;
+            }
+        }
+
+        return nearestFacing >= 0 ? nearestFacing : nearest;
+    }
+
+    /// <summary>
+    /// Whether there is anything at all under the car to drive on - the road, the ground, a bridge. Its own
+    /// colliders are ignored, and so is anything on a car (a car resting on another car's roof has nowhere
+    /// useful to go).
+    /// </summary>
+    bool IsOnTheGround()
+    {
+        int count = Physics.RaycastNonAlloc(
+            transform.position + Vector3.up * 0.5f, Vector3.down, groundHits, groundCheckDistance,
+            ~0, QueryTriggerInteraction.Ignore);
+
+        for (int i = 0; i < count; i++)
+        {
+            Collider hit = groundHits[i].collider;
+            if (hit == null) continue;
+            if (hit.transform.IsChildOf(transform)) continue;
+            if (hit.GetComponentInParent<AICarController>() != null) continue;
+
+            return true;
+        }
+
+        return false;
     }
 
     void UpdateWheelVisuals()

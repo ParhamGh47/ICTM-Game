@@ -14,6 +14,11 @@ using System.Collections.Generic;
 ///    again. Cars follow the loop forever, so none ever reaches the end of the
 ///    path and dies. Forward cars turn at "Turnaround %", reverse cars at
 ///    100 - Turnaround %.
+///  - Painting REPLACES the previous batch: whatever is under "PassingCars" is
+///    removed first, then the paths and the cars are built again from the road.
+///    Without that, a second run would leave the first run's cars behind - and
+///    since the paths they point at are rebuilt (the old objects destroyed),
+///    those cars would have no path at all and would stand still forever.
 ///  - Each car is placed EXACTLY on its own waypoint and gets
 ///    AICarController.startingWaypoint = that waypoint's index, so it starts
 ///    by advancing to the NEXT waypoint and drives forward. (Without this,
@@ -31,6 +36,11 @@ using System.Collections.Generic;
 ///  - "Lights On" decides whether spawned cars drive with their headlights on:
 ///    the LightL/LightR spotlights are enabled and the lens material is swapped
 ///    to its emissive "lit" variant (206: LightOff206 -> Light206).
+///  - Headlights are also tinted per car, from the small palette in
+///    <see cref="HeadlightColors"/>: four colours of lamp, each car drawing its
+///    own off a shuffled deck like the paint does, so a lane of traffic does not
+///    all glow the same white. Both the spotlight and the glow on the lens are
+///    tinted, so the pool of light on the road matches the lamp it comes from.
 ///
 /// Usage: open a scene with a RoadArchitect road, then:
 ///   Tools > Road Tools > Paint Passing Cars
@@ -38,6 +48,11 @@ using System.Collections.Generic;
 public class PassingCarsSpawner : EditorWindow
 {
     private const string ParentName = "PassingCars";
+
+    // What the window was last set to, kept in EditorPrefs so it survives a Unity restart. Painting replaces
+    // the whole batch now, so a second run has to be able to reproduce the first one exactly - "how many cars
+    // per lane was this?" is not a question anyone should have to answer twice.
+    private const string PrefsPrefix = "ICTM.PassingCarsSpawner.";
 
     // Waypoint spacing along the road, in meters. Dense enough that cars hug
     // the curves, sparse enough to keep object counts low.
@@ -77,6 +92,8 @@ public class PassingCarsSpawner : EditorWindow
 
     void OnEnable()
     {
+        LoadSettings();
+
         if (targetRoad == null)
         {
             var roads = FindObjectsOfType<Road>();
@@ -245,11 +262,13 @@ public class PassingCarsSpawner : EditorWindow
         // ---- Headlights -----------------------------------------------------
         lightsOn = EditorGUILayout.Toggle(new GUIContent("Lights On",
             "Spawned cars drive with headlights on: LightL/LightR spotlights " +
-            "enabled and the lens material swapped to its emissive variant."), lightsOn);
+            "enabled, each car given its own headlight colour, and the lens " +
+            "material swapped to its emissive variant."), lightsOn);
         EditorGUILayout.LabelField(
             "Enables the LightL/LightR spotlights and the emissive lens material " +
             "(206: Light206). The 911 has no separate off-material, so it only " +
-            "gets the spotlights.",
+            "gets the spotlights. Headlight colours: " + HeadlightColors.Length +
+            " (warm white, white, cool blue-white, amber), one per car.",
             EditorStyles.miniLabel);
 
         EditorGUILayout.Space();
@@ -282,6 +301,10 @@ public class PassingCarsSpawner : EditorWindow
 
     void PaintCars()
     {
+        // Re-scanned here as well as when the window opens, so a car prefab dropped into the folder while the
+        // window was sitting open still joins the fleet on the next paint.
+        FindCarPrefabs();
+
         if (targetRoad == null || targetRoad.spline == null || carPrefabs.Length == 0)
         {
             Debug.LogError("Cannot paint: missing road or car prefabs");
@@ -319,11 +342,17 @@ public class PassingCarsSpawner : EditorWindow
             "Each direction turns around at the END of its own stretch (not the same " +
             "point in the middle) and shuttles back and forth forever - no car gets " +
             "stuck at the end of the path.\n\n" +
+            $"Whatever an earlier run left under '{ParentName}' is replaced, so painting " +
+            "twice gives one batch of cars rather than two.\n\n" +
             "This action can be undone (Ctrl+Z).",
             "Paint", "Cancel"))
         {
             return;
         }
+
+        // Remembered as soon as the paint is agreed to, so a run that then fails halfway does not take the
+        // settings down with it.
+        SaveSettings();
 
         System.Random rng = new System.Random();
 
@@ -333,6 +362,8 @@ public class PassingCarsSpawner : EditorWindow
         unpaintedSample = null;
 
         GameObject parent = FindOrCreateParent(ParentName);
+        ClearPreviousPaint(parent);
+
         int created = 0;
 
         // Forward lane: shuttles out along the spline (+right side) to its turnaround.
@@ -489,7 +520,7 @@ public class PassingCarsSpawner : EditorWindow
             }
 
             ApplyRandomColor(carObj, rng);
-            ApplyLightState(carObj, lightsOn);
+            ApplyLightState(carObj, lightsOn, NextHeadlightColor(rng));
             created++;
         }
 
@@ -688,24 +719,77 @@ public class PassingCarsSpawner : EditorWindow
         return false;
     }
 
+    // The lamp colours a passing car may be given. Deliberately the colours a bulb actually comes in - the
+    // warm white the prefabs already use, a plain white, a cool blue-white (xenon) and an amber - rather than
+    // anything that would read as an effect. Four is enough for a lane of traffic to look varied.
+    private static readonly Color[] HeadlightColors =
+    {
+        new Color(1f, 0.9725f, 0.8078f),   // warm white, the colour the car prefabs are authored with
+        new Color(1f, 1f, 0.9608f),        // plain white
+        new Color(0.78f, 0.87f, 1f),       // cool blue-white
+        new Color(1f, 0.76f, 0.42f),       // amber
+    };
+
+    // The headlight colours as a shuffled deck, so a run spreads over all four before any repeats.
+    private List<Color> headlightDeck;
+    private int headlightDeckIndex;
+
+    /// <summary>
+    /// The next lamp colour off a shuffled draw, the same way the body paint is handed out, so a fleet shows
+    /// every colour before one comes round again.
+    /// </summary>
+    Color NextHeadlightColor(System.Random rng)
+    {
+        if (headlightDeck == null || headlightDeckIndex >= headlightDeck.Count)
+        {
+            headlightDeck = new List<Color>(HeadlightColors);
+
+            for (int i = headlightDeck.Count - 1; i > 0; i--)
+            {
+                int j = rng.Next(i + 1);
+                Color swap = headlightDeck[i];
+                headlightDeck[i] = headlightDeck[j];
+                headlightDeck[j] = swap;
+            }
+
+            headlightDeckIndex = 0;
+        }
+
+        return headlightDeck[headlightDeckIndex++];
+    }
+
     // Turns the car's headlights on/off after painting. Matches the manual
     // level-1 setup: LightL/LightR spotlights plus an emissive lens material
     // when available (206 ships Light206 / LightOff206).
-    void ApplyLightState(GameObject carObj, bool on)
+    void ApplyLightState(GameObject carObj, bool on, Color tint)
     {
-        // 1) Real spotlight components (LightL / LightR).
+        // 1) Real spotlight components (LightL / LightR), each car its own colour.
         var lights = carObj.GetComponentsInChildren<Light>(true);
         foreach (var l in lights)
         {
             if (l == null) continue;
             Undo.RecordObject(l, "Set Passing Car Lights");
             l.enabled = on;
+            l.color = tint;
         }
 
-        // 2) Lens material with an "off" twin (206: Light206 <-> LightOff206).
-        // The twin is a separate asset sitting next to the lit one, so it is
-        // derived by name through the AssetDatabase instead of being searched
-        // on the car (the prefab only ever carries one of the two).
+        // 2) The lens material, lit or not (206: Light206 <-> LightOff206).
+        ApplyLensMaterial(carObj, on);
+
+        // 3) And the glow on the lens, so the bright bit matches the pool of light the spotlight throws. Last,
+        //    because it is the LIT material that glows - tinting the unlit one would set a colour on something
+        //    that emits nothing, and the swap above would then put the untinted lit one back on.
+        TintLensGlow(carObj, tint);
+    }
+
+    /// <summary>
+    /// Swaps the car's lens between its lit and unlit materials (206: Light206 <-> LightOff206). The twin is a
+    /// separate asset sitting next to the lit one, so it is derived by name through the AssetDatabase rather
+    /// than searched for on the car - a prefab only ever carries one of the two. A car with no lens material of
+    /// its own, like the 911, is left alone.
+    /// </summary>
+    void ApplyLensMaterial(GameObject carObj, bool on)
+    {
         Material lens = FindLensMaterial(carObj);
         if (lens == null) return; // e.g. the 911 has no separate lens material
 
@@ -755,6 +839,39 @@ public class PassingCarsSpawner : EditorWindow
         }
     }
 
+    /// <summary>
+    /// Tints the glow on a car's lens to match the lamp it belongs to.
+    ///
+    /// The lens is a shared material (206: Light206, yellow-white and hot), so the colour cannot go on the
+    /// material itself without recolouring every car in the level. It goes on the renderer as a property
+    /// block instead, which is per car and leaves the asset alone - and the material's own brightness is kept,
+    /// so the glow stays as hot as it was and only its colour changes.
+    /// </summary>
+    void TintLensGlow(GameObject carObj, Color tint)
+    {
+        var renderers = carObj.GetComponentsInChildren<MeshRenderer>(true);
+
+        foreach (var renderer in renderers)
+        {
+            foreach (Material mat in renderer.sharedMaterials)
+            {
+                if (mat == null) continue;
+                if (!mat.name.StartsWith("Light")) continue;
+                if (!mat.HasProperty("_EmissionColor")) return;
+
+                Color emission = mat.GetColor("_EmissionColor");
+                float brightness = Mathf.Max(emission.r, Mathf.Max(emission.g, emission.b));
+                if (brightness <= 0f) return;   // nothing glowing on this car
+
+                var block = new MaterialPropertyBlock();
+                renderer.GetPropertyBlock(block);
+                block.SetColor("_EmissionColor", tint * brightness);
+                renderer.SetPropertyBlock(block);
+                return;
+            }
+        }
+    }
+
     // First headlight-lens material found on the car (206: "Light206" or
     // "LightOff206"). Null when the car has none - then only the spotlights
     // get toggled.
@@ -770,6 +887,33 @@ public class PassingCarsSpawner : EditorWindow
             }
         }
         return null;
+    }
+
+    /// <summary>
+    /// Removes whatever the last paint run left under the parent, cars and paths alike.
+    ///
+    /// Painting rebuilds the waypoint paths every time, which means the objects parked cars were pointing at
+    /// no longer exist afterwards - and a car with no path cannot be driven, so it stands where it was put for
+    /// the rest of the level. That is what happened to a level that had been painted twice: 120 cars, 60 of
+    /// them pointing at nothing and standing still on the road. Clearing the batch first is what makes
+    /// painting repeatable - run it ten times and there are still only the cars it was asked for, all moving.
+    /// </summary>
+    void ClearPreviousPaint(GameObject parent)
+    {
+        int removed = 0;
+
+        // Backwards: the child list shifts as each one goes.
+        for (int i = parent.transform.childCount - 1; i >= 0; i--)
+        {
+            Undo.DestroyObjectImmediate(parent.transform.GetChild(i).gameObject);
+            removed++;
+        }
+
+        if (removed > 0)
+        {
+            Debug.Log($"Replaced the previous paint run: {removed} object(s) - the paths and the cars " +
+                      "built from them - removed before painting the new ones.");
+        }
     }
 
     GameObject FindOrCreateParent(string parentName)
@@ -814,6 +958,33 @@ public class PassingCarsSpawner : EditorWindow
 
     void OnDisable()
     {
+        SaveSettings();
         EditorUtility.ClearProgressBar();
+    }
+
+    void LoadSettings()
+    {
+        startParam = EditorPrefs.GetFloat(PrefsPrefix + "startParam", startParam);
+        endParam = EditorPrefs.GetFloat(PrefsPrefix + "endParam", endParam);
+        turnParam = EditorPrefs.GetFloat(PrefsPrefix + "turnParam", turnParam);
+        carsPerDirection = EditorPrefs.GetInt(PrefsPrefix + "carsPerDirection", carsPerDirection);
+        laneOffsetAuto = EditorPrefs.GetBool(PrefsPrefix + "laneOffsetAuto", laneOffsetAuto);
+        laneOffset = EditorPrefs.GetFloat(PrefsPrefix + "laneOffset", laneOffset);
+        minSpeedKPH = EditorPrefs.GetFloat(PrefsPrefix + "minSpeedKPH", minSpeedKPH);
+        maxSpeedKPH = EditorPrefs.GetFloat(PrefsPrefix + "maxSpeedKPH", maxSpeedKPH);
+        lightsOn = EditorPrefs.GetBool(PrefsPrefix + "lightsOn", lightsOn);
+    }
+
+    void SaveSettings()
+    {
+        EditorPrefs.SetFloat(PrefsPrefix + "startParam", startParam);
+        EditorPrefs.SetFloat(PrefsPrefix + "endParam", endParam);
+        EditorPrefs.SetFloat(PrefsPrefix + "turnParam", turnParam);
+        EditorPrefs.SetInt(PrefsPrefix + "carsPerDirection", carsPerDirection);
+        EditorPrefs.SetBool(PrefsPrefix + "laneOffsetAuto", laneOffsetAuto);
+        EditorPrefs.SetFloat(PrefsPrefix + "laneOffset", laneOffset);
+        EditorPrefs.SetFloat(PrefsPrefix + "minSpeedKPH", minSpeedKPH);
+        EditorPrefs.SetFloat(PrefsPrefix + "maxSpeedKPH", maxSpeedKPH);
+        EditorPrefs.SetBool(PrefsPrefix + "lightsOn", lightsOn);
     }
 }

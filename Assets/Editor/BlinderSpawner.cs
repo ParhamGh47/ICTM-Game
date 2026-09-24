@@ -28,8 +28,9 @@ public class BlinderSpawner : EditorWindow
     private const string PrefabPath = "Assets/Prefabs/Signs/Signs/Blinder.prefab";
     private const string DefaultParentName = "Road Blinders";
 
-    /// <summary>How tall a blinder reads in the scene preview. Only a drawing aid.</summary>
-    private const float PreviewHeight = 1.3f;
+    /// <summary>How tall a blinder reads in the scene preview. Only a drawing aid, kept in step with the
+    /// Blinder prefab's own height - change this if the prefab's model is squashed further.</summary>
+    private const float PreviewHeight = 0.9f;
 
     private readonly List<RoadRouteEntry> roads = new List<RoadRouteEntry>();
 

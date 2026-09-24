@@ -79,10 +79,11 @@ public class CarController : MonoBehaviour
              "last centimetre, where the next nudge tips it straight back over the edge.")]
     public int resetBackOffNodes = 2;
 
-    [Tooltip("The furthest back that may put it, in metres. RoadArchitect nodes on these levels are 15-90 m " +
-             "apart, so two of them is sometimes most of a road; this keeps the reset near the jump the " +
-             "driver fell at rather than a hundred metres up the level.")]
-    public float resetBackOffMetres = 90f;
+    [Tooltip("The furthest back that may put it, in metres. Deliberately generous: a level's own nodes are " +
+             "15-90 m apart, so at three hundred metres this stops being the thing that decides where the car " +
+             "lands and the node count above takes over - the reset goes properly back up the last road the " +
+             "car was on instead of stopping one bend short of it.")]
+    public float resetBackOffMetres = 300f;
 
     private Road[] cachedRoads;
     private CheckpointIndicator cachedCompass;

@@ -375,6 +375,50 @@ public static class GraphicsQuality
         SpeedMotionBlur.RefreshAll(scene);
     }
 
+    /// <summary>
+    /// Whether the level that is open now would look different if it were loaded again.
+    ///
+    /// Everything a preset changes about the picture - the lights, the shadows, the anti-aliasing, the rain,
+    /// the blur - is put into effect the moment it is chosen. The one thing that cannot be is a level's ground
+    /// detail: the terrain builds it as the level loads and has no reason to build it again, so its share of a
+    /// preset waits for the next load. That is a real, visible difference - grass at 30 m against grass at
+    /// 80 m - so a screen that changes the setting while a level is open needs to be able to say so, and offer
+    /// the restart that applies it (see <see cref="PauseOptionsPanel"/>).
+    ///
+    /// Answered by looking at the terrain itself rather than by remembering that something changed, so it is
+    /// true exactly while the level really is drawn with the wrong amount of detail - including after the
+    /// player changes their mind and picks the preset the level was already using, which needs no restart.
+    /// </summary>
+    public static bool ActiveSceneNeedsReload()
+    {
+        Scene scene = SceneManager.GetActiveScene();
+        if (!scene.IsValid() || !scene.isLoaded) return false;
+
+        Settings settings = Presets[(int)Current];
+        GameObject[] roots = scene.GetRootGameObjects();
+
+        for (int i = 0; i < roots.Length; i++)
+        {
+            Terrain[] terrains = roots[i].GetComponentsInChildren<Terrain>(true);
+
+            for (int t = 0; t < terrains.Length; t++)
+                if (TerrainDiffers(terrains[t], settings)) return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>Whether a terrain draws something other than what this preset asks of it.</summary>
+    private static bool TerrainDiffers(Terrain terrain, Settings settings)
+    {
+        if (terrain == null) return false;
+
+        return !Mathf.Approximately(terrain.detailObjectDistance, settings.detailDistance)
+            || !Mathf.Approximately(terrain.detailObjectDensity, settings.detailDensity)
+            || !Mathf.Approximately(terrain.basemapDistance, settings.basemapDistance)
+            || !Mathf.Approximately(terrain.heightmapPixelError, settings.heightmapPixelError);
+    }
+
     private static void ApplyTerrain(GameObject root, Settings settings)
     {
         Terrain[] terrains = root.GetComponentsInChildren<Terrain>(true);

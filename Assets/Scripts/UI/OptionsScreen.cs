@@ -1,4 +1,3 @@
-using System;
 using System.Collections;
 using System.Collections.Generic;
 using TMPro;
@@ -23,9 +22,10 @@ using UnityEngine.UI;
 ///
 /// The settings tab holds the graphics settings, which live in <see cref="GraphicsQuality"/>: the three
 /// presets and the two switches that sit on top of them. A choice takes effect and is saved as soon as it is
-/// made - only the ground detail of a level waits for that level to load - so there is nothing to confirm.
-/// What each preset changes is described in words rather than in numbers, because the numbers are the
-/// implementation and the picture is the point.
+/// made - only the ground detail of a level waits for that level to load, and a level that is open when the
+/// choice changes asks to be restarted rather than saying so in advance (see <see cref="PauseOptionsPanel"/>).
+/// Nothing here describes what the presets do: the picture is the description, and a list of numbers beside
+/// it would be the implementation rather than the choice.
 ///
 /// A gamepad or the keyboard drives all of it through the project's own menu navigation, which finds these
 /// buttons on its own; the places where the nearest-neighbour guess is wrong - the tab row, the preset row -
@@ -37,66 +37,6 @@ public class OptionsScreen : MonoBehaviour
 {
     // ---------------------------------------------------------------- content
 
-    /// <summary>One line of the controls table: what it does, and what to press on each device.</summary>
-    [Serializable]
-    public struct ControlBinding
-    {
-        public string action;
-        public string keyboard;
-        public string gamepad;
-
-        public ControlBinding(string action, string keyboard, string gamepad)
-        {
-            this.action = action;
-            this.keyboard = keyboard;
-            this.gamepad = gamepad;
-        }
-    }
-
-    /// <summary>A titled group of bindings, so a long table reads as two short ones.</summary>
-    [Serializable]
-    public struct ControlGroup
-    {
-        public string title;
-        public ControlBinding[] bindings;
-
-        public ControlGroup(string title, params ControlBinding[] bindings)
-        {
-            this.title = title;
-            this.bindings = bindings;
-        }
-    }
-
-    /// <summary>
-    /// The controls the game reads today. W/A/S/D and the arrow keys both steer and drive, focus is held
-    /// rather than tapped (it locks the truck onto a target ahead), and the pad's face buttons are named by
-    /// position - A bottom, B right, X left, Y top - so one list covers every pad.
-    /// </summary>
-    private static readonly ControlGroup[] DefaultControls =
-    {
-        new ControlGroup("DRIVING",
-            new ControlBinding("Accelerate", "W   or   Up arrow", "Right trigger  RT"),
-            new ControlBinding("Brake / Reverse", "S   or   Down arrow", "Left trigger  LT"),
-            new ControlBinding("Steer", "A  D   or   Left / Right arrow", "Left stick"),
-            new ControlBinding("Focus  (hold)", "Space", "A"),
-            new ControlBinding("Horn", "H", "X"),
-            new ControlBinding("Headlights", "L", "B"),
-            new ControlBinding("Change camera", "C", "Y"),
-            new ControlBinding("Reset vehicle", "R", "D-pad up"),
-            new ControlBinding("Pause", "Escape", "Start")),
-
-        new ControlGroup("MENUS",
-            new ControlBinding("Move the highlight", "Arrow keys   or   W A S D", "D-pad   or   Left stick"),
-            new ControlBinding("Confirm", "Enter", "A"),
-            new ControlBinding("Back", "Escape", "B")),
-    };
-
-    private static readonly string[] DefaultNotes =
-    {
-        "Hold FOCUS to lock onto a target in front of the truck and steer onto it.",
-        "Any controller Unity recognises works - the pad column is named the way an Xbox pad is.",
-    };
-
     [Header("Content")]
     public string titleText = "OPTIONS";
     public string hintText = "ESC  TO  GO  BACK";
@@ -105,10 +45,10 @@ public class OptionsScreen : MonoBehaviour
     public string backText = "BACK";
 
     [Tooltip("The controls table. Leave empty to use the built-in one.")]
-    public ControlGroup[] controls = DefaultControls;
+    public ControlGroup[] controls = ControlBindings.All;
 
     [Tooltip("Small lines under the table, one row each. Leave empty to use the built-in ones.")]
-    public string[] notes = DefaultNotes;
+    public string[] notes = ControlBindings.Notes;
 
     // ---------------------------------------------------------------- the settings tab
 
@@ -120,20 +60,10 @@ public class OptionsScreen : MonoBehaviour
     public string motionBlurText = "MOTION BLUR";
     public string onText = "ON";
     public string offText = "OFF";
-    [Tooltip("The line under the switches.")]
+    [Tooltip("The plate beside the settings. Says how a choice is taken, not what the presets do.")]
+    [TextArea(2, 6)]
     public string settingsNoteText =
-        "Your choice is saved and applied straight away. A level's ground detail comes in with the next level you start.";
-
-    public string presetsBlurbTitle = "WHAT THE PRESETS DO";
-    [TextArea(4, 12)]
-    public string presetsBlurb =
-        "HIGH is the game as it was built: the most grass, the longest shadows, and the most lights on every " +
-        "object at once.\n\n" +
-        "MEDIUM and LOW thin the grass, bring the shadows and the ground texture in closer, and light each " +
-        "object with fewer lights, so the truck keeps its frame rate on a slower machine. Nothing is switched " +
-        "off: the lights still light, the rain still falls and the speed blur still blurs - there is simply " +
-        "less of the distance drawn to pay for it.\n\n" +
-        "Shadows and motion blur have their own switches below, on top of whichever preset is chosen.";
+        "Your choice is saved and applied straight away.";
 
     // ---------------------------------------------------------------- look
 
@@ -181,8 +111,9 @@ public class OptionsScreen : MonoBehaviour
     public float presetGap = 16f;
     public Vector2 switchSize = new Vector2(420f, 60f);
     public float switchGap = 14f;
-    public float blurbX = 1120f;
-    public float blurbWidth = 740f;
+    [Tooltip("Where the note plate sits, and how wide it is.")]
+    public float noteX = 1120f;
+    public float noteWidth = 740f;
 
     // ---------------------------------------------------------------- transition
 
@@ -437,7 +368,7 @@ public class OptionsScreen : MonoBehaviour
 
         y -= headerHeight;
 
-        ControlGroup[] groups = (controls == null || controls.Length == 0) ? DefaultControls : controls;
+        ControlGroup[] groups = (controls == null || controls.Length == 0) ? ControlBindings.All : controls;
 
         for (int g = 0; g < groups.Length; g++)
         {
@@ -455,7 +386,7 @@ public class OptionsScreen : MonoBehaviour
         }
 
         // The notes stop short of the right-hand corner, where BACK sits.
-        string[] lines = (notes == null || notes.Length == 0) ? DefaultNotes : notes;
+        string[] lines = (notes == null || notes.Length == 0) ? ControlBindings.Notes : notes;
         for (int i = 0; i < lines.Length; i++)
             y = BuildNote(page, lines[i], y, ContentWidth - 420f);
     }
@@ -498,7 +429,7 @@ public class OptionsScreen : MonoBehaviour
     {
         float y = contentTopY;
 
-        BuildBlurb(page);
+        BuildSettingsNote(page);
 
         y = BuildCaption(page, graphicsCaption, y, accentColor, captionSize);
 
@@ -546,46 +477,35 @@ public class OptionsScreen : MonoBehaviour
         PlaceTopLeft((RectTransform)blurButton.transform, sideMargin, y, switchSize.x, switchSize.y);
         blurLabel = blurButton.GetComponentInChildren<TextMeshProUGUI>();
         blurButton.onClick.AddListener(ToggleMotionBlur);
-
-        y -= switchSize.y + groupGap;
-
-        BuildNote(page, settingsNoteText, y, blurbX - sideMargin - 40f);
     }
 
     /// <summary>
-    /// The plate beside the settings: what the presets do, in words. Nothing here is a number, because what
-    /// the numbers are is an implementation detail and what the player is choosing is a picture.
+    /// The plate beside the settings. It carries the one thing the player needs to know about a choice - that
+    /// it lands straight away - and nothing about what each preset does, because the picture in front of them
+    /// is the description and a list of numbers beside it would be the implementation.
     /// </summary>
-    private void BuildBlurb(RectTransform page)
+    private void BuildSettingsNote(RectTransform page)
     {
         float pad = 26f;
-        float inner = blurbWidth - pad * 2f;
-        float titleHeight = captionSize * 1.5f;
-        float bodyGap = 14f;
+        float inner = noteWidth - pad * 2f;
 
-        TextMeshProUGUI body = CreateText("Blurb", page, noteSize, dimLabelColor, TextAlignmentOptions.TopLeft);
-        body.text = presetsBlurb;
+        TextMeshProUGUI body = CreateText("Settings Note", page, noteSize, Fade(labelColor, 0.75f), TextAlignmentOptions.TopLeft);
+        body.text = settingsNoteText;
         body.lineSpacing = 8f;
 
-        float bodyHeight = Mathf.Max(noteSize * 2f, body.GetPreferredValues(presetsBlurb, inner, 0f).y);
-        float height = pad + titleHeight + bodyGap + bodyHeight + pad;
+        float bodyHeight = Mathf.Max(noteSize * 2f, body.GetPreferredValues(settingsNoteText, inner, 0f).y);
+        float height = pad + bodyHeight + pad;
 
-        RectTransform panel = CreateRect("Preset Notes", page);
-        PlaceTopLeft(panel, blurbX, contentTopY, blurbWidth, height);
+        RectTransform panel = CreateRect("Settings Note Plate", page);
+        PlaceTopLeft(panel, noteX, contentTopY, noteWidth, height);
 
         Image plate = panel.gameObject.AddComponent<Image>();
         plate.color = panelColor;
         plate.raycastTarget = false;
 
-        // The texts are moved onto the plate now that it exists, so they are drawn on top of it.
+        // The text is moved onto the plate now that it exists, so it is drawn on top of it.
         body.transform.SetParent(panel, false);
-        PlaceTopLeft(body.rectTransform, pad, -(pad + titleHeight + bodyGap), inner, bodyHeight);
-
-        TextMeshProUGUI title = CreateText("Blurb Title", panel, captionSize, accentColor, TextAlignmentOptions.TopLeft);
-        title.text = presetsBlurbTitle;
-        title.fontStyle = FontStyles.Bold;
-        title.characterSpacing = 3f;
-        PlaceTopLeft(title.rectTransform, pad, -pad, inner, titleHeight);
+        PlaceTopLeft(body.rectTransform, pad, -pad, inner, bodyHeight);
     }
 
     private void BuildActions(Transform root)

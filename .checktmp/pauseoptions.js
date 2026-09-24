@@ -9,7 +9,7 @@ const S = {
   rowInset: 10, actionWidth: 196, keyboardX: 216, keyboardWidth: 312, gamepadX: 538, gamepadWidth: 292,
   preset: [165, 44], presetGap: 12, switch: [320, 42], switchGap: 8,
   noteX: 545, noteWidth: 285,
-  promptTopY: 300, promptHeight: 58, reload: [200, 42],
+  promptTopY: 400, promptHeight: 58, reload: [200, 42],
 };
 
 const groups = [
@@ -61,6 +61,12 @@ sy += S.preset[1] + 16;
 add("settings", "Shadows", 0, sy, S.switch[0], S.switch[1]);
 sy += S.switch[1] + S.switchGap;
 add("settings", "Blur", 0, sy, S.switch[0], S.switch[1]);
+sy += S.switch[1] + 14;
+add("settings", "Caption Difficulty", 0, sy, S.noteX - 20, S.captionHeight);
+sy += S.captionHeight + 6;
+for (let i = 0; i < 3; i++)
+  add("settings", "Difficulty " + i, i * (S.preset[0] + S.presetGap), sy, S.preset[0], S.preset[1]);
+const difficultyBottom = sy + S.preset[1];
 add("settings", "Prompt", 0, S.promptTopY, S.safe[0], S.promptHeight);
 add("settings", "Reload", S.safe[0] - S.reload[0] - 12, S.promptTopY + (S.promptHeight - S.reload[1]) / 2, S.reload[0], S.reload[1]);
 
@@ -73,7 +79,7 @@ for (const r of rects) {
   }
 }
 console.log(`controls page ends at y=${controlsBottom} of ${S.safe[1]}`);
-console.log(`settings page: switches end at y=${sy + S.switch[1]}, prompt ${S.promptTopY}..${S.promptTopY + S.promptHeight}`);
+console.log(`settings page: difficulty row ends at y=${difficultyBottom}, prompt ${S.promptTopY}..${S.promptTopY + S.promptHeight}`);
 
 // collisions between things that should not touch (rows/plates contain cells, so skip same-row pairs)
 const containment = (a, b, pad = 0) =>
@@ -113,6 +119,8 @@ const TEXT = [
   ["gamepad column", "D-pad   or   Left stick", 20, S.gamepadWidth],
   ["gamepad column", "Right trigger  RT", 20, S.gamepadWidth],
   ["reload prompt", "The level's ground detail changed - restart to apply it.", 16, S.safe[0] - S.reload[0] - 60],
+  ["difficulty prompt", "Difficulty changed - restart to play this level at the new one.", 16, S.safe[0] - S.reload[0] - 60],
+  ["both prompt", "Graphics and difficulty changed - restart to apply them.", 16, S.safe[0] - S.reload[0] - 60],
 ];
 // the one line that is expected to wrap, so it is checked for room rather than for one line
 const wrapped = { text: "Your choice is saved and applied straight away.", size: 16, width: S.noteWidth, height: 44 };

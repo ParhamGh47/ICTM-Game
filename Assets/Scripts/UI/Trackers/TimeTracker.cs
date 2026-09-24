@@ -8,8 +8,14 @@ public class TimeTracker : MonoBehaviour
     public Text currentTimeText;
 
     [Header("Target Time Settings")]
-    [Tooltip("Target time in seconds (e.g. 200 = 3 minutes 20 seconds)")]
+    [Tooltip("The time the level is built with, in seconds (e.g. 200 = 3 minutes 20 seconds). This is the " +
+             "Medium time: the difficulty the player has set takes its share off it (see GameDifficulty), and " +
+             "the target shown on the HUD is the time that really counts down.")]
     public float targetTimeSeconds = 200f; // 3:20
+
+    // The target at the difficulty the level started with. Read once, in Start, so a difficulty chosen while
+    // the level is running cannot change it - it lands on the next level, or on this one when it is restarted.
+    private float activeTargetTimeSeconds;
 
     private float elapsedTime = 0f;
     private bool isRunning = true;
@@ -18,9 +24,11 @@ public class TimeTracker : MonoBehaviour
 
     void Start()
     {
+        activeTargetTimeSeconds = GameDifficulty.TimeLimit(targetTimeSeconds);
+
         if (targetTimeText != null)
         {
-            targetTimeText.text = FormatTargetTime(targetTimeSeconds);
+            targetTimeText.text = FormatTargetTime(activeTargetTimeSeconds);
         }
     }
 
@@ -35,7 +43,7 @@ public class TimeTracker : MonoBehaviour
             currentTimeText.text = FormatElapsedTime(elapsedTime);
         }
 
-        if (elapsedTime >= targetTimeSeconds)
+        if (elapsedTime >= activeTargetTimeSeconds)
         {
             isRunning = false;
             gameOver.Instance.ShowGameOver();

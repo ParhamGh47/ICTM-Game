@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using TMPro;
@@ -20,12 +21,14 @@ using UnityEngine.UI;
 /// columns are the keyboard and the pad, and the pad is named the way an Xbox pad is because that is the
 /// one every player can picture; a note under the table says the same buttons work on any pad.
 ///
-/// The settings tab holds the graphics settings, which live in <see cref="GraphicsQuality"/>: the three
-/// presets and the two switches that sit on top of them. A choice takes effect and is saved as soon as it is
-/// made - only the ground detail of a level waits for that level to load, and a level that is open when the
-/// choice changes asks to be restarted rather than saying so in advance (see <see cref="PauseOptionsPanel"/>).
-/// Nothing here describes what the presets do: the picture is the description, and a list of numbers beside
-/// it would be the implementation rather than the choice.
+/// The settings tab holds the game's two choices, each of which is a row of three with the one in force lit
+/// up. The graphics settings live in <see cref="GraphicsQuality"/>: the three presets and the two switches
+/// that sit on top of them. The difficulties live in <see cref="GameDifficulty"/>: what a level's time limit
+/// and its kill requirement become. A choice takes effect and is saved as soon as it is made - only the
+/// ground detail of a level waits for that level to load, and a difficulty lands on the next level - so a
+/// level that is open when either changes asks to be restarted rather than saying so in advance (see
+/// <see cref="PauseOptionsPanel"/>). Nothing here describes what the presets do: the picture is the
+/// description, and a list of numbers beside it would be the implementation rather than the choice.
 ///
 /// A gamepad or the keyboard drives all of it through the project's own menu navigation, which finds these
 /// buttons on its own; the places where the nearest-neighbour guess is wrong - the tab row, the preset row -
@@ -60,6 +63,13 @@ public class OptionsScreen : MonoBehaviour
     public string motionBlurText = "MOTION BLUR";
     public string onText = "ON";
     public string offText = "OFF";
+    public string difficultyCaption = "DIFFICULTY";
+    [Tooltip("One label per difficulty, in the order GameDifficulty defines them: Easy, Medium, Hard.")]
+    public string[] difficultyLabels = { "EASY", "MEDIUM", "HARD" };
+    [Tooltip("The plate under the difficulties. Says what the choice changes, since it cannot be seen.")]
+    [TextArea(2, 6)]
+    public string difficultyNoteText =
+        "How long a level gives you, and how many targets it asks for. It lands on the next level you start.";
     [Tooltip("The plate beside the settings. Says how a choice is taken, not what the presets do.")]
     [TextArea(2, 6)]
     public string settingsNoteText =
@@ -132,7 +142,8 @@ public class OptionsScreen : MonoBehaviour
         public Button button;
     }
 
-    private sealed class PresetRow
+    /// <summary>One choice of a row: a preset, or a difficulty. Both rows are built and refreshed alike.</summary>
+    private sealed class ChoiceRow
     {
         public int index;
         public Button button;
@@ -141,7 +152,8 @@ public class OptionsScreen : MonoBehaviour
     }
 
     private readonly List<Tab> tabs = new List<Tab>();
-    private readonly List<PresetRow> presetRows = new List<PresetRow>();
+    private readonly List<ChoiceRow> presetRows = new List<ChoiceRow>();
+    private readonly List<ChoiceRow> difficultyRows = new List<ChoiceRow>();
 
     private CanvasGroup group;
     private RectTransform controlsPage;
@@ -171,6 +183,7 @@ public class OptionsScreen : MonoBehaviour
         BuildUi();
 
         GraphicsQuality.Changed += Refresh;
+        GameDifficulty.Changed += Refresh;
     }
 
     private void Start()
@@ -184,6 +197,7 @@ public class OptionsScreen : MonoBehaviour
     private void OnDestroy()
     {
         GraphicsQuality.Changed -= Refresh;
+        GameDifficulty.Changed -= Refresh;
     }
 
     // ---------------------------------------------------------------- tabs
@@ -226,6 +240,11 @@ public class OptionsScreen : MonoBehaviour
         GraphicsQuality.SetMotionBlur(!GraphicsQuality.MotionBlur);
     }
 
+    private void ChooseDifficulty(int index)
+    {
+        GameDifficulty.Choose((DifficultyLevel)index);
+    }
+
     private void GoBack()
     {
         // No fade of its own: SceneLoader covers menu-to-menu hops with the screen fade, so the transition
@@ -239,12 +258,19 @@ public class OptionsScreen : MonoBehaviour
     /// </summary>
     private void Refresh()
     {
-        if (presetRows.Count == 0) return;
-
         for (int i = 0; i < presetRows.Count; i++)
         {
-            PresetRow row = presetRows[i];
+            ChoiceRow row = presetRows[i];
             bool active = (int)GraphicsQuality.Current == row.index;
+
+            row.activeBar.enabled = active;
+            row.label.color = active ? accentColor : labelColor;
+        }
+
+        for (int i = 0; i < difficultyRows.Count; i++)
+        {
+            ChoiceRow row = difficultyRows[i];
+            bool active = (int)GameDifficulty.Current == row.index;
 
             row.activeBar.enabled = active;
             row.label.color = active ? accentColor : labelColor;
@@ -434,33 +460,7 @@ public class OptionsScreen : MonoBehaviour
         y = BuildCaption(page, graphicsCaption, y, accentColor, captionSize);
 
         // The presets, as a row of choices with the one in force lit up.
-        int count = Mathf.Min(presetLabels != null ? presetLabels.Length : 0, 3);
-
-        for (int i = 0; i < count; i++)
-        {
-            int index = i;                          // captured, not the loop variable, for the callback
-            bool active = (int)GraphicsQuality.Current == index;
-
-            Button button = CreateButton(presetLabels[i], page, presetLabels[i], presetButtonSize);
-            PlaceTopLeft((RectTransform)button.transform, sideMargin + i * (presetButtonSize.x + presetGap), y,
-                presetButtonSize.x, presetButtonSize.y);
-
-            TextMeshProUGUI label = button.GetComponentInChildren<TextMeshProUGUI>();
-            label.fontStyle = FontStyles.Bold;
-            label.characterSpacing = 3f;
-
-            Image bar = CreateImage("Selected", button.transform, accentColor);
-            RectTransform barRect = bar.rectTransform;
-            barRect.anchorMin = new Vector2(0f, 0f);
-            barRect.anchorMax = new Vector2(1f, 0f);
-            barRect.pivot = new Vector2(0.5f, 0f);
-            barRect.sizeDelta = new Vector2(0f, 5f);
-            barRect.anchoredPosition = Vector2.zero;
-
-            button.onClick.AddListener(() => ChoosePreset(index));
-
-            presetRows.Add(new PresetRow { index = index, button = button, label = label, activeBar = bar });
-        }
+        BuildChoiceRow(page, presetLabels, y, presetRows, ChoosePreset);
 
         y -= presetButtonSize.y + groupGap;
 
@@ -477,6 +477,73 @@ public class OptionsScreen : MonoBehaviour
         PlaceTopLeft((RectTransform)blurButton.transform, sideMargin, y, switchSize.x, switchSize.y);
         blurLabel = blurButton.GetComponentInChildren<TextMeshProUGUI>();
         blurButton.onClick.AddListener(ToggleMotionBlur);
+
+        y -= switchSize.y + groupGap;
+
+        // The difficulty, under everything the picture is made of: it is the one choice here that changes what
+        // a level asks of the player rather than what it looks like.
+        y = BuildCaption(page, difficultyCaption, y, accentColor, captionSize);
+
+        BuildChoiceRow(page, difficultyLabels, y, difficultyRows, ChooseDifficulty);
+
+        BuildDifficultyNote(page, y + presetButtonSize.y + 12f);
+    }
+
+    /// <summary>
+    /// A row of choices with the one in force lit up. The presets and the difficulties are the same row in
+    /// every way but what they choose, so both are built by this rather than by two copies.
+    ///
+    /// The labels are the enum's own order - GraphicsQuality's presets, GameDifficulty's difficulties - so the
+    /// index handed to the callback is the value to choose.
+    /// </summary>
+    private void BuildChoiceRow(RectTransform page, string[] labels, float y, List<ChoiceRow> rows, Action<int> choose)
+    {
+        // Three is as many as either setting has; a stray fourth label cannot be clicked into a value the
+        // setting does not have.
+        int count = Mathf.Min(labels != null ? labels.Length : 0, 3);
+
+        for (int i = 0; i < count; i++)
+        {
+            int index = i;                          // captured, not the loop variable, for the callback
+
+            Button button = CreateButton(labels[i], page, labels[i], presetButtonSize);
+            PlaceTopLeft((RectTransform)button.transform, sideMargin + i * (presetButtonSize.x + presetGap), y,
+                presetButtonSize.x, presetButtonSize.y);
+
+            TextMeshProUGUI label = button.GetComponentInChildren<TextMeshProUGUI>();
+            label.fontStyle = FontStyles.Bold;
+            label.characterSpacing = 3f;
+
+            Image bar = CreateImage("Selected", button.transform, accentColor);
+            RectTransform barRect = bar.rectTransform;
+            barRect.anchorMin = new Vector2(0f, 0f);
+            barRect.anchorMax = new Vector2(1f, 0f);
+            barRect.pivot = new Vector2(0.5f, 0f);
+            barRect.sizeDelta = new Vector2(0f, 5f);
+            barRect.anchoredPosition = Vector2.zero;
+
+            button.onClick.AddListener(() => choose(index));
+
+            rows.Add(new ChoiceRow { index = index, button = button, label = label, activeBar = bar });
+        }
+    }
+
+    /// <summary>
+    /// What the difficulties change, written under them. Unlike the graphics presets - where the picture in
+    /// front of the player is the description - a time limit and a kill count cannot be seen from here, so
+    /// this is the only place the choice can say what it does.
+    /// </summary>
+    private void BuildDifficultyNote(RectTransform page, float y)
+    {
+        TextMeshProUGUI note = CreateText("Difficulty Note", page, noteSize, Fade(labelColor, 0.75f), TextAlignmentOptions.TopLeft);
+        note.text = difficultyNoteText;
+        note.lineSpacing = 6f;
+
+        // The full width between the margins: the plate beside the graphics settings ends well above this, so
+        // there is nothing here to keep clear of.
+        float height = Mathf.Max(noteSize * 1.6f, note.GetPreferredValues(difficultyNoteText, ContentWidth, 0f).y);
+
+        PlaceTopLeft(note.rectTransform, sideMargin, y, ContentWidth, height);
     }
 
     /// <summary>
@@ -526,6 +593,7 @@ public class OptionsScreen : MonoBehaviour
         if (controlsTab == null || settingsTab == null) return;
 
         Button middlePreset = presetRows.Count > 1 ? presetRows[presetRows.Count / 2].button : null;
+        Button middleDifficulty = difficultyRows.Count > 1 ? difficultyRows[difficultyRows.Count / 2].button : null;
 
         SetNavigation(controlsTab, null, settingsTab, backButton, null);
         SetNavigation(settingsTab, null, null, middlePreset, controlsTab);
@@ -542,10 +610,18 @@ public class OptionsScreen : MonoBehaviour
             SetNavigation(shadowsButton, null, null, blurButton, middlePreset);
 
         if (blurButton != null)
-            SetNavigation(blurButton, null, null, backButton, shadowsButton);
+            SetNavigation(blurButton, null, null, middleDifficulty, shadowsButton);
+
+        for (int i = 0; i < difficultyRows.Count; i++)
+        {
+            Button left = i > 0 ? difficultyRows[i - 1].button : null;
+            Button right = i < difficultyRows.Count - 1 ? difficultyRows[i + 1].button : null;
+
+            SetNavigation(difficultyRows[i].button, left, right, backButton, blurButton);
+        }
 
         if (backButton != null)
-            SetNavigation(backButton, null, null, null, blurButton);
+            SetNavigation(backButton, null, null, null, middleDifficulty != null ? middleDifficulty : blurButton);
     }
 
     private static void SetNavigation(Button button, Button left, Button right, Button down, Button up)

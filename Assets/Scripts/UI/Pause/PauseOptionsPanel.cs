@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
@@ -15,12 +16,14 @@ using UnityEngine.UI;
 /// in the window, so the options keep looking like the pause menu even if that artwork is ever changed.
 ///
 /// Both tabs are the same two as the options screen: CONTROLS, which is the table from
-/// <see cref="ControlBindings"/>, and SETTINGS, which is <see cref="GraphicsQuality"/>.
+/// <see cref="ControlBindings"/>, and SETTINGS, which is <see cref="GraphicsQuality"/> and
+/// <see cref="GameDifficulty"/>.
 ///
-/// The one thing this screen does that the options screen does not: when a setting is changed that a level
-/// cannot show until it is loaded again - the amount of ground detail its terrain draws - the level that is
-/// open says so and offers the restart that applies it, rather than the setting quietly doing nothing until
-/// the player happens to play the level again.
+/// The one thing this screen does that the options screen does not: when a setting is chosen that a level
+/// cannot pick up until it is started again - the amount of ground detail its terrain draws, or the
+/// difficulty its time limit and kill requirement were built with - the level that is open says so and offers
+/// the restart that applies it, rather than the setting quietly doing nothing until the player happens to
+/// play the level again.
 ///
 /// The UI is built in code for the same reason the other screens build theirs: nothing has to be added to the
 /// pause prefab, so the pause panel the game already had keeps working exactly as it did.
@@ -42,6 +45,7 @@ public class PauseOptionsPanel : MonoBehaviour
     public string motionBlurText = "MOTION BLUR";
     public string onText = "ON";
     public string offText = "OFF";
+    public string difficultyCaption = "DIFFICULTY";
 
     [Tooltip("The note beside the settings. Says how a choice is taken, not what the presets do.")]
     [TextArea(2, 6)]
@@ -49,6 +53,11 @@ public class PauseOptionsPanel : MonoBehaviour
 
     [Tooltip("Shown when the open level cannot show the chosen preset until it is loaded again.")]
     public string reloadPromptText = "The level's ground detail changed - restart to apply it.";
+    [Tooltip("Shown when the difficulty was changed while a level is open: its time limit and kill " +
+             "requirement were read as it started, so it is still being played at the old one.")]
+    public string difficultyPromptText = "Difficulty changed - restart to play this level at the new one.";
+    [Tooltip("Shown when both changed at once.")]
+    public string bothPromptText = "Graphics and difficulty changed - restart to apply them.";
     public string reloadButtonText = "RESTART LEVEL";
 
     // There is deliberately nothing under the table explaining how the controls behave: the table is what the
@@ -108,7 +117,7 @@ public class PauseOptionsPanel : MonoBehaviour
     public float switchGap = 8f;
     public float noteX = 545f;
     public float noteWidth = 285f;
-    public float promptTopY = 300f;
+    public float promptTopY = 400f;
     public float promptHeight = 58f;
     public Vector2 reloadButtonSize = new Vector2(200f, 42f);
 
@@ -122,7 +131,8 @@ public class PauseOptionsPanel : MonoBehaviour
     private RectTransform settingsPage;
 
     private readonly List<Tab> tabs = new List<Tab>();
-    private readonly List<PresetRow> presetRows = new List<PresetRow>();
+    private readonly List<ChoiceRow> presetRows = new List<ChoiceRow>();
+    private readonly List<ChoiceRow> difficultyRows = new List<ChoiceRow>();
 
     private Button controlsTab;
     private Button settingsTab;
@@ -133,6 +143,7 @@ public class PauseOptionsPanel : MonoBehaviour
 
     private TextMeshProUGUI shadowsLabel;
     private TextMeshProUGUI blurLabel;
+    private TextMeshProUGUI promptLabel;
 
     private RectTransform reloadPrompt;
 
@@ -153,7 +164,8 @@ public class PauseOptionsPanel : MonoBehaviour
         public Button button;
     }
 
-    private sealed class PresetRow
+    /// <summary>One choice of a row: a preset, or a difficulty. Both rows are built and refreshed alike.</summary>
+    private sealed class ChoiceRow
     {
         public int index;
         public Button button;
@@ -268,6 +280,7 @@ public class PauseOptionsPanel : MonoBehaviour
     private void OnEnable()
     {
         GraphicsQuality.Changed += Refresh;
+        GameDifficulty.Changed += Refresh;
 
         Refresh();
 
@@ -277,6 +290,7 @@ public class PauseOptionsPanel : MonoBehaviour
     private void OnDisable()
     {
         GraphicsQuality.Changed -= Refresh;
+        GameDifficulty.Changed -= Refresh;
     }
 
     private void BeginFromTabs()
@@ -338,6 +352,11 @@ public class PauseOptionsPanel : MonoBehaviour
         GraphicsQuality.SetMotionBlur(!GraphicsQuality.MotionBlur);
     }
 
+    private void ChooseDifficulty(int index)
+    {
+        GameDifficulty.Choose((DifficultyLevel)index);
+    }
+
     private void ReloadLevel()
     {
         if (owner != null) owner.RestartLevel();
@@ -349,12 +368,20 @@ public class PauseOptionsPanel : MonoBehaviour
     /// </summary>
     private void Refresh()
     {
-        if (presetRows.Count == 0) return;
-
         for (int i = 0; i < presetRows.Count; i++)
         {
-            PresetRow row = presetRows[i];
+            ChoiceRow row = presetRows[i];
             bool active = (int)GraphicsQuality.Current == row.index;
+
+            row.activeBar.enabled = active;
+            row.label.color = active ? inkColor : dimInkColor;
+            row.label.fontStyle = active ? FontStyles.Bold : FontStyles.Normal;
+        }
+
+        for (int i = 0; i < difficultyRows.Count; i++)
+        {
+            ChoiceRow row = difficultyRows[i];
+            bool active = (int)GameDifficulty.Current == row.index;
 
             row.activeBar.enabled = active;
             row.label.color = active ? inkColor : dimInkColor;
@@ -373,12 +400,33 @@ public class PauseOptionsPanel : MonoBehaviour
             blurLabel.color = GraphicsQuality.MotionBlur ? inkColor : dimInkColor;
         }
 
-        // The ground detail of the level that is open is the one setting that has to wait for it to be loaded
-        // again, so the offer to do that appears exactly while it is true and goes away when the player picks
-        // a preset the level is already showing. Nothing has to be rewired when it comes and goes: every
-        // button here keeps Unity's own navigation, which skips what is switched off.
+        // Two choices here have to wait for a level to be started again before it can honour them: the amount
+        // of ground detail its terrain draws, which it builds as it loads, and the difficulty, whose time
+        // limit and kill requirement it reads as its HUD starts. The offer to restart appears exactly while
+        // one of them really is out of date and goes away when the player picks the value the level already
+        // has. Nothing has to be rewired when it comes and goes: every button here keeps Unity's own
+        // navigation, which skips what is switched off.
+        bool graphicsOutOfDate = GraphicsQuality.ActiveSceneNeedsReload();
+        bool difficultyOutOfDate = GameDifficulty.ActiveSceneNeedsReload();
+
         if (reloadPrompt != null)
-            reloadPrompt.gameObject.SetActive(GraphicsQuality.ActiveSceneNeedsReload());
+        {
+            reloadPrompt.gameObject.SetActive(graphicsOutOfDate || difficultyOutOfDate);
+
+            if (promptLabel != null)
+                promptLabel.text = PromptText(graphicsOutOfDate, difficultyOutOfDate);
+        }
+    }
+
+    /// <summary>
+    /// What the restart prompt says. It is one plate with one button whatever the reason - the two settings
+    /// are applied by the same restart - so the wording is the only thing that changes.
+    /// </summary>
+    private string PromptText(bool graphics, bool difficulty)
+    {
+        if (graphics && difficulty) return bothPromptText;
+
+        return difficulty ? difficultyPromptText : reloadPromptText;
     }
 
     // ---------------------------------------------------------------- UI construction
@@ -570,30 +618,7 @@ public class PauseOptionsPanel : MonoBehaviour
         y += captionHeight + 6f;
 
         // The presets, as a row of choices with the one in force's lettering darkened.
-        for (int i = 0; i < 3; i++)
-        {
-            int index = i;                          // captured, not the loop variable, for the callback
-            string label = PresetName(index);
-
-            Button button = CreatePlateButton("Preset " + label, page, label, presetButtonSize, 18f);
-            PlaceTop(page, (RectTransform)button.transform, i * (presetButtonSize.x + presetGap), y,
-                presetButtonSize.x, presetButtonSize.y);
-
-            TextMeshProUGUI text = button.GetComponentInChildren<TextMeshProUGUI>();
-            text.characterSpacing = 3f;
-
-            Image bar = CreateImage("Selected", button.transform, inkColor);
-            RectTransform barRect = bar.rectTransform;
-            barRect.anchorMin = new Vector2(0f, 0f);
-            barRect.anchorMax = new Vector2(1f, 0f);
-            barRect.pivot = new Vector2(0.5f, 0f);
-            barRect.sizeDelta = new Vector2(0f, 4f);
-            barRect.anchoredPosition = Vector2.zero;
-
-            button.onClick.AddListener(() => ChoosePreset(index));
-
-            presetRows.Add(new PresetRow { index = index, button = button, label = text, activeBar = bar });
-        }
+        BuildChoiceRow(page, y, presetRows, PresetName, ChoosePreset);
 
         y += presetButtonSize.y + 16f;
 
@@ -611,7 +636,52 @@ public class PauseOptionsPanel : MonoBehaviour
         blurLabel = blurButton.GetComponentInChildren<TextMeshProUGUI>();
         blurButton.onClick.AddListener(ToggleMotionBlur);
 
+        y += switchSize.y + 14f;
+
+        // The difficulty, under everything the picture is made of: it is the one choice here that changes what
+        // a level asks of the player rather than what it looks like.
+        CreateLabel(page, "Caption - difficulty", difficultyCaption, 20f, inkColor, 0f, y, noteX - 20f,
+            TextAlignmentOptions.TopLeft, true);
+
+        y += captionHeight + 6f;
+
+        BuildChoiceRow(page, y, difficultyRows, DifficultyName, ChooseDifficulty);
+
         BuildReloadPrompt(page);
+    }
+
+    /// <summary>
+    /// A row of choices with the one in force's lettering darkened. The presets and the difficulties are the
+    /// same row in every way but what they choose and how they are named, so both are built by this rather
+    /// than by two copies of it.
+    /// </summary>
+    private void BuildChoiceRow(Transform page, float y, List<ChoiceRow> rows, Func<int, string> nameOf,
+        Action<int> choose)
+    {
+        for (int i = 0; i < 3; i++)
+        {
+            int index = i;                          // captured, not the loop variable, for the callback
+            string label = nameOf(index);
+
+            Button button = CreatePlateButton(label, page, label, presetButtonSize, 18f);
+            PlaceTop(page, (RectTransform)button.transform, i * (presetButtonSize.x + presetGap), y,
+                presetButtonSize.x, presetButtonSize.y);
+
+            TextMeshProUGUI text = button.GetComponentInChildren<TextMeshProUGUI>();
+            text.characterSpacing = 3f;
+
+            Image bar = CreateImage("Selected", button.transform, inkColor);
+            RectTransform barRect = bar.rectTransform;
+            barRect.anchorMin = new Vector2(0f, 0f);
+            barRect.anchorMax = new Vector2(1f, 0f);
+            barRect.pivot = new Vector2(0.5f, 0f);
+            barRect.sizeDelta = new Vector2(0f, 4f);
+            barRect.anchoredPosition = Vector2.zero;
+
+            button.onClick.AddListener(() => choose(index));
+
+            rows.Add(new ChoiceRow { index = index, button = button, label = text, activeBar = bar });
+        }
     }
 
     /// <summary>The preset's name, as GraphicsQuality defines it: Low, Medium, High.</summary>
@@ -619,6 +689,13 @@ public class PauseOptionsPanel : MonoBehaviour
     {
         GraphicsPreset preset = (GraphicsPreset)Mathf.Clamp(index, 0, 2);
         return preset.ToString().ToUpperInvariant();
+    }
+
+    /// <summary>The difficulty's name, as GameDifficulty defines it: Easy, Medium, Hard.</summary>
+    private static string DifficultyName(int index)
+    {
+        DifficultyLevel level = (DifficultyLevel)Mathf.Clamp(index, 0, 2);
+        return level.ToString().ToUpperInvariant();
     }
 
     /// <summary>
@@ -649,9 +726,9 @@ public class PauseOptionsPanel : MonoBehaviour
         plate.raycastTarget = false;
 
         // Both of these are children of the prompt plate, so they go away with it.
-        TextMeshProUGUI text = CreateText("Prompt", reloadPrompt, 16f, inkColor, TextAlignmentOptions.Left);
-        text.text = reloadPromptText;
-        PlaceTop(reloadPrompt, text.rectTransform, 18f, 0f, safeSize.x - reloadButtonSize.x - 60f, promptHeight);
+        promptLabel = CreateText("Prompt", reloadPrompt, 16f, inkColor, TextAlignmentOptions.Left);
+        promptLabel.text = reloadPromptText;
+        PlaceTop(reloadPrompt, promptLabel.rectTransform, 18f, 0f, safeSize.x - reloadButtonSize.x - 60f, promptHeight);
 
         reloadButton = CreatePlateButton("Restart Level", reloadPrompt, reloadButtonText, reloadButtonSize, 16f);
         PlaceTop(reloadPrompt, (RectTransform)reloadButton.transform, safeSize.x - reloadButtonSize.x - 12f,

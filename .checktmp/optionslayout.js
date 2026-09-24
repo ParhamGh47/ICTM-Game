@@ -56,26 +56,44 @@ for (let i = 0; i < 2; i++) {
 }
 const controlsBottom = y;
 
-// settings page
+const switchGap = num("switchGap");
+const noteWidth = num("noteWidth");
+const noteX = num("noteX");
+const contentWidth = 1920 - sideMargin * 2;
+
+// settings page. BuildCaption places the caption at y and returns y - size*1.5 - 10, which is where the
+// row under it goes.
 let s = contentTopY;
-mark("caption graphics", s, captionHeight);
-s -= captionHeight + 10;
+const noteBody = Math.max(noteSize * 2, noteSize * 1.25);
+mark("settings note plate", s, 26 + noteBody + 26);
+
+const caption = (name) => {
+  mark(name, s, captionHeight);
+  s -= captionHeight + 10;
+};
+
+caption("caption graphics");
 mark("presets", s, presetButtonH);
 s -= presetButtonH + groupGap;
 mark("shadows", s, switchH);
-s -= switchH + 14;
+s -= switchH + switchGap;
 mark("motion blur", s, switchH);
 s -= switchH + groupGap;
-mark("settings note", s, Math.max(noteSize * 1.6, noteSize * 1.3));
-const settingsBottom = s - noteSize * 1.6;
+caption("caption difficulty");
+mark("difficulties", s, presetButtonH);
+const difficultiesBottom = s - presetButtonH;
+mark("difficulty note", s - presetButtonH - 12, Math.max(noteSize * 1.6, noteSize * 1.3));
+const settingsBottom = s - presetButtonH - 12 - Math.max(noteSize * 1.6, noteSize * 1.3);
 
-// the blurb panel on the settings page (height depends on wrapped text, so it is approximated)
-const blurbText = (src.match(/presetsBlurb =([\s\S]*?);\n/) || [])[1] || "";
-const blurbChars = (blurbText.match(/"([^"]*)"/g) || []).map((x) => x.length).reduce((a, b) => a + b, 0);
-const blurbInner = 740 - 52;
-const blurbLines = Math.ceil(blurbChars / (blurbInner / (noteSize * 0.52)));
-const blurbHeight = 26 + captionHeight + 14 + blurbLines * noteSize * 1.25 + 26;
-mark("blurb panel (approx)", contentTopY, blurbHeight);
+// no plate or row may run into the settings note plate or into BACK, and no string may overrun its box
+const clashes = [];
+const notePlate = { top: contentTopY, bottom: contentTopY - (26 + noteBody + 26), left: noteX, right: noteX + noteWidth };
+if (difficultiesBottom > notePlate.bottom && noteX < sideMargin + 3 * 165 + 2 * 12)
+  clashes.push("the difficulty row runs under the settings note plate");
+const longest = "How long a level gives you, and how many targets it asks for. It lands on the next level you start.";
+const noteBox = contentWidth;
+if (longest.length * noteSize * 0.5 > noteBox)
+  clashes.push("the difficulty note needs ~" + (longest.length * noteSize * 0.5).toFixed(0) + "px in " + noteBox + "px");
 
 for (const o of out) {
   const fits = o.bottom >= -1080;
@@ -92,4 +110,6 @@ const backBottom = -(1080 - 46);
 console.log("\nBACK button".padEnd(34) + ("y " + backTop + " .. " + backBottom).padEnd(22) + "x 1660..1860");
 console.log("controls content ends at y " + controlsBottom.toFixed(0) + " (bottom margin " + (1080 + controlsBottom).toFixed(0) + "px)");
 console.log("settings content ends at y " + settingsBottom.toFixed(0) + " (bottom margin " + (1080 + settingsBottom).toFixed(0) + "px)");
+console.log("difficulty row ends at y " + difficultiesBottom.toFixed(0) + "; note plate ends at y " + (contentTopY - (26 + noteBody + 26)).toFixed(0));
+console.log(clashes.length ? "CLASHES: " + clashes.join("; ") : "no clashes on the settings page");
 console.log("notes are placed " + (sideMargin + (1800 - 420)) + "px wide, so they stop well left of BACK");

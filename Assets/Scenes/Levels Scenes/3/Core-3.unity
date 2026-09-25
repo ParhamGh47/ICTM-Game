@@ -21444,6 +21444,7 @@ GameObject:
   m_Component:
   - component: {fileID: 707016318}
   - component: {fileID: 707016317}
+  - component: {fileID: 3000591699717677991}
   m_Layer: 0
   m_Name: Soundtrack
   m_TagString: Untagged
@@ -54006,3 +54007,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 46c087e1027750343ae4c624aabb94d6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+--- !u!114 &3000591699717677991
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 707016316}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9af42c6e15d84b7392c0e5a81d67f3b2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  channel: 1
+  includeChildren: 0

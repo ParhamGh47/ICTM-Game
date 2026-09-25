@@ -38533,6 +38533,7 @@ GameObject:
   m_Component:
   - component: {fileID: 707016318}
   - component: {fileID: 707016317}
+  - component: {fileID: 3000682118038388150}
   m_Layer: 0
   m_Name: Soundtrack
   m_TagString: Untagged
@@ -40613,7 +40614,7 @@ ParticleSystem:
         m_RotationOrder: 4
     startSizeY:
       serializedVersion: 2
-      minMaxState: 0
+      minMaxState: 3
       scalar: 1
       minScalar: 1
       maxCurve:
@@ -40666,7 +40667,7 @@ ParticleSystem:
         m_RotationOrder: 4
     startSizeZ:
       serializedVersion: 2
-      minMaxState: 0
+      minMaxState: 3
       scalar: 1
       minScalar: 1
       maxCurve:
@@ -55960,6 +55961,11 @@ MonoBehaviour:
   splashTint: {r: 0.60784316, g: 0.8156863, b: 1, a: 0.35}
   streakMaterial: {fileID: 2100000, guid: 1d926615662cf774ebf37843700f7218, type: 2}
   splashMaterial: {fileID: 2100000, guid: 1868add304e34184fb18cd07989d4d30, type: 2}
+  ambience: {fileID: 0}
+  ambienceClip: {fileID: 0}
+  generateAmbienceIfMissing: 1
+  ambienceVolume: 0.5
+  lightRainAmbience: 0.4
   streaksFar: {fileID: 1037815342}
   streaksNear: {fileID: 1175833847}
   splashes: {fileID: 742167972}
@@ -61059,7 +61065,7 @@ ParticleSystem:
         m_RotationOrder: 4
     startSizeY:
       serializedVersion: 2
-      minMaxState: 0
+      minMaxState: 3
       scalar: 1
       minScalar: 1
       maxCurve:
@@ -61112,7 +61118,7 @@ ParticleSystem:
         m_RotationOrder: 4
     startSizeZ:
       serializedVersion: 2
-      minMaxState: 0
+      minMaxState: 3
       scalar: 1
       minScalar: 1
       maxCurve:
@@ -73131,7 +73137,7 @@ ParticleSystem:
         m_RotationOrder: 4
     startSizeY:
       serializedVersion: 2
-      minMaxState: 0
+      minMaxState: 3
       scalar: 1
       minScalar: 1
       maxCurve:
@@ -73184,7 +73190,7 @@ ParticleSystem:
         m_RotationOrder: 4
     startSizeZ:
       serializedVersion: 2
-      minMaxState: 0
+      minMaxState: 3
       scalar: 1
       minScalar: 1
       maxCurve:
@@ -81554,8 +81560,8 @@ Transform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1262020872}
-  m_LocalRotation: {x: 0.057534296, y: 0.9402693, z: -0.2018145, w: 0.26805672}
-  m_LocalPosition: {x: 73.246376, y: 2.9809265, z: 933.48035}
+  m_LocalRotation: {x: -0.07585107, y: 0.2733095, z: -0.021624174, w: -0.9586871}
+  m_LocalPosition: {x: 74.57521, y: 2.3809264, z: 931.3392}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -126023,6 +126029,20 @@ PhysicMaterial:
   bounciness: 0
   frictionCombine: 0
   bounceCombine: 0
+--- !u!114 &3000682118038388150
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 707016316}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9af42c6e15d84b7392c0e5a81d67f3b2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  channel: 1
+  includeChildren: 0
 --- !u!1001 &6890820110328195566
 PrefabInstance:
   m_ObjectHideFlags: 0

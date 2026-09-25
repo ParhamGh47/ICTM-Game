@@ -156,6 +156,29 @@ public class RainSystem : MonoBehaviour
 
     public Material splashMaterial;
 
+    [Header("Rain ambience")]
+    [Tooltip("The looping bed of rain sound that goes with the falling drops. Left empty, one is made as a " +
+             "child of this object, so a level only has to have rain for it to be heard.")]
+    public AudioSource ambience;
+
+    [Tooltip("The loop to play. Left empty it is looked for in Resources: Assets/Resources/Audio/rain-light, and " +
+             "failing that one is made (see RainAmbienceClip) - so rain is never silent just because nobody " +
+             "wired a clip to it.")]
+    public AudioClip ambienceClip;
+
+    [Tooltip("Make a light-rain loop when there is no clip to play, so a level that has just been given rain " +
+             "has rain sound with it. Off means the drops are silent until a clip is assigned.")]
+    public bool generateAmbienceIfMissing = true;
+
+    [Tooltip("Volume of the bed at full intensity, before the player's own ENVIRONMENT setting. The rain is a " +
+             "bed under everything else rather than a thing of its own, so this sits under the engine even at " +
+             "full strength.")]
+    [Range(0f, 1f)] public float ambienceVolume = 0.5f;
+
+    [Tooltip("How much of that the lightest rain is worth. Rain that can be heard raging on screen and not at " +
+             "all in the mix would read as broken, so a drizzle keeps a share of it.")]
+    [Range(0f, 1f)] public float lightRainAmbience = 0.4f;
+
     [Header("Built systems (created by Rebuild)")]
     public ParticleSystem streaksFar;
 
@@ -174,6 +197,10 @@ public class RainSystem : MonoBehaviour
     private const string FarLayerName = "Rain Far";
     private const string NearLayerName = "Rain Near";
     private const string SplashLayerName = "Rain Splashes";
+
+    // Where a level's rain loop is looked for when the component has none of its own. A level that wants its
+    // own sound assigns Ambience Clip instead; this is so rain is never silent just because nobody wired it.
+    private const string AmbienceResourcePath = "Audio/rain-light";
 
     private readonly RaycastHit[] groundHits = new RaycastHit[16];
 
@@ -216,6 +243,7 @@ public class RainSystem : MonoBehaviour
             Rebuild();
 
         ApplyQualityScale();
+        BuildAmbience();
 
         intensity = EvaluateIntensity(EvaluateProgress());
         currentIntensity = intensity;
@@ -454,6 +482,73 @@ public class RainSystem : MonoBehaviour
 
         if (splashes != null)
             ApplySplashLayer(splashes, intensity);
+
+        ApplyAmbience(intensity);
+    }
+
+    // ------------------------------------------------------------------
+    //  Rain ambience
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// Makes the sound that goes with the falling drops.
+    ///
+    /// The bed is 2D on purpose: rain is all around the player rather than somewhere out on the road, and a
+    /// positional loop would swing around the cab as the truck turns. Its volume is worked out here, from the
+    /// rain's own strength and the player's ENVIRONMENT setting, so it is one of the sounds the bus must leave
+    /// alone (see <see cref="SoundBus.MarkHandled"/>).
+    ///
+    /// The clip is the component's own if it has one, and otherwise whatever is at
+    /// Assets/Resources/Audio/rain-light - so a level with rain has rain sound without anyone wiring it, and a
+    /// level that wants something else can point Ambience Clip somewhere else. With neither, a loop is made
+    /// (see <see cref="RainAmbienceClip"/>), which is what Core-4's light rain is heard through.
+    /// </summary>
+    private void BuildAmbience()
+    {
+        if (ambience == null)
+        {
+            GameObject go = new GameObject("Rain Ambience");
+            go.transform.SetParent(transform, false);
+
+            ambience = go.AddComponent<AudioSource>();
+        }
+
+        ambience.playOnAwake = false;
+        ambience.loop = true;
+        ambience.spatialBlend = 0f;
+        ambience.dopplerLevel = 0f;
+
+        if (ambience.clip == null)
+            ambience.clip = ambienceClip != null ? ambienceClip : Resources.Load<AudioClip>(AmbienceResourcePath);
+
+        // Nothing assigned and nothing in Resources: make one, rather than let a level rain in silence.
+        if (ambience.clip == null && generateAmbienceIfMissing)
+            ambience.clip = RainAmbienceClip.Shared;
+
+        SoundBus.MarkHandled(ambience);
+
+        if (ambience.clip != null && !ambience.isPlaying)
+            ambience.Play();
+    }
+
+    /// <summary>
+    /// Sets the bed's volume from how hard it is raining.
+    ///
+    /// The strength is measured against the heaviest rain this level has rather than against 1, because a
+    /// level's rain is authored on a scale of its own: Core-4's is deliberately light and only ever reaches
+    /// 0.2, so reading the raw number would leave its rain barely audible however heavy it looked on screen.
+    ///
+    /// The lightest rain keeps a share of the volume rather than fading to nothing, because drops that can be
+    /// seen falling and cannot be heard at all read as a bug rather than as a light shower.
+    /// </summary>
+    private void ApplyAmbience(float value)
+    {
+        if (ambience == null) return;
+
+        float heaviest = Mathf.Max(0.001f, heavyIntensity);
+        float strength = Mathf.Lerp(lightRainAmbience, 1f, Mathf.Clamp01(value / heaviest));
+
+        ambience.volume = ambienceVolume * strength * SoundSettings.Volume(SoundChannel.Environment);
     }
 
     /// <summary>Editor preview / debugging: forces the given strength until the next rebuild.</summary>

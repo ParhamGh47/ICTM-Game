@@ -2391,6 +2391,7 @@ GameObject:
   - component: {fileID: 6890820110899190684}
   - component: {fileID: 6890820110899190682}
   - component: {fileID: 6890820110899190683}
+  - component: {fileID: 3000848221632972236}
   m_Layer: 0
   m_Name: PauseManager
   m_TagString: Untagged
@@ -3678,6 +3679,7 @@ GameObject:
   - component: {fileID: 6890820111359889550}
   - component: {fileID: 6890820111359889551}
   - component: {fileID: 6890820111359889548}
+  - component: {fileID: 3000716261371651901}
   m_Layer: 0
   m_Name: GameOverManager
   m_TagString: Untagged
@@ -5546,3 +5548,31 @@ MonoBehaviour:
   selectOnEnable: 1
   keepSelectionAlive: 1
   rememberLast: 1
+--- !u!114 &3000848221632972236
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6890820110899190687}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9af42c6e15d84b7392c0e5a81d67f3b2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  channel: 1
+  includeChildren: 0
+--- !u!114 &3000716261371651901
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6890820111359889585}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9af42c6e15d84b7392c0e5a81d67f3b2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  channel: 1
+  includeChildren: 0

@@ -38,6 +38,29 @@ public class EngineAudio : MonoBehaviour
     [Header("Master Engine Volume Multiplier")]
     [Range(0f, 3f)] public float engineVolumeMultiplier = 3f;
 
+    [Header("Camera Mix")]
+    [Tooltip("How the engine sits in the mix when the camera is looking down on the race. From above, the " +
+             "truck is a long way from the camera and its engine - a positional sound - arrives quieter than " +
+             "the soundtrack, which plays at one volume wherever the player is. Lifting it here is what keeps " +
+             "the engine in the same place in the mix from up there.")]
+    [Range(0f, 3f)] public float aboveViewGain = 1.45f;
+
+    [Tooltip("...and when the camera is behind or inside the truck, where the engine needs no help. Inside " +
+             "the cab the source is almost on top of the listener, so it is eased down instead of being left " +
+             "to sit over the music.")]
+    [Range(0f, 3f)] public float nearViewGain = 0.85f;
+
+    [Tooltip("The angle the above gain is reached at: how far off straight down this game's above camera " +
+             "looks.")]
+    public float aboveViewAngle = 40f;
+
+    [Tooltip("...and the angle the near gain is reached at, about where the chase cameras sit.")]
+    public float nearViewAngle = 75f;
+
+    [Tooltip("Seconds for the mix to settle after a camera change. A camera switch is a cut, and the sound " +
+             "should not cut with it.")]
+    public float cameraMixSeconds = 0.6f;
+
     [Header("Engine RPM")]
     public float idleRPM = 850f;
     public float redlineRPM = 6500f;
@@ -67,6 +90,8 @@ public class EngineAudio : MonoBehaviour
 
     private AudioSource engineSource;
     private AudioLowPassFilter lowpassFilter;
+    private Camera viewCamera;
+    private float viewGain = 1f;
     private float engineRPM;
     private int currentGear = 0;
     private float shiftTimer = 0f;
@@ -89,6 +114,18 @@ public class EngineAudio : MonoBehaviour
     public ParticleSystem yellowPS2;
     public ParticleSystem blackPS2;
 
+    void Awake()
+    {
+        // The engine is one of the sounds whose volume this script works out for itself - it follows the RPM,
+        // dips on every gear change - so the player's ENGINE setting is folded into these writes rather than
+        // being handed to a SoundChannelSource, which would fight them. Telling the bus keeps it from giving
+        // the engine one of its own; the shift and exhaust one-shots go with it, because they are the same
+        // hand doing the same job.
+        SoundBus.MarkHandled(GetComponent<AudioSource>());
+        SoundBus.MarkHandled(shiftSource);
+        SoundBus.MarkHandled(exhaustBurst);
+    }
+
     void Start()
     {
         engineSource = GetComponent<AudioSource>();
@@ -97,7 +134,7 @@ public class EngineAudio : MonoBehaviour
         engineSource.loop = true;
         engineSource.playOnAwake = false;
         engineSource.spatialBlend = 1f;
-        engineSource.volume = baseVolume * engineVolumeMultiplier;
+        engineSource.volume = baseVolume * engineVolumeMultiplier * Mix();
         engineSource.Play();
 
         loopLength = engineSource.clip.length;
@@ -111,6 +148,7 @@ public class EngineAudio : MonoBehaviour
         HandleShifting();
         UpdateEngineRPM();
         UpdatePitchAndFilters();
+        UpdateViewMix();
         UpdateVolumeEnvelope();
         UpdateOrganicVariation();
 
@@ -135,7 +173,7 @@ public class EngineAudio : MonoBehaviour
         {
             StartShift(currentGear + 1);
             StartCoroutine(exhaustParticle());
-            exhaustBurst.PlayOneShot(exhaustBurst.clip);
+            exhaustBurst.PlayOneShot(exhaustBurst.clip, SoundSettings.Volume(SoundChannel.Engine));
             StartCoroutine(carShiftUp());
         }
         else
@@ -167,7 +205,7 @@ public class EngineAudio : MonoBehaviour
         if (shiftSource != null)
         {
             shiftSource.pitch = Random.Range(0.94f, 1.06f);
-            shiftSource.volume = shiftVolume;
+            shiftSource.volume = shiftVolume * SoundSettings.Volume(SoundChannel.Engine);
             shiftSource.PlayOneShot(shiftSource.clip);
         }
 
@@ -211,7 +249,43 @@ public class EngineAudio : MonoBehaviour
                 break;
         }
 
-        engineSource.volume = baseVolume * volumeEnvelope * engineVolumeMultiplier;
+        engineSource.volume = baseVolume * volumeEnvelope * engineVolumeMultiplier * Mix();
+    }
+
+    /// <summary>
+    /// The share of its authored volume the engine is heard at: the player's own ENGINE setting, and - while
+    /// the camera mix is on - whatever the camera the player is driving from asks for.
+    /// </summary>
+    private float Mix()
+    {
+        return SoundSettings.Volume(SoundChannel.Engine) * viewGain;
+    }
+
+    /// <summary>
+    /// Moves the engine's view gain towards what the camera in use asks for.
+    ///
+    /// A positional source is quieter the further away it is, and this game's cameras sit at very different
+    /// distances: from above, the truck is a long way off and its engine competes badly with a soundtrack that
+    /// plays at one volume everywhere; from inside the cab it is right on top of the listener. Rather than let
+    /// the mix drift with the camera, the two ends are authored here (<see cref="aboveViewGain"/>,
+    /// <see cref="nearViewGain"/>) and the view is read from the camera's own angle, so a blend between two
+    /// cameras passes through the change. Eased, because a camera switch is a cut and the sound should not
+    /// cut with it.
+    /// </summary>
+    private void UpdateViewMix()
+    {
+        float target = 1f;
+
+        if (SoundSettings.CameraMix)
+        {
+            if (viewCamera == null) viewCamera = CameraView.Gameplay();
+
+            float above = CameraView.LookingDown(viewCamera, aboveViewAngle, nearViewAngle);
+
+            target = Mathf.Lerp(nearViewGain, aboveViewGain, above);
+        }
+
+        viewGain = CameraView.Follow(viewGain, target, cameraMixSeconds);
     }
 
     private void UpdateEngineRPM()

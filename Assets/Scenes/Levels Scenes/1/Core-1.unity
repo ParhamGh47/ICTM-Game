@@ -62695,6 +62695,7 @@ GameObject:
   m_Component:
   - component: {fileID: 675011825}
   - component: {fileID: 675011824}
+  - component: {fileID: 3000530576662164382}
   m_Layer: 0
   m_Name: Soundtrack
   m_TagString: Untagged
@@ -204486,3 +204487,17 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   gameplaySceneName: 
   endScene: TW-End-1
+--- !u!114 &3000530576662164382
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 675011823}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9af42c6e15d84b7392c0e5a81d67f3b2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  channel: 1
+  includeChildren: 0

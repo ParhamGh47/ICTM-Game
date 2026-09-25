@@ -16,6 +16,10 @@ using UnityEngine.UI;
 /// session, so every button in the game reacts without anything being wired up in any scene. Only the
 /// button that is currently hovered or selected is ever changed.
 ///
+/// It is also what plays the two menu sounds (<see cref="UiSounds"/>): it already knows which button is
+/// highlighted and when one is pressed, so the squish of moving between buttons and the splat of confirming
+/// one are told from here rather than from every screen separately.
+///
 /// Turn it off through <see cref="Enabled"/>, or tune the fields on the "Button Focus Effect" object it
 /// creates, to change how buttons feel everywhere at once.
 /// </summary>
@@ -69,6 +73,9 @@ public class ButtonFocusEffect : MonoBehaviour
     private PointerEventData pointerData;
     private Vector3 lastPointerPosition;
     private bool usingMouse;
+
+    // The button the highlight was on last frame, which is what tells a navigation step from a panel opening.
+    private Button lastFocus;
 
     private sealed class Entry
     {
@@ -177,6 +184,8 @@ public class ButtonFocusEffect : MonoBehaviour
         Button focus = pointerMode ? (hovered != null ? hovered : selected) : selected;
         bool pressed = focus != null && (Input.GetMouseButton(0) || Input.GetButton("Submit"));
 
+        PlayMenuSounds(focus, pointerMode);
+
         if (focus != null) EnsureEntry(focus);
 
         RectTransform focusRect = focus != null ? focus.transform as RectTransform : null;
@@ -218,6 +227,32 @@ public class ButtonFocusEffect : MonoBehaviour
         }
 
         foreach (Entry entry in stale) entries.Remove(entry);
+    }
+
+    /// <summary>
+    /// The two sounds a menu makes, played from here because this is already the one place that knows which
+    /// button is highlighted and how it got there (see <see cref="UiSounds"/>).
+    ///
+    /// The squish is for a highlight that moves from one button to another - and only while the keyboard or the
+    /// pad is what moves it. Dragging the pointer across a menu is not navigating, and a squish for every button
+    /// it crossed would be a machine-gun. The first button to be highlighted at all is not a step either: that
+    /// is a panel opening or a level starting, which should be quiet.
+    ///
+    /// The splat is the press itself, from whichever device made it - the key, the pad's confirm button or the
+    /// pointer - played on the way down, as the button reacts.
+    /// </summary>
+    private void PlayMenuSounds(Button focus, bool pointerMode)
+    {
+        if (focus != lastFocus)
+        {
+            if (lastFocus != null && focus != null && !pointerMode) UiSounds.PlayMove();
+
+            lastFocus = focus;
+        }
+
+        if (focus == null) return;
+
+        if (Input.GetButtonDown("Submit") || Input.GetMouseButtonDown(0)) UiSounds.PlayConfirm();
     }
 
     // ---------------------------------------------------------------- input

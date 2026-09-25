@@ -20,6 +20,43 @@ public class StoryTypeWriter : MonoBehaviour
              "skips the story, so neither has to share the other's job.")]
     public Button speedUpButton;
 
+    [Tooltip("What the Speed Up button says while fast typing is off. The button carries the mode so the " +
+             "player can see which one is on without pressing it. The lettering is set to size itself to the " +
+             "plate, so a longer label wraps under the name instead of running off the cardboard.")]
+    public string speedUpOffLabel = "Speed-up: OFF";
+
+    [Tooltip("What the Speed Up button says while fast typing is on.")]
+    public string speedUpOnLabel = "Speed-up: ON";
+
+    [Tooltip("What the Speed Up button's lettering is coloured while fast typing is on. It is set back to " +
+             "the colour the scene gave it the rest of the time.")]
+    public Color speedUpOnLabelColor = new Color(0.72f, 0.28f, 0.05f, 1f);
+
+    [Header("Typing Sound")]
+    [Tooltip("A clack for each character as the page types itself out. The clips are made rather than " +
+             "shipped - see TypewriterClip - and belong to the EFFECTS channel, so the sound settings govern " +
+             "them like everything else the game plays at the player.")]
+    public bool keystrokes = true;
+
+    [Tooltip("How loud a clack is, before the player's own settings.")]
+    [Range(0f, 1f)] public float keystrokeVolume = 0.42f;
+
+    [Tooltip("The shortest gap between two clacks. Fast typing reveals several characters per frame, and a " +
+             "clack for every one of them would be a buzz: this is what keeps it a typewriter at any speed.")]
+    [Min(0f)] public float keystrokeInterval = 0.034f;
+
+    [Tooltip("The same, while Speed Up is on. Shorter, so the typing is heard to be faster - but not as much " +
+             "shorter as the text is, or it stops being a keyboard.")]
+    [Min(0f)] public float keystrokeIntervalSpeedUp = 0.02f;
+
+    [Tooltip("How far each clack's pitch is allowed to wander. Every key of a real typewriter sounds a " +
+             "little different from the last, and the same clack over and over sounds like a machine gun.")]
+    [Range(0f, 0.5f)] public float keystrokePitchSpread = 0.1f;
+
+    [Tooltip("How much higher the clacks are while Speed Up is on, so the fast page sounds like the same " +
+             "typewriter being used harder.")]
+    [Range(0.5f, 2f)] public float keystrokeSpeedUpPitch = 1.09f;
+
     [Header("Auto Start")]
     [TextArea(3, 10)]
     public string startText;
@@ -33,6 +70,16 @@ public class StoryTypeWriter : MonoBehaviour
     private int currentPage = 1;
     private int totalPages = 1;
 
+    // ---- the Speed Up button's own lettering, so the button says which mode it is in
+    private TMP_Text tmpLabel;
+    private Text legacyLabel;
+    private Color offLabelColor;
+
+    // ---- the typing sound
+    private AudioSource clacks;
+    private float nextClack;
+    private int clackedThrough;    // the last character a clack has been played for on this page
+
     void Awake()
     {
         tmp = GetComponent<TMP_Text>();
@@ -41,11 +88,135 @@ public class StoryTypeWriter : MonoBehaviour
         tmp.enableWordWrapping = true;
 
         if (continueButton != null) continueButton.onClick.AddListener(OnContinueClicked);
-        if (speedUpButton != null) speedUpButton.onClick.AddListener(OnSpeedUpClicked);
+
+        if (speedUpButton != null)
+        {
+            speedUpButton.onClick.AddListener(OnSpeedUpClicked);
+
+            FindSpeedUpLabel();
+        }
+
+        MakeClackSource();
+
+        // Shows which mode the button is in before the player has touched it, so the story never starts in a
+        // state the button does not mention.
+        ShowSpeedUpState();
 
         // Usable from the first frame, so the button can also hold the menu highlight while the
         // opening page types itself out.
         SetContinueInteractable(true);
+    }
+
+    // ---------------------------------------------------------------- the Speed Up button's look
+
+    /// <summary>
+    /// Finds the lettering on the Speed Up button, wherever the scene put it, and lets it size itself to the
+    /// plate - the two labels are close in length but not identical, and the plate's text has to fit both.
+    /// </summary>
+    private void FindSpeedUpLabel()
+    {
+        legacyLabel = speedUpButton.GetComponentInChildren<Text>(true);
+
+        if (legacyLabel != null)
+        {
+            legacyLabel.resizeTextForBestFit = true;
+            legacyLabel.resizeTextMinSize = 12;
+            legacyLabel.resizeTextMaxSize = legacyLabel.fontSize;
+
+            offLabelColor = legacyLabel.color;
+            return;
+        }
+
+        tmpLabel = speedUpButton.GetComponentInChildren<TMP_Text>(true);
+
+        if (tmpLabel == null) return;
+
+        tmpLabel.enableAutoSizing = true;
+        tmpLabel.fontSizeMin = 12f;
+        tmpLabel.fontSizeMax = tmpLabel.fontSize;
+
+        offLabelColor = tmpLabel.color;
+    }
+
+    /// <summary>
+    /// Puts the current mode on the Speed Up button: its words and its colour.
+    ///
+    /// This is the button's own lettering rather than a tint of its plate on purpose. ButtonFocusEffect owns the
+    /// plate - it brightens it on hover and puts it back afterwards - so anything written there would be undone
+    /// the next time the button lost the highlight. The lettering under the plate is not touched by anything else.
+    /// </summary>
+    private void ShowSpeedUpState()
+    {
+        string label = speedUpActive ? speedUpOnLabel : speedUpOffLabel;
+        Color color = speedUpActive ? speedUpOnLabelColor : offLabelColor;
+
+        if (legacyLabel != null)
+        {
+            legacyLabel.text = label;
+            legacyLabel.color = color;
+            return;
+        }
+
+        if (tmpLabel != null)
+        {
+            tmpLabel.text = label;
+            tmpLabel.color = color;
+        }
+    }
+
+    // ---------------------------------------------------------------- the typing sound
+
+    /// <summary>
+    /// The source the clacks are played from. It is marked handled, the way <see cref="UiSounds"/> does, because
+    /// the player's EFFECTS setting is folded in where the sound is played rather than by anything sweeping over
+    /// the sources afterwards - a source has one volume, and two writers would fight over it.
+    /// </summary>
+    private void MakeClackSource()
+    {
+        if (!keystrokes) return;
+
+        clacks = GetComponent<AudioSource>();
+
+        if (clacks == null) clacks = gameObject.AddComponent<AudioSource>();
+
+        clacks.playOnAwake = false;
+        clacks.loop = false;
+        clacks.spatialBlend = 0f;       // the story is on the screen, not somewhere in the scene
+        clacks.volume = 1f;
+
+        SoundBus.MarkHandled(clacks);
+    }
+
+    /// <summary>
+    /// One clack for the characters revealed since the last one, never closer together than the interval above.
+    ///
+    /// Which of the two sounds it is comes from the character it is being played for: a space or a line break is
+    /// the bar at the bottom of the keyboard, anything else is a key.
+    /// </summary>
+    private void Clack(int shown)
+    {
+        if (clacks == null || shown <= clackedThrough) return;
+        if (Time.time < nextClack) return;
+
+        clackedThrough = shown;
+        nextClack = Time.time + (speedUpActive ? keystrokeIntervalSpeedUp : keystrokeInterval);
+
+        var info = tmp.textInfo;
+        int index = shown - 1;
+        char typed = index >= 0 && index < info.characterCount ? info.characterInfo[index].character : ' ';
+
+        AudioClip clip = typed == ' ' || typed == '\n' || typed == '\t' || typed == '\r'
+            ? TypewriterClip.Bar
+            : TypewriterClip.Key;
+
+        // Every key a little different, and the whole keyboard a little higher while the story is being rushed.
+        float pitch = speedUpActive ? keystrokeSpeedUpPitch : 1f;
+        clacks.pitch = Mathf.Clamp(pitch * (1f + Random.Range(-keystrokePitchSpread, keystrokePitchSpread)), 0.5f, 2f);
+
+        float level = keystrokeVolume * Random.Range(0.85f, 1f);
+        if (speedUpActive) level *= 0.8f;
+
+        clacks.PlayOneShot(clip, level * SoundSettings.Volume(SoundChannel.Effects));
     }
 
     void Start()
@@ -93,6 +264,10 @@ public class StoryTypeWriter : MonoBehaviour
         tmp.maxVisibleCharacters = first;
         isTyping = true;
 
+        // A page starts with a clack of its own, at once rather than a beat later.
+        clackedThrough = first - 1;
+        nextClack = 0f;
+
         // Stays clickable while the page types: pressing it reveals the rest of the page, so the
         // player is never stuck waiting for the text and the highlight has somewhere to sit.
         SetContinueInteractable(true);
@@ -118,7 +293,11 @@ public class StoryTypeWriter : MonoBehaviour
             float multiplier = speedUpActive ? Mathf.Max(1f, speedUpMultiplier) : 1f;
 
             revealed = Mathf.Min(remaining, revealed + rate * multiplier * Time.deltaTime);
-            tmp.maxVisibleCharacters = first + Mathf.CeilToInt(revealed);
+
+            int shown = first + Mathf.CeilToInt(revealed);
+            tmp.maxVisibleCharacters = shown;
+
+            Clack(shown);
 
             yield return null;
         }
@@ -173,6 +352,9 @@ public class StoryTypeWriter : MonoBehaviour
     public void OnSpeedUpClicked()
     {
         speedUpActive = !speedUpActive;
+
+        // The button carries the mode, so it has to change the moment it is switched.
+        ShowSpeedUpState();
     }
 
     private void SetContinueInteractable(bool value)

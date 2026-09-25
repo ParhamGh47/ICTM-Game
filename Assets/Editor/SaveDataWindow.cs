@@ -11,8 +11,8 @@ using UnityEngine;
 /// registry and on macOS a plist - readable, but not something to hand-edit nine paint colours into. This is
 /// the editor's way in. It reads and writes the same keys the game does, so what it shows is what the game
 /// will load, and the buttons that change a lot at once go through the game's own store
-/// (<c>LevelProgress</c>, <c>TruckPaint</c>, <c>GraphicsQuality</c>) so its in-memory copy cannot fall out of
-/// step with the saved one.
+/// (<c>LevelProgress</c>, <c>TruckPaint</c>, <c>GraphicsQuality</c>, <c>GameDifficulty</c>, <c>SoundSettings</c>)
+/// so its in-memory copy cannot fall out of step with the saved one.
 ///
 /// The keys themselves are repeated here rather than read from the game: the game scripts live in an assembly
 /// this one cannot reference, and the prefixes are a storage contract one file owns (the "storage" block of
@@ -34,7 +34,34 @@ public class SaveDataWindow : EditorWindow
     private const string ShadowsKey = "Graphics.Shadows";
     private const string MotionBlurKey = "Graphics.MotionBlur";
 
+    private const string DifficultyKey = "Game.Difficulty";
+
+    private const string CameraMixKey = "Sound.CameraMix";
+
+    /// <summary>
+    /// The sound channels' keys, in the order of the game's own <c>SoundChannel</c> enum: master, soundtrack,
+    /// engine, effects, environment. The names beside them are what the settings screens label them with, and
+    /// the steps are what the game's <c>SoundLevel</c> enum holds.
+    /// </summary>
+    private static readonly string[] SoundKeys =
+    {
+        "Sound.Master",
+        "Sound.Soundtrack",
+        "Sound.Engine",
+        "Sound.Effects",
+        "Sound.Environment",
+    };
+
+    private static readonly string[] ChannelNames =
+    {
+        "Master", "Soundtrack", "Engine", "Effects", "Environment",
+    };
+
+    private static readonly string[] LevelNames = { "Muted", "Low", "Medium", "High" };
+
     private static readonly string[] PresetNames = { "Low", "Medium", "High" };
+
+    private static readonly string[] DifficultyNames = { "Easy", "Medium", "Hard" };
 
     // ---------------------------------------------------------------- state
 
@@ -50,6 +77,12 @@ public class SaveDataWindow : EditorWindow
     private int preset = 2;             // High, which is what the game runs at until it is changed
     private bool shadows = true;
     private bool motionBlur = true;
+
+    private int difficulty = 1;         // Medium, which is the game exactly as the levels were authored
+
+    // Every channel starts at High: the game as it was built to sound, before anyone touches the settings.
+    private int[] soundLevels = { 3, 3, 3, 3, 3 };
+    private bool cameraMix = true;
 
     private Vector2 scroll;
 
@@ -125,6 +158,13 @@ public class SaveDataWindow : EditorWindow
         preset = Mathf.Clamp(PlayerPrefs.GetInt(PresetKey, 2), 0, PresetNames.Length - 1);
         shadows = PlayerPrefs.GetInt(ShadowsKey, 1) != 0;
         motionBlur = PlayerPrefs.GetInt(MotionBlurKey, 1) != 0;
+
+        difficulty = Mathf.Clamp(PlayerPrefs.GetInt(DifficultyKey, 1), 0, DifficultyNames.Length - 1);
+
+        for (int i = 0; i < SoundKeys.Length; i++)
+            soundLevels[i] = Mathf.Clamp(PlayerPrefs.GetInt(SoundKeys[i], 3), 0, LevelNames.Length - 1);
+
+        cameraMix = PlayerPrefs.GetInt(CameraMixKey, 1) != 0;
     }
 
     private static string[] StyleLabels()
@@ -145,13 +185,15 @@ public class SaveDataWindow : EditorWindow
 
         EditorGUILayout.HelpBox(
             "Everything the game saves lives in PlayerPrefs - there is no save file. " +
-            "Progress, the truck's paint and the graphics settings are all one save, shared by every level and " +
-            "every profile. Changes here are read the next time the game loads them: stop and start play mode, " +
-            "or reload the scene.", MessageType.Info);
+            "Progress, the truck's paint and every setting the player can change are all one save, shared by " +
+            "every level and every profile. Changes here are read the next time the game loads them: stop and " +
+            "start play mode, or reload the scene.", MessageType.Info);
 
         Section("Level progress", DrawProgress);
         Section("Truck paint", DrawPaint);
         Section("Graphics", DrawGraphics);
+        Section("Difficulty", DrawDifficulty);
+        Section("Sound", DrawSound);
         Section("Everything", DrawDangerZone);
 
         EditorGUILayout.EndScrollView();
@@ -261,6 +303,65 @@ public class SaveDataWindow : EditorWindow
         if (GUILayout.Button("Back to what a new player gets")) CallStatic("GraphicsQuality", "ResetToDefaults");
     }
 
+    private void DrawDifficulty()
+    {
+        EditorGUI.BeginChangeCheck();
+
+        difficulty = EditorGUILayout.Popup(
+            new GUIContent("Level", "What a level's time limit and kill requirement are scaled by. Medium is " +
+                                  "the game exactly as the levels were authored, and is the default."),
+            Mathf.Clamp(difficulty, 0, DifficultyNames.Length - 1), DifficultyNames);
+
+        if (EditorGUI.EndChangeCheck())
+        {
+            PlayerPrefs.SetInt(DifficultyKey, difficulty);
+            PlayerPrefs.Save();
+        }
+
+        if (GUILayout.Button("Back to what a new player gets")) CallStatic("GameDifficulty", "ResetToDefaults");
+    }
+
+    private void DrawSound()
+    {
+        EditorGUI.BeginChangeCheck();
+
+        for (int i = 0; i < SoundKeys.Length; i++)
+        {
+            soundLevels[i] = EditorGUILayout.Popup(
+                new GUIContent(ChannelNames[i], ChannelTooltip(i)),
+                Mathf.Clamp(soundLevels[i], 0, LevelNames.Length - 1), LevelNames);
+        }
+
+        cameraMix = EditorGUILayout.Toggle(
+            new GUIContent("Camera mix", "Whether the engine is re-balanced for the camera the player is " +
+                                          "driving from, so it keeps its place in the mix from any of them."),
+            cameraMix);
+
+        if (EditorGUI.EndChangeCheck())
+        {
+            for (int i = 0; i < SoundKeys.Length; i++)
+                PlayerPrefs.SetInt(SoundKeys[i], soundLevels[i]);
+
+            PlayerPrefs.SetInt(CameraMixKey, cameraMix ? 1 : 0);
+            PlayerPrefs.Save();
+        }
+
+        if (GUILayout.Button("Back to what a new player gets")) CallStatic("SoundSettings", "ResetToDefaults");
+    }
+
+    /// <summary>What each channel is, in the same words the game's own settings screens use.</summary>
+    private static string ChannelTooltip(int channel)
+    {
+        switch (channel)
+        {
+            case 0: return "Everything at once, the way a volume knob works.";
+            case 1: return "The music: the menu song, a level's own track, the pause and game over songs.";
+            case 2: return "The player's own truck: the engine, its gear shifts and its exhaust.";
+            case 3: return "Everything the truck hits or is told to do: crashes, the horn, the targets.";
+            default: return "The world around the road: the rain, sirens, whatever a level puts out there.";
+        }
+    }
+
     private void DrawDangerZone()
     {
         if (GUILayout.Button("Print everything to the console")) Debug.Log("[Save] " + Report());
@@ -273,7 +374,8 @@ public class SaveDataWindow : EditorWindow
         {
             bool go = EditorUtility.DisplayDialog(
                 "Delete saved data",
-                "Forget the level progress, the truck's paint and the graphics settings?\n\n" +
+                "Forget the level progress, the truck's paint, the graphics and difficulty settings and the " +
+                "sound settings?\n\n" +
                 "This is the player's saved data and it cannot be undone.",
                 "Delete",
                 "Cancel");
@@ -285,6 +387,12 @@ public class SaveDataWindow : EditorWindow
             PlayerPrefs.DeleteKey(PresetKey);
             PlayerPrefs.DeleteKey(ShadowsKey);
             PlayerPrefs.DeleteKey(MotionBlurKey);
+            PlayerPrefs.DeleteKey(DifficultyKey);
+
+            for (int i = 0; i < SoundKeys.Length; i++)
+                PlayerPrefs.DeleteKey(SoundKeys[i]);
+
+            PlayerPrefs.DeleteKey(CameraMixKey);
 
             for (int i = 0; i < partNames.Length; i++)
                 ClearPart(partNames[i]);
@@ -379,16 +487,33 @@ public class SaveDataWindow : EditorWindow
         int preset = PlayerPrefs.GetInt(PresetKey, 2);
         string presetName = PresetNames[Mathf.Clamp(preset, 0, PresetNames.Length - 1)];
 
+        int difficulty = PlayerPrefs.GetInt(DifficultyKey, 1);
+        string difficultyName = DifficultyNames[Mathf.Clamp(difficulty, 0, DifficultyNames.Length - 1)];
+
+        List<string> sound = new List<string>();
+
+        for (int i = 0; i < SoundKeys.Length; i++)
+        {
+            int level = PlayerPrefs.GetInt(SoundKeys[i], 3);
+
+            sound.Add(ChannelNames[i] + " " + LevelNames[Mathf.Clamp(level, 0, LevelNames.Length - 1)]);
+        }
+
         return string.Format(
             "\n  {0}\n" +
             "  progress: unlocked up to {1}, finished up to {2}\n" +
             "  paint: {3}\n" +
-            "  graphics: {4}, shadows {5}, motion blur {6}",
+            "  graphics: {4}, shadows {5}, motion blur {6}\n" +
+            "  difficulty: {7}\n" +
+            "  sound: {8}, camera mix {9}",
             Location(), unlocked, cleared,
             parts.Count == 0 ? "(nothing repainted)" : string.Join(" | ", parts.ToArray()),
             presetName,
             PlayerPrefs.GetInt(ShadowsKey, 1) != 0 ? "on" : "off",
-            PlayerPrefs.GetInt(MotionBlurKey, 1) != 0 ? "on" : "off");
+            PlayerPrefs.GetInt(MotionBlurKey, 1) != 0 ? "on" : "off",
+            difficultyName,
+            string.Join(", ", sound.ToArray()),
+            PlayerPrefs.GetInt(CameraMixKey, 1) != 0 ? "on" : "off");
     }
 
     /// <summary>

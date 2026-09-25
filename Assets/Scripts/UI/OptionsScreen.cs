@@ -6,8 +6,9 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// The options screen: what the game's controls are, and the settings that change how it looks - one tab
-/// each, over a single page.
+/// The options screen: what the game's controls are, and the settings - one tab each, over a single page. The
+/// settings are one page rather than several: what the game looks like and what it sounds like are both some
+/// setting or other, and the tab row is for the two things a player comes here to see, not for three screens.
 ///
 /// Like <see cref="CreditsScreen"/>, <see cref="TipsScreen"/> and <see cref="CustomizeScreen"/> the whole UI
 /// is built in code, so the scene file only holds a camera, an EventSystem and this component. The look is
@@ -21,14 +22,22 @@ using UnityEngine.UI;
 /// columns are the keyboard and the pad, and the pad is named the way an Xbox pad is because that is the
 /// one every player can picture; a note under the table says the same buttons work on any pad.
 ///
-/// The settings tab holds the game's two choices, each of which is a row of three with the one in force lit
-/// up. The graphics settings live in <see cref="GraphicsQuality"/>: the three presets and the two switches
-/// that sit on top of them. The difficulties live in <see cref="GameDifficulty"/>: what a level's time limit
-/// and its kill requirement become. A choice takes effect and is saved as soon as it is made - only the
-/// ground detail of a level waits for that level to load, and a difficulty lands on the next level - so a
-/// level that is open when either changes asks to be restarted rather than saying so in advance (see
-/// <see cref="PauseOptionsPanel"/>). Nothing here describes what the presets do: the picture is the
-/// description, and a list of numbers beside it would be the implementation rather than the choice.
+/// The settings tab is the second page, and the only place anything is chosen. It holds the three groups in
+/// the order they matter: the graphics settings (<see cref="GraphicsQuality"/> - the three presets and the
+/// two switches that sit on top of them), the difficulties (<see cref="GameDifficulty"/> - what a level's time
+/// limit and its kill requirement become), and the sound (<see cref="SoundSettings"/> - one row per channel,
+/// plus the switch that keeps the engine in the same place in the mix whichever camera the player drives
+/// from). A choice takes effect and is saved as soon as it is made - only the ground detail of a level waits
+/// for that level to load, and a difficulty lands on the next level - so a level that is open when either
+/// changes asks to be restarted rather than saying so in advance (see <see cref="PauseOptionsPanel"/>).
+/// Nothing here describes what the presets do: the picture is the description, and a list of numbers beside
+/// it would be the implementation rather than the choice.
+///
+/// The sound rows are built from <see cref="SoundSettings"/> - the channels, their names, the steps, where the
+/// choice is kept - so this page and the pause menu's options are the same rows, and a channel added there
+/// appears here without this file changing. A row lights up the step the channel is really playing at, which
+/// means the master's own row moves the rest: put the master on LOW and every other row reads LOW with it,
+/// because that is what they are now playing at.
 ///
 /// A gamepad or the keyboard drives all of it through the project's own menu navigation, which finds these
 /// buttons on its own; the places where the nearest-neighbour guess is wrong - the tab row, the preset row -
@@ -66,14 +75,20 @@ public class OptionsScreen : MonoBehaviour
     public string difficultyCaption = "DIFFICULTY";
     [Tooltip("One label per difficulty, in the order GameDifficulty defines them: Easy, Medium, Hard.")]
     public string[] difficultyLabels = { "EASY", "MEDIUM", "HARD" };
-    [Tooltip("The plate under the difficulties. Says what the choice changes, since it cannot be seen.")]
-    [TextArea(2, 6)]
-    public string difficultyNoteText =
-        "How long a level gives you, and how many targets it asks for. It lands on the next level you start.";
     [Tooltip("The plate beside the settings. Says how a choice is taken, not what the presets do.")]
     [TextArea(2, 6)]
     public string settingsNoteText =
         "Your choice is saved and applied straight away.";
+
+    // ---------------------------------------------------------------- the sound rows
+
+    [Header("Sound")]
+    public string soundCaption = "SOUND";
+    public string cameraMixText = "CAMERA MIX";
+    [Tooltip("The line beside the camera mix switch, saying what it does in one line.")]
+    [TextArea(2, 6)]
+    public string cameraMixNoteText =
+        "Keeps the engine at the same level whichever camera you drive from.";
 
     // ---------------------------------------------------------------- look
 
@@ -117,13 +132,30 @@ public class OptionsScreen : MonoBehaviour
     public float deviceColumnWidth = 560f;
 
     [Header("Layout - the settings tab")]
-    public Vector2 presetButtonSize = new Vector2(230f, 64f);
+    public Vector2 presetButtonSize = new Vector2(230f, 58f);
     public float presetGap = 16f;
-    public Vector2 switchSize = new Vector2(420f, 60f);
-    public float switchGap = 14f;
-    [Tooltip("Where the note plate sits, and how wide it is.")]
+    public Vector2 switchSize = new Vector2(400f, 54f);
+    public float switchGap = 12f;
+    [Tooltip("Where the note plates sit, and how wide they are. One under the other, beside the left column.")]
     public float noteX = 1120f;
     public float noteWidth = 740f;
+    public float noteGap = 32f;
+    [Tooltip("How far under a section's content the next section's heading starts. The three groups are told " +
+             "apart by this and by the rule under each heading, since the rows themselves are alike.")]
+    public float sectionGap = 28f;
+    [Tooltip("The accent rule drawn under a section heading, matching the one under the screen's title.")]
+    public float sectionRuleWidth = 240f;
+    public float sectionRuleHeight = 4f;
+
+    [Header("Layout - the sound rows")]
+    public Vector2 soundButtonSize = new Vector2(170f, 46f);
+    public float soundButtonGap = 12f;
+    public float soundRowGap = 8f;
+    [Tooltip("How much room the channel's own name is given, before its steps start.")]
+    public float soundLabelWidth = 400f;
+    public float soundFirstButtonX = 440f;
+    [Tooltip("How far the camera mix's one-line note sits to the right of its switch.")]
+    public float cameraMixNoteGap = 30f;
 
     // ---------------------------------------------------------------- transition
 
@@ -136,13 +168,13 @@ public class OptionsScreen : MonoBehaviour
 
     private sealed class Tab
     {
-        public bool showsControls;
+        public Page shows;
         public TextMeshProUGUI label;
         public Image activeBar;
         public Button button;
     }
 
-    /// <summary>One choice of a row: a preset, or a difficulty. Both rows are built and refreshed alike.</summary>
+    /// <summary>One choice of a row: a preset, a difficulty, or one step of a sound channel.</summary>
     private sealed class ChoiceRow
     {
         public int index;
@@ -151,9 +183,25 @@ public class OptionsScreen : MonoBehaviour
         public Image activeBar;
     }
 
+    /// <summary>One sound channel: its name on the left, and the steps it can be on to the right.</summary>
+    private sealed class ChannelRow
+    {
+        public int channel;
+        public TextMeshProUGUI label;
+        public ChoiceRow[] steps;
+    }
+
+    /// <summary>Which of the screen's two pages is on show. Only ever one of them.</summary>
+    private enum Page
+    {
+        Controls = 0,
+        Settings = 1,
+    }
+
     private readonly List<Tab> tabs = new List<Tab>();
     private readonly List<ChoiceRow> presetRows = new List<ChoiceRow>();
     private readonly List<ChoiceRow> difficultyRows = new List<ChoiceRow>();
+    private readonly List<ChannelRow> soundRows = new List<ChannelRow>();
 
     private CanvasGroup group;
     private RectTransform controlsPage;
@@ -164,11 +212,13 @@ public class OptionsScreen : MonoBehaviour
     private Button backButton;
     private Button shadowsButton;
     private Button blurButton;
+    private Button cameraMixButton;
 
     private TextMeshProUGUI shadowsLabel;
     private TextMeshProUGUI blurLabel;
+    private TextMeshProUGUI cameraMixLabel;
 
-    private bool showingControls = true;
+    private Page page = Page.Controls;
 
     /// <summary>The width the table and the rows use, between the two margins.</summary>
     private float ContentWidth
@@ -184,11 +234,12 @@ public class OptionsScreen : MonoBehaviour
 
         GraphicsQuality.Changed += Refresh;
         GameDifficulty.Changed += Refresh;
+        SoundSettings.Changed += Refresh;
     }
 
     private void Start()
     {
-        ShowControls(true);
+        ShowPage(Page.Controls);
         Refresh();
 
         StartCoroutine(FadeIn());
@@ -198,16 +249,21 @@ public class OptionsScreen : MonoBehaviour
     {
         GraphicsQuality.Changed -= Refresh;
         GameDifficulty.Changed -= Refresh;
+        SoundSettings.Changed -= Refresh;
     }
 
     // ---------------------------------------------------------------- tabs
 
-    private void ShowControls(bool show)
+    /// <summary>
+    /// Puts one page on screen. The other is switched off rather than hidden, so its buttons are not merely
+    /// unseen but unselectable - which is what keeps a keyboard or a gamepad from wandering onto them.
+    /// </summary>
+    private void ShowPage(Page show)
     {
-        showingControls = show;
+        page = show;
 
-        if (controlsPage != null) controlsPage.gameObject.SetActive(show);
-        if (settingsPage != null) settingsPage.gameObject.SetActive(!show);
+        if (controlsPage != null) controlsPage.gameObject.SetActive(show == Page.Controls);
+        if (settingsPage != null) settingsPage.gameObject.SetActive(show == Page.Settings);
 
         RefreshTabs();
     }
@@ -216,7 +272,7 @@ public class OptionsScreen : MonoBehaviour
     {
         for (int i = 0; i < tabs.Count; i++)
         {
-            bool active = tabs[i].showsControls == showingControls;
+            bool active = tabs[i].shows == page;
 
             tabs[i].activeBar.enabled = active;
             tabs[i].label.color = active ? accentColor : labelColor;
@@ -243,6 +299,16 @@ public class OptionsScreen : MonoBehaviour
     private void ChooseDifficulty(int index)
     {
         GameDifficulty.Choose((DifficultyLevel)index);
+    }
+
+    private void ChooseLevel(int channel, int step)
+    {
+        SoundSettings.SetLevel(channel, (SoundLevel)step);
+    }
+
+    private void ToggleCameraMix()
+    {
+        SoundSettings.SetCameraMix(!SoundSettings.CameraMix);
     }
 
     private void GoBack()
@@ -286,6 +352,31 @@ public class OptionsScreen : MonoBehaviour
         {
             blurLabel.text = motionBlurText + "   " + (GraphicsQuality.MotionBlur ? onText : offText);
             blurLabel.color = GraphicsQuality.MotionBlur ? labelColor : dimLabelColor;
+        }
+
+        // The step lit is the one the channel is really playing at, not the one the player chose for it: the
+        // master is a ceiling, so its row moving caps the rest and they say so here. Each channel's own choice
+        // is still there underneath, and comes back to the bar the moment the master lets it.
+        for (int i = 0; i < soundRows.Count; i++)
+        {
+            ChannelRow row = soundRows[i];
+            int level = (int)SoundSettings.EffectiveLevel(row.channel);
+
+            row.label.color = level > 0 ? labelColor : dimLabelColor;
+
+            for (int s = 0; s < row.steps.Length; s++)
+            {
+                bool active = s == level;
+
+                row.steps[s].activeBar.enabled = active;
+                row.steps[s].label.color = active ? accentColor : labelColor;
+            }
+        }
+
+        if (cameraMixLabel != null)
+        {
+            cameraMixLabel.text = cameraMixText + "   " + (SoundSettings.CameraMix ? onText : offText);
+            cameraMixLabel.color = SoundSettings.CameraMix ? labelColor : dimLabelColor;
         }
     }
 
@@ -352,11 +443,11 @@ public class OptionsScreen : MonoBehaviour
     private void BuildTabs(Transform root)
     {
         // Named after what they show, because MenuNavigation starts on "Controls" by that name.
-        controlsTab = CreateTab(root, "Controls", controlsTabText, 0, true);
-        settingsTab = CreateTab(root, "Settings", settingsTabText, 1, false);
+        controlsTab = CreateTab(root, "Controls", controlsTabText, 0, Page.Controls);
+        settingsTab = CreateTab(root, "Settings", settingsTabText, 1, Page.Settings);
     }
 
-    private Button CreateTab(Transform root, string name, string label, int index, bool showsControls)
+    private Button CreateTab(Transform root, string name, string label, int index, Page shows)
     {
         Button button = CreateButton(name, root, label, tabSize);
         PlaceTopLeft((RectTransform)button.transform, sideMargin + index * (tabSize.x + tabGap), tabTopY, tabSize.x, tabSize.y);
@@ -375,9 +466,9 @@ public class OptionsScreen : MonoBehaviour
         barRect.sizeDelta = new Vector2(0f, 5f);
         barRect.anchoredPosition = Vector2.zero;
 
-        button.onClick.AddListener(() => ShowControls(showsControls));
+        button.onClick.AddListener(() => ShowPage(shows));
 
-        tabs.Add(new Tab { showsControls = showsControls, label = text, activeBar = bar, button = button });
+        tabs.Add(new Tab { shows = shows, label = text, activeBar = bar, button = button });
 
         return button;
     }
@@ -455,9 +546,9 @@ public class OptionsScreen : MonoBehaviour
     {
         float y = contentTopY;
 
-        BuildSettingsNote(page);
+        BuildSettingsNotes(page);
 
-        y = BuildCaption(page, graphicsCaption, y, accentColor, captionSize);
+        y = BuildSectionHeading(page, graphicsCaption, y);
 
         // The presets, as a row of choices with the one in force lit up.
         BuildChoiceRow(page, presetLabels, y, presetRows, ChoosePreset);
@@ -478,15 +569,20 @@ public class OptionsScreen : MonoBehaviour
         blurLabel = blurButton.GetComponentInChildren<TextMeshProUGUI>();
         blurButton.onClick.AddListener(ToggleMotionBlur);
 
-        y -= switchSize.y + groupGap;
+        y -= switchSize.y + sectionGap;
 
         // The difficulty, under everything the picture is made of: it is the one choice here that changes what
         // a level asks of the player rather than what it looks like.
-        y = BuildCaption(page, difficultyCaption, y, accentColor, captionSize);
+        y = BuildSectionHeading(page, difficultyCaption, y);
 
         BuildChoiceRow(page, difficultyLabels, y, difficultyRows, ChooseDifficulty);
 
-        BuildDifficultyNote(page, y + presetButtonSize.y + 12f);
+        y -= presetButtonSize.y + sectionGap;
+
+        // The sound is the last group on this page rather than a page of its own: it is a setting like the
+        // other two, and the tab row is what the player is choosing between - what the game looks like and
+        // what it sounds like, not three separate screens.
+        BuildSoundGroup(page, y);
     }
 
     /// <summary>
@@ -529,42 +625,36 @@ public class OptionsScreen : MonoBehaviour
     }
 
     /// <summary>
-    /// What the difficulties change, written under them. Unlike the graphics presets - where the picture in
-    /// front of the player is the description - a time limit and a kill count cannot be seen from here, so
-    /// this is the only place the choice can say what it does.
+    /// The plate beside the settings: the one thing the player needs to know about a choice - that it lands
+    /// straight away - and nothing about what each preset does, because the picture in front of them is the
+    /// description and a list of numbers beside it would be the implementation.
+    ///
+    /// It is out of the left column's way for the whole length of the page, so no row below has to stop short
+    /// of it.
     /// </summary>
-    private void BuildDifficultyNote(RectTransform page, float y)
+    private void BuildSettingsNotes(RectTransform page)
     {
-        TextMeshProUGUI note = CreateText("Difficulty Note", page, noteSize, Fade(labelColor, 0.75f), TextAlignmentOptions.TopLeft);
-        note.text = difficultyNoteText;
-        note.lineSpacing = 6f;
-
-        // The full width between the margins: the plate beside the graphics settings ends well above this, so
-        // there is nothing here to keep clear of.
-        float height = Mathf.Max(noteSize * 1.6f, note.GetPreferredValues(difficultyNoteText, ContentWidth, 0f).y);
-
-        PlaceTopLeft(note.rectTransform, sideMargin, y, ContentWidth, height);
+        BuildNotePlate(page, settingsNoteText, "Settings Note", noteX, contentTopY, noteWidth);
     }
 
     /// <summary>
-    /// The plate beside the settings. It carries the one thing the player needs to know about a choice - that
-    /// it lands straight away - and nothing about what each preset does, because the picture in front of them
-    /// is the description and a list of numbers beside it would be the implementation.
+    /// A paragraph on its own plate, tall enough for the words in it however they wrap. Returns the height it
+    /// took, so the caller knows where the next thing may start.
     /// </summary>
-    private void BuildSettingsNote(RectTransform page)
+    private float BuildNotePlate(Transform page, string text, string name, float x, float y, float width)
     {
         float pad = 26f;
-        float inner = noteWidth - pad * 2f;
+        float inner = width - pad * 2f;
 
-        TextMeshProUGUI body = CreateText("Settings Note", page, noteSize, Fade(labelColor, 0.75f), TextAlignmentOptions.TopLeft);
-        body.text = settingsNoteText;
+        TextMeshProUGUI body = CreateText(name, page, noteSize, Fade(labelColor, 0.75f), TextAlignmentOptions.TopLeft);
+        body.text = text;
         body.lineSpacing = 8f;
 
-        float bodyHeight = Mathf.Max(noteSize * 2f, body.GetPreferredValues(settingsNoteText, inner, 0f).y);
+        float bodyHeight = Mathf.Max(noteSize * 2f, body.GetPreferredValues(text, inner, 0f).y);
         float height = pad + bodyHeight + pad;
 
-        RectTransform panel = CreateRect("Settings Note Plate", page);
-        PlaceTopLeft(panel, noteX, contentTopY, noteWidth, height);
+        RectTransform panel = CreateRect(name + " Plate", page);
+        PlaceTopLeft(panel, x, y, width, height);
 
         Image plate = panel.gameObject.AddComponent<Image>();
         plate.color = panelColor;
@@ -573,6 +663,119 @@ public class OptionsScreen : MonoBehaviour
         // The text is moved onto the plate now that it exists, so it is drawn on top of it.
         body.transform.SetParent(panel, false);
         PlaceTopLeft(body.rectTransform, pad, -pad, inner, bodyHeight);
+
+        return height;
+    }
+
+    /// <summary>A paragraph with no plate of its own, for one that sits beside something already plated.</summary>
+    private void BuildSideNote(Transform page, string text, float x, float y, float width, float height)
+    {
+        TextMeshProUGUI body = CreateText("Note", page, noteSize, Fade(labelColor, 0.75f), TextAlignmentOptions.TopLeft);
+        body.text = text;
+        body.lineSpacing = 8f;
+
+        PlaceTopLeft(body.rectTransform, x, y, width, height);
+    }
+
+    /// <summary>
+    /// The sound group of the settings page: a caption with the camera mix switch beside it, then one row per
+    /// channel. Returns where the group ends, should anything ever be built under it.
+    ///
+    /// The rows are built from <see cref="SoundSettings"/> rather than written out here, which is what makes
+    /// this page and the pause menu's the same rows - the same channels, the same steps, the same where they
+    /// are kept - and what makes a channel added there turn up in both.
+    /// </summary>
+    private float BuildSoundGroup(RectTransform page, float y)
+    {
+        // The heading carries the camera mix as well: it is not a volume, it is the one tweak on top of what
+        // the ENGINE row says, so it reads as part of the group's heading rather than as a sixth channel - and
+        // it costs the rows below it no room at all. The heading's rule is short enough to stop well short of
+        // the switch, the way the screen's own title rule does.
+        float headingTop = y;
+        float captionHeight = captionSize * 1.5f;
+
+        // The heading's own lettering stops before the switch beside it; the rule under it is short enough not
+        // to reach it either.
+        y = BuildSectionHeading(page, soundCaption, y, soundLabelWidth - 20f);
+
+        // Centred on the heading's own line, so the two read as one row.
+        float switchY = headingTop + Mathf.Max(0f, (switchSize.y - captionHeight) * 0.5f);
+
+        cameraMixButton = CreateButton("Camera Mix", page, cameraMixText, switchSize);
+        PlaceTopLeft((RectTransform)cameraMixButton.transform, sideMargin + soundLabelWidth, switchY,
+            switchSize.x, switchSize.y);
+        cameraMixLabel = cameraMixButton.GetComponentInChildren<TextMeshProUGUI>();
+        cameraMixButton.onClick.AddListener(ToggleCameraMix);
+
+        // The note is on the caption's line, to the switch's right, where nothing else is drawn and the text
+        // fits on one line however narrow the gap is made.
+        float mixNoteX = sideMargin + soundLabelWidth + switchSize.x + cameraMixNoteGap;
+
+        BuildSideNote(page, cameraMixNoteText, mixNoteX, switchY + (switchSize.y - noteSize * 1.6f) * 0.5f,
+            ContentWidth - (mixNoteX - sideMargin), switchSize.y);
+
+        // Whatever this heading row takes - the switch is taller than the lettering and its rule - the channels
+        // start below all of it.
+        y = Mathf.Min(y, switchY - switchSize.y) - 12f;
+
+        for (int channel = 0; channel < SoundSettings.ChannelCount; channel++)
+            y = BuildSoundRow(page, channel, y);
+
+        return y;
+    }
+
+    /// <summary>
+    /// One channel of the sound group: its name on the left, then the game's steps, with the one in force lit.
+    /// Returns where the row below it starts.
+    /// </summary>
+    private float BuildSoundRow(RectTransform page, int channel, float y)
+    {
+        // The name is a label rather than a button: it heads the row, and the steps beside it want every pixel
+        // of the width. It is nudged down to sit on the steps' centre line rather than their top edge.
+        TextMeshProUGUI name = CreateLabel(page, "Channel - " + SoundSettings.ChannelNames[channel],
+            SoundSettings.ChannelNames[channel], bodySize, labelColor, sideMargin, y, soundLabelWidth,
+            TextAlignmentOptions.Left, true);
+
+        name.rectTransform.anchoredPosition = new Vector2(sideMargin,
+            y - (soundButtonSize.y - bodySize * 1.5f) * 0.5f);
+
+        ChannelRow row = new ChannelRow
+        {
+            channel = channel,
+            label = name,
+            steps = new ChoiceRow[SoundSettings.StepCount],
+        };
+
+        for (int step = 0; step < SoundSettings.StepCount; step++)
+        {
+            int chosen = step;              // captured, not the loop variable, for the callback
+
+            Button button = CreateButton(SoundSettings.ChannelNames[channel] + " " + SoundSettings.StepNames[step],
+                page, SoundSettings.StepNames[step], soundButtonSize);
+
+            PlaceTopLeft((RectTransform)button.transform,
+                sideMargin + soundFirstButtonX + step * (soundButtonSize.x + soundButtonGap), y,
+                soundButtonSize.x, soundButtonSize.y);
+
+            TextMeshProUGUI label = button.GetComponentInChildren<TextMeshProUGUI>();
+            label.characterSpacing = 2f;
+
+            Image bar = CreateImage("Selected", button.transform, accentColor);
+            RectTransform barRect = bar.rectTransform;
+            barRect.anchorMin = new Vector2(0f, 0f);
+            barRect.anchorMax = new Vector2(1f, 0f);
+            barRect.pivot = new Vector2(0.5f, 0f);
+            barRect.sizeDelta = new Vector2(0f, 5f);
+            barRect.anchoredPosition = Vector2.zero;
+
+            button.onClick.AddListener(() => ChooseLevel(channel, chosen));
+
+            row.steps[step] = new ChoiceRow { index = step, button = button, label = label, activeBar = bar };
+        }
+
+        soundRows.Add(row);
+
+        return y - soundButtonSize.y - soundRowGap;
     }
 
     private void BuildActions(Transform root)
@@ -595,8 +798,16 @@ public class OptionsScreen : MonoBehaviour
         Button middlePreset = presetRows.Count > 1 ? presetRows[presetRows.Count / 2].button : null;
         Button middleDifficulty = difficultyRows.Count > 1 ? difficultyRows[difficultyRows.Count / 2].button : null;
 
+        // Where the settings page is entered from: the middle preset, the way the sound rows are entered from
+        // the middle step of the first channel. The tab row is the one place the nearest-neighbour guess reads
+        // badly.
+        Button middleFirstSound = null;
+
+        if (soundRows.Count > 0)
+            middleFirstSound = soundRows[0].steps[SoundSettings.StepCount / 2].button;
+
         SetNavigation(controlsTab, null, settingsTab, backButton, null);
-        SetNavigation(settingsTab, null, null, middlePreset, controlsTab);
+        SetNavigation(settingsTab, controlsTab, null, middlePreset, controlsTab);
 
         for (int i = 0; i < presetRows.Count; i++)
         {
@@ -617,11 +828,40 @@ public class OptionsScreen : MonoBehaviour
             Button left = i > 0 ? difficultyRows[i - 1].button : null;
             Button right = i < difficultyRows.Count - 1 ? difficultyRows[i + 1].button : null;
 
-            SetNavigation(difficultyRows[i].button, left, right, backButton, blurButton);
+            SetNavigation(difficultyRows[i].button, left, right, cameraMixButton, blurButton);
         }
 
+        // The sound rows are a grid of twenty small buttons, which is exactly the shape a
+        // nearest-neighbour guess gets wrong once the rows are this narrow - so the columns and the rows are
+        // wired as the table they look like. Up from the top row is the camera mix above it, which is the
+        // group's heading; down from the last row is BACK.
+        Button middleLastSound = null;
+
+        for (int i = 0; i < soundRows.Count; i++)
+        {
+            ChannelRow row = soundRows[i];
+
+            for (int s = 0; s < row.steps.Length; s++)
+            {
+                Button left = s > 0 ? row.steps[s - 1].button : null;
+                Button right = s < row.steps.Length - 1 ? row.steps[s + 1].button : null;
+                Button above = i > 0 ? soundRows[i - 1].steps[s].button : cameraMixButton;
+                Button below = i < soundRows.Count - 1 ? soundRows[i + 1].steps[s].button : backButton;
+
+                SetNavigation(row.steps[s].button, left, right, below, above);
+            }
+
+            if (i == soundRows.Count - 1) middleLastSound = row.steps[SoundSettings.StepCount / 2].button;
+        }
+
+        if (cameraMixButton != null)
+            SetNavigation(cameraMixButton, null, null,
+                middleFirstSound != null ? middleFirstSound : backButton,
+                middleDifficulty != null ? middleDifficulty : blurButton);
+
         if (backButton != null)
-            SetNavigation(backButton, null, null, null, middleDifficulty != null ? middleDifficulty : blurButton);
+            SetNavigation(backButton, null, null, null,
+                middleLastSound != null ? middleLastSound : middleDifficulty);
     }
 
     private static void SetNavigation(Button button, Button left, Button right, Button down, Button up)
@@ -670,12 +910,37 @@ public class OptionsScreen : MonoBehaviour
         return text;
     }
 
-    /// <summary>A section heading in the accent colour. Returns the y the section's content starts at.</summary>
+    /// <summary>A heading inside the controls table. Returns the y the group's rows start at.</summary>
     private float BuildCaption(Transform parent, string text, float y, Color colour, float size)
     {
         CreateLabel(parent, "Caption", text, size, colour, sideMargin, y, ContentWidth, TextAlignmentOptions.TopLeft, true);
 
         return y - size * 1.5f - 10f;
+    }
+
+    /// <summary>
+    /// A section heading: its name in the accent colour with a short accent rule under it, the way the screen's
+    /// own title has one. This is what tells the three groups apart - the rows themselves are alike enough
+    /// that a heading alone leaves them reading as one long list - and it returns the y the section's content
+    /// starts at, so the rule's height and the gap under it are decided in one place.
+    /// </summary>
+    private float BuildSectionHeading(Transform parent, string text, float y)
+    {
+        return BuildSectionHeading(parent, text, y, ContentWidth);
+    }
+
+    /// <summary>The same, for a heading that shares its line with something else and so must stop short of it.</summary>
+    private float BuildSectionHeading(Transform parent, string text, float y, float width)
+    {
+        CreateLabel(parent, "Caption", text, captionSize, accentColor, sideMargin, y, width,
+            TextAlignmentOptions.TopLeft, true);
+
+        float ruleY = y - captionSize * 1.5f - 4f;
+
+        Image rule = CreateImage("Section Rule", parent, Fade(accentColor, 0.45f));
+        PlaceTopLeft(rule.rectTransform, sideMargin, ruleY, sectionRuleWidth, sectionRuleHeight);
+
+        return ruleY - sectionRuleHeight - 12f;
     }
 
     /// <summary>A line of guidance under the table. Returns the y the next one starts at.</summary>

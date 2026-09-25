@@ -116,9 +116,15 @@ public class CreditsScreen : MonoBehaviour
             source.playOnAwake = false;
             source.clip = music;
             source.loop = loopMusic;
-            source.volume = musicVolume;
+
+            // The credits song is music, so it follows the player's own SOUNDTRACK setting. The source is made
+            // here rather than in the scene, which is why the setting is folded in by hand: it is also what
+            // tells the bus this one is already accounted for.
+            source.volume = musicVolume * SoundSettings.Volume(SoundChannel.Soundtrack);
             source.spatialBlend = 0f;      // 2D: the credits song is not positional
             source.Play();
+
+            SoundBus.MarkHandled(source);
         }
 
         StartCoroutine(RevealRoutine());

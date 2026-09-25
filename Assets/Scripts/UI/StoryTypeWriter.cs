@@ -57,6 +57,32 @@ public class StoryTypeWriter : MonoBehaviour
              "typewriter being used harder.")]
     [Range(0.5f, 2f)] public float keystrokeSpeedUpPitch = 1.09f;
 
+    [Tooltip("How much lower and heavier a shifted character is: a capital, a digit or a mark is struck " +
+             "through the shift key, which puts more of the machine behind the blow than a lower-case letter.")]
+    [Range(0.5f, 1.5f)] public float shiftedPitch = 0.94f;
+
+    [Tooltip("How much louder the same shifted characters are, before the pitch wobble is counted in.")]
+    [Range(0.5f, 2f)] public float shiftedVolume = 1.12f;
+
+    [Tooltip("Whether a line break rings the bell at the margin. On a typewriter the bell is the sound that " +
+             "comes just before the carriage does, so the two belong together - but a story with many short " +
+             "lines can have more of it than the ear wants.")]
+    public bool carriageBell = true;
+
+    [Tooltip("How loud that bell is against the carriage return it rings for.")]
+    [Range(0f, 1f)] public float bellVolume = 0.5f;
+
+    [Tooltip("How far the gap between two clacks wanders. Nobody types in time - a steady interval is the " +
+             "thing that makes a typed page sound like a machine printing one.")]
+    [Range(0f, 0.5f)] public float keystrokeRhythmSpread = 0.12f;
+
+    [Tooltip("The extra breath after a full stop, question mark or exclamation mark, in seconds. A typed " +
+             "sentence is not one run of keys: the hand stops at the end of one before starting the next.")]
+    [Min(0f)] public float sentencePause = 0.07f;
+
+    [Tooltip("The shorter version of the same thing, after a comma, a semicolon or a colon.")]
+    [Min(0f)] public float clausePause = 0.025f;
+
     [Header("Auto Start")]
     [TextArea(3, 10)]
     public string startText;
@@ -190,8 +216,10 @@ public class StoryTypeWriter : MonoBehaviour
     /// <summary>
     /// One clack for the characters revealed since the last one, never closer together than the interval above.
     ///
-    /// Which of the two sounds it is comes from the character it is being played for: a space or a line break is
-    /// the bar at the bottom of the keyboard, anything else is a key.
+    /// Which sound it is comes from the character it is being played for, the way it would from a real
+    /// keyboard: the wide bar at the bottom of it for a space, the carriage for a line break, and a letter's
+    /// own typebar for a letter - so the same character always sounds the same and a line of prose does not.
+    /// A capital, a digit or a mark is struck through the shift key and comes out a little heavier and lower.
     /// </summary>
     private void Clack(int shown)
     {
@@ -199,24 +227,50 @@ public class StoryTypeWriter : MonoBehaviour
         if (Time.time < nextClack) return;
 
         clackedThrough = shown;
-        nextClack = Time.time + (speedUpActive ? keystrokeIntervalSpeedUp : keystrokeInterval);
 
         var info = tmp.textInfo;
         int index = shown - 1;
         char typed = index >= 0 && index < info.characterCount ? info.characterInfo[index].character : ' ';
 
-        AudioClip clip = typed == ' ' || typed == '\n' || typed == '\t' || typed == '\r'
-            ? TypewriterClip.Bar
-            : TypewriterClip.Key;
+        bool lineBreak = typed == '\n' || typed == '\r';
+        bool wide = lineBreak || typed == ' ' || typed == '\t';
+
+        AudioClip clip = lineBreak ? TypewriterClip.Return
+            : wide ? TypewriterClip.Bar
+            : TypewriterClip.Key(TypewriterClip.VoiceFor(typed));
+
+        // Everything a typewriter can reach that is not a lower-case letter is reached through the shift key.
+        bool shifted = !wide && !char.IsLower(typed);
 
         // Every key a little different, and the whole keyboard a little higher while the story is being rushed.
         float pitch = speedUpActive ? keystrokeSpeedUpPitch : 1f;
+        if (shifted) pitch *= shiftedPitch;
+
         clacks.pitch = Mathf.Clamp(pitch * (1f + Random.Range(-keystrokePitchSpread, keystrokePitchSpread)), 0.5f, 2f);
 
         float level = keystrokeVolume * Random.Range(0.85f, 1f);
+        if (shifted) level *= shiftedVolume;
         if (speedUpActive) level *= 0.8f;
 
-        clacks.PlayOneShot(clip, level * SoundSettings.Volume(SoundChannel.Effects));
+        // Folded in here rather than by anything sweeping over the sources afterwards: a source has one volume,
+        // and two writers would fight over it.
+        float effects = SoundSettings.Volume(SoundChannel.Effects);
+
+        clacks.PlayOneShot(clip, level * effects);
+
+        // The margin bell rings just before the carriage comes back, so the two are played as one gesture.
+        if (lineBreak && carriageBell)
+            clacks.PlayOneShot(TypewriterClip.Bell, level * bellVolume * effects);
+
+        // And the hand is not a metronome: the gap between two keys wanders, and a sentence or a clause leaves
+        // a longer one than a word does.
+        float interval = (speedUpActive ? keystrokeIntervalSpeedUp : keystrokeInterval)
+            * (1f + Random.Range(-keystrokeRhythmSpread, keystrokeRhythmSpread));
+
+        if (typed == '.' || typed == '!' || typed == '?') interval += sentencePause;
+        else if (typed == ',' || typed == ';' || typed == ':') interval += clausePause;
+
+        nextClack = Time.time + interval;
     }
 
     void Start()

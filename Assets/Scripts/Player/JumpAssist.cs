@@ -38,11 +38,12 @@ public class JumpAssist : MonoBehaviour
 
     [Tooltip("The speed (km/h) the help pushes the truck towards while it is over a gap. A jump slower than " +
              "this is sped up; one already at or above it is left alone.")]
-    public float assistSpeedKPH = 80f;
+    public float assistSpeedKPH = 95f;
 
-    [Tooltip("How hard the help accelerates the truck over a gap, in metres per second squared. Kept gentle: " +
-             "it is a nudge forwards, not a rocket, and it only has the length of the jump to work in.")]
-    public float assistAcceleration = 8f;
+    [Tooltip("How hard the help accelerates the truck over a gap, in metres per second squared. It only has " +
+             "the length of the jump to work in, so this is what decides how much of the target speed a short " +
+             "jump actually gains - raise it for a jump that climbs more steeply, lower it for a gentler arc.")]
+    public float assistAcceleration = 14f;
 
     [Tooltip("Ignore the first moments in the air, which is what a kerb, a crest or a scrappy landing looks " +
              "like. A real jump spends longer off the ground than this.")]
@@ -53,7 +54,6 @@ public class JumpAssist : MonoBehaviour
     public float maxAirTime = 3f;
 
     private Rigidbody rb;
-    private float airborneTime;
 
     // Shared so the checks cost no allocation every frame.
     private static readonly RaycastHit[] hits = new RaycastHit[16];
@@ -63,22 +63,38 @@ public class JumpAssist : MonoBehaviour
         rb = GetComponent<Rigidbody>();
     }
 
+    /// <summary>
+    /// Whether the truck is in the air over a break in the road right now.
+    ///
+    /// Kept up to date whether or not the speed assist itself is switched on, because it is what tells the
+    /// jump cinematic a jump has begun - the two are separate things a player can want separately.
+    /// </summary>
+    public bool IsOverGap { get; private set; }
+
+    /// <summary>How long the truck has been over the gap, in simulated seconds.</summary>
+    public float OverGapTime { get; private set; }
+
     private void FixedUpdate()
     {
-        if (!enableAssist || rb == null)
+        if (rb == null)
             return;
 
         // On the ground, or still over road: not a jump. Whichever it is, the truck is back on something,
         // so the air clock starts again for the next time it leaves the ground.
         if (HasGroundBelow(groundProbe) || HasRoadBelow(roadProbe))
         {
-            airborneTime = 0f;
+            IsOverGap = false;
+            OverGapTime = 0f;
             return;
         }
 
-        airborneTime += Time.fixedDeltaTime;
+        IsOverGap = true;
+        OverGapTime += Time.fixedDeltaTime;
 
-        if (airborneTime < airborneDelay || airborneTime > maxAirTime)
+        if (!enableAssist)
+            return;
+
+        if (OverGapTime < airborneDelay || OverGapTime > maxAirTime)
             return;
 
         Vector3 velocity = rb.velocity;

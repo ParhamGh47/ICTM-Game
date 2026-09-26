@@ -4828,6 +4828,7 @@ GameObject:
   - component: {fileID: 5411794254173547888}
   - component: {fileID: 8830126470192837465}
   - component: {fileID: 8830126470192837466}
+  - component: {fileID: 8830126470192837467}
   m_Layer: 7
   m_Name: Truck (Player)
   m_TagString: Player
@@ -66035,7 +66036,34 @@ MonoBehaviour:
   groundProbe: 1.5
   roadProbe: 6
   activationSpeedKPH: 25
-  assistSpeedKPH: 80
-  assistAcceleration: 8
+  assistSpeedKPH: 95
+  assistAcceleration: 14
   airborneDelay: 0.15
   maxAirTime: 3
+--- !u!114 &8830126470192837467
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5411794254173547900}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 669c5bc7aaacdda4f9c565181ee284cb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  enable: 1
+  startDelay: 0.25
+  maxShowSeconds: 2.6
+  endHeightAboveGround: 3.5
+  slowMotionScale: 0.4
+  sideDistance: 4.5
+  shotHeight: 2.3
+  backDistance: 1.2
+  lookHeight: 0.6
+  shotFieldOfView: 45
+  variation: 0.18
+  groundedProbe: 1.5
+  blendInSeconds: 0.4
+  blendOutSeconds: 0.4
+  shotPriority: 2500

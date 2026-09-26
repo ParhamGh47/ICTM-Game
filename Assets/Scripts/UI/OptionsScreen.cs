@@ -70,6 +70,8 @@ public class OptionsScreen : MonoBehaviour
     public string[] presetLabels = { "LOW", "MEDIUM", "HIGH" };
     public string shadowsText = "SHADOWS";
     public string motionBlurText = "MOTION BLUR";
+    [Tooltip("The switch over the slow-motion jump camera. No note beside it, like the other switches.")]
+    public string cinematicText = "JUMP CAMERA";
     public string onText = "ON";
     public string offText = "OFF";
     public string difficultyCaption = "DIFFICULTY";
@@ -212,10 +214,12 @@ public class OptionsScreen : MonoBehaviour
     private Button backButton;
     private Button shadowsButton;
     private Button blurButton;
+    private Button cinematicButton;
     private Button cameraMixButton;
 
     private TextMeshProUGUI shadowsLabel;
     private TextMeshProUGUI blurLabel;
+    private TextMeshProUGUI cinematicLabel;
     private TextMeshProUGUI cameraMixLabel;
 
     private Page page = Page.Controls;
@@ -235,6 +239,7 @@ public class OptionsScreen : MonoBehaviour
         GraphicsQuality.Changed += Refresh;
         GameDifficulty.Changed += Refresh;
         SoundSettings.Changed += Refresh;
+        CinematicSettings.Changed += Refresh;
     }
 
     private void Start()
@@ -250,6 +255,7 @@ public class OptionsScreen : MonoBehaviour
         GraphicsQuality.Changed -= Refresh;
         GameDifficulty.Changed -= Refresh;
         SoundSettings.Changed -= Refresh;
+        CinematicSettings.Changed -= Refresh;
     }
 
     // ---------------------------------------------------------------- tabs
@@ -294,6 +300,11 @@ public class OptionsScreen : MonoBehaviour
     private void ToggleMotionBlur()
     {
         GraphicsQuality.SetMotionBlur(!GraphicsQuality.MotionBlur);
+    }
+
+    private void ToggleCinematic()
+    {
+        CinematicSettings.SetJumpCamera(!CinematicSettings.JumpCamera);
     }
 
     private void ChooseDifficulty(int index)
@@ -352,6 +363,12 @@ public class OptionsScreen : MonoBehaviour
         {
             blurLabel.text = motionBlurText + "   " + (GraphicsQuality.MotionBlur ? onText : offText);
             blurLabel.color = GraphicsQuality.MotionBlur ? labelColor : dimLabelColor;
+        }
+
+        if (cinematicLabel != null)
+        {
+            cinematicLabel.text = cinematicText + "   " + (CinematicSettings.JumpCamera ? onText : offText);
+            cinematicLabel.color = CinematicSettings.JumpCamera ? labelColor : dimLabelColor;
         }
 
         // The step lit is the one the channel is really playing at, not the one the player chose for it: the
@@ -568,6 +585,13 @@ public class OptionsScreen : MonoBehaviour
         PlaceTopLeft((RectTransform)blurButton.transform, sideMargin, y, switchSize.x, switchSize.y);
         blurLabel = blurButton.GetComponentInChildren<TextMeshProUGUI>();
         blurButton.onClick.AddListener(ToggleMotionBlur);
+
+        y -= switchSize.y + switchGap;
+
+        cinematicButton = CreateButton("Jump Camera", page, cinematicText, switchSize);
+        PlaceTopLeft((RectTransform)cinematicButton.transform, sideMargin, y, switchSize.x, switchSize.y);
+        cinematicLabel = cinematicButton.GetComponentInChildren<TextMeshProUGUI>();
+        cinematicButton.onClick.AddListener(ToggleCinematic);
 
         y -= switchSize.y + sectionGap;
 
@@ -821,14 +845,17 @@ public class OptionsScreen : MonoBehaviour
             SetNavigation(shadowsButton, null, null, blurButton, middlePreset);
 
         if (blurButton != null)
-            SetNavigation(blurButton, null, null, middleDifficulty, shadowsButton);
+            SetNavigation(blurButton, null, null, cinematicButton, shadowsButton);
+
+        if (cinematicButton != null)
+            SetNavigation(cinematicButton, null, null, middleDifficulty, blurButton);
 
         for (int i = 0; i < difficultyRows.Count; i++)
         {
             Button left = i > 0 ? difficultyRows[i - 1].button : null;
             Button right = i < difficultyRows.Count - 1 ? difficultyRows[i + 1].button : null;
 
-            SetNavigation(difficultyRows[i].button, left, right, cameraMixButton, blurButton);
+            SetNavigation(difficultyRows[i].button, left, right, cameraMixButton, cinematicButton);
         }
 
         // The sound rows are a grid of twenty small buttons, which is exactly the shape a

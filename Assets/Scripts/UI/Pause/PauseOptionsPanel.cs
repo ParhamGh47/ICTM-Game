@@ -53,6 +53,8 @@ public class PauseOptionsPanel : MonoBehaviour
     public string gamepadHeaderText = "GAMEPAD";
     public string shadowsText = "SHADOWS";
     public string motionBlurText = "MOTION BLUR";
+    [Tooltip("The switch over the slow-motion jump camera. No note beside it, like the other switches.")]
+    public string cinematicText = "JUMP CAMERA";
     public string onText = "ON";
     public string offText = "OFF";
     public string difficultyCaption = "DIFFICULTY";
@@ -174,6 +176,7 @@ public class PauseOptionsPanel : MonoBehaviour
     private Button backButton;
     private Button shadowsButton;
     private Button blurButton;
+    private Button cinematicButton;
     private Button cameraMixButton;
     private Button reloadButton;
     private Button dismissButton;
@@ -188,6 +191,7 @@ public class PauseOptionsPanel : MonoBehaviour
 
     private TextMeshProUGUI shadowsLabel;
     private TextMeshProUGUI blurLabel;
+    private TextMeshProUGUI cinematicLabel;
     private TextMeshProUGUI cameraMixLabel;
     private TextMeshProUGUI promptLabel;
 
@@ -346,6 +350,7 @@ public class PauseOptionsPanel : MonoBehaviour
         GraphicsQuality.Changed += Refresh;
         GameDifficulty.Changed += Refresh;
         SoundSettings.Changed += Refresh;
+        CinematicSettings.Changed += Refresh;
 
         // A reopened panel shows what is out of date again, whatever was answered last time.
         if (promptLabel != null) promptDismissed = false;
@@ -360,6 +365,7 @@ public class PauseOptionsPanel : MonoBehaviour
         GraphicsQuality.Changed -= Refresh;
         GameDifficulty.Changed -= Refresh;
         SoundSettings.Changed -= Refresh;
+        CinematicSettings.Changed -= Refresh;
     }
 
     private void BeginFromTabs()
@@ -429,6 +435,11 @@ public class PauseOptionsPanel : MonoBehaviour
         GraphicsQuality.SetMotionBlur(!GraphicsQuality.MotionBlur);
     }
 
+    private void ToggleCinematic()
+    {
+        CinematicSettings.SetJumpCamera(!CinematicSettings.JumpCamera);
+    }
+
     private void ChooseDifficulty(int index)
     {
         GameDifficulty.Choose((DifficultyLevel)index);
@@ -496,6 +507,12 @@ public class PauseOptionsPanel : MonoBehaviour
         {
             blurLabel.text = motionBlurText + "   " + (GraphicsQuality.MotionBlur ? onText : offText);
             blurLabel.color = GraphicsQuality.MotionBlur ? inkColor : dimInkColor;
+        }
+
+        if (cinematicLabel != null)
+        {
+            cinematicLabel.text = cinematicText + "   " + (CinematicSettings.JumpCamera ? onText : offText);
+            cinematicLabel.color = CinematicSettings.JumpCamera ? inkColor : dimInkColor;
         }
 
         // The sound rows are all live: a change is heard the moment it is made, which is what makes them worth
@@ -809,6 +826,13 @@ public class PauseOptionsPanel : MonoBehaviour
         blurLabel = blurButton.GetComponentInChildren<TextMeshProUGUI>();
         blurButton.onClick.AddListener(ToggleMotionBlur);
 
+        y += switchSize.y + switchGap;
+
+        cinematicButton = CreatePlateButton("Jump Camera", page, cinematicText, switchSize, 16f);
+        PlaceTop(page, (RectTransform)cinematicButton.transform, 0f, y, switchSize.x, switchSize.y);
+        cinematicLabel = cinematicButton.GetComponentInChildren<TextMeshProUGUI>();
+        cinematicButton.onClick.AddListener(ToggleCinematic);
+
         y += switchSize.y + 14f;
 
         // The difficulty, under everything the picture is made of: it is the one choice here that changes what
@@ -1065,7 +1089,8 @@ public class PauseOptionsPanel : MonoBehaviour
         }
 
         SetNavigation(shadowsButton, null, null, blurButton, middlePreset);
-        SetNavigation(blurButton, null, null, middleDifficulty, shadowsButton);
+        SetNavigation(blurButton, null, null, cinematicButton, shadowsButton);
+        SetNavigation(cinematicButton, null, null, middleDifficulty, blurButton);
 
         for (int i = 0; i < difficultyRows.Count; i++)
         {
@@ -1073,7 +1098,7 @@ public class PauseOptionsPanel : MonoBehaviour
             Button right = i < difficultyRows.Count - 1 ? difficultyRows[i + 1].button : null;
 
             SetNavigation(difficultyRows[i].button, left, right,
-                middleFirstSound != null ? middleFirstSound : cameraMixButton, blurButton);
+                middleFirstSound != null ? middleFirstSound : cameraMixButton, cinematicButton);
         }
 
         // The sound rows are a grid of twenty small plates, which is the shape a nearest-neighbour guess gets

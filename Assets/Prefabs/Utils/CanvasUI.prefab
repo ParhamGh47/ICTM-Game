@@ -881,6 +881,10 @@ MonoBehaviour:
   easyTargetKills: 7
   mediumTargetKills: 10
   hardTargetKills: 14
+  killSlowMotion: 1
+  killSlowMotionScale: 0.35
+  killSlowMotionHold: 0.07
+  killSlowMotionRecover: 0.22
 --- !u!1 &6890820110302793911
 GameObject:
   m_ObjectHideFlags: 0

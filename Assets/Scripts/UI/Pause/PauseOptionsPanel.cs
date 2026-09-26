@@ -54,7 +54,7 @@ public class PauseOptionsPanel : MonoBehaviour
     public string shadowsText = "SHADOWS";
     public string motionBlurText = "MOTION BLUR";
     [Tooltip("The switch over the slow-motion jump camera. No note beside it, like the other switches.")]
-    public string cinematicText = "JUMP CAMERA";
+    public string cinematicText = "CINEMATIC CAMERA";
     public string onText = "ON";
     public string offText = "OFF";
     public string difficultyCaption = "DIFFICULTY";
@@ -828,7 +828,7 @@ public class PauseOptionsPanel : MonoBehaviour
 
         y += switchSize.y + switchGap;
 
-        cinematicButton = CreatePlateButton("Jump Camera", page, cinematicText, switchSize, 16f);
+        cinematicButton = CreatePlateButton("Cinematic Camera", page, cinematicText, switchSize, 16f);
         PlaceTop(page, (RectTransform)cinematicButton.transform, 0f, y, switchSize.x, switchSize.y);
         cinematicLabel = cinematicButton.GetComponentInChildren<TextMeshProUGUI>();
         cinematicButton.onClick.AddListener(ToggleCinematic);

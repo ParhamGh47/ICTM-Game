@@ -11,60 +11,35 @@ public enum DifficultyLevel
 }
 
 /// <summary>
-/// The game's difficulty: three settings, what each one changes, and where the choice is kept.
+/// The game's difficulty: three settings and the player's choice between them.
 ///
-/// A level's numbers are authored in the level itself - the time its timer counts down from, and how many
-/// targets it asks to be hit - and those authored numbers are what Medium means. Medium is the game exactly
-/// as it was built, so choosing it is the same as never having chosen anything, and it is the default. The
-/// other two are the same level with those two numbers stretched or squeezed:
+/// Every level authors its own numbers - a time limit and a kill requirement for each of the three
+/// difficulties (see <see cref="TimeTracker"/> and <see cref="KillDisplay"/>) - and this only decides
+/// which of them is used. Nothing is derived from a shared scale, so "Easy" on a level is exactly what
+/// that level says Easy is: the levels are not obliged to be a fixed fraction of one another, and one
+/// level can be made easier or harder on its own without touching the other two.
 ///
-///  * the time limit, into which every level's timer counts down (see <see cref="TimeLimit"/>)
-///  * the kill requirement, on the levels that ask for one (see <see cref="KillTarget"/>)
+/// Medium is the game as it was built and the default, which is why the fields on a tracker are named
+/// for the three difficulties rather than for a base value and two adjustments.
 ///
-/// Only those two. Difficulty is deliberately not a damage multiplier or a physics tweak: a truck that
-/// handles one way on Easy and another on Hard would be a different game, and what a level asks of the
-/// player - get there in this long, hit this many - is what "hard" means for a racing game.
-///
-/// A level reads both numbers once, as its own HUD starts, so the setting cannot change a level that is
-/// already running: it lands when the next one starts, or when the current one is restarted. That is the same
-/// shape as the graphics preset, and it is answered the same way - a level that is open when the choice
-/// changes says so and offers the restart (<see cref="ActiveSceneNeedsReload"/> and
-/// <see cref="PauseOptionsPanel"/>), rather than quietly asking for something other than what it shows.
+/// A level reads its difficulty's numbers once, as its own HUD starts, so the setting cannot change a
+/// level that is already running: it lands when the next one starts, or when the current one is
+/// restarted. That is the same shape as the graphics preset, and it is answered the same way - a level
+/// that is open when the choice changes says so and offers the restart (<see cref="ActiveSceneNeedsReload"/>
+/// and <see cref="PauseOptionsPanel"/>), rather than quietly asking for something other than what it shows.
 ///
 /// The choice is kept in PlayerPrefs, so it survives restarts, and it is the player's alone - nothing in a
 /// level reads it but the HUD's two trackers.
 /// </summary>
 public static class GameDifficulty
 {
-    // ---------------------------------------------------------------- what a difficulty is
+    // ---------------------------------------------------------------- the three settings
 
-    /// <summary>Everything a difficulty changes. Edit <see cref="Levels"/> to retune, nothing else.</summary>
-    private struct Settings
-    {
-        public string name;
+    /// <summary>The difficulties' own names, in the order the enum defines them.</summary>
+    private static readonly string[] Names = { "Easy", "Medium", "Hard" };
 
-        /// <summary>Multiplied into a level's authored time limit. Above 1 is more time, so easier.</summary>
-        public float timeScale;
-
-        /// <summary>Multiplied into a level's authored kill requirement, rounded to a whole target.</summary>
-        public float killScale;
-    }
-
-    /// <summary>
-    /// The three difficulties. Medium is the game as authored, and the two others are it with a quarter either
-    /// way: a fifth more time and a third fewer targets on Easy, a fifth less time and a third more targets on
-    /// Hard. Nothing here is more than a rounding away from a number the level already had, which is what keeps
-    /// all three recognisably the same level.
-    /// </summary>
-    private static readonly Settings[] Levels =
-    {
-        new Settings { name = "Easy",   timeScale = 1.25f, killScale = 0.7f  },
-        new Settings { name = "Medium", timeScale = 1f,    killScale = 1f    },
-        new Settings { name = "Hard",   timeScale = 0.8f,  killScale = 1.35f },
-    };
-
-    /// <summary>The most a level's timer may be squeezed to, so no setting can make one impossible.</summary>
-    private const float ShortestTime = 15f;
+    /// <summary>A timer never counts down from less than this, however low a level authors its time.</summary>
+    private const float ShortestTime = 1f;
 
     // ---------------------------------------------------------------- player prefs key
 
@@ -79,16 +54,10 @@ public static class GameDifficulty
     public static DifficultyLevel Current { get; private set; } = DifficultyLevel.Medium;
 
     /// <summary>The difficulty's own name, for anything that has to print it.</summary>
-    public static string CurrentName => Levels[(int)Current].name;
-
-    /// <summary>How much of a level's authored time limit the difficulty allows.</summary>
-    public static float TimeScale => Levels[(int)Current].timeScale;
-
-    /// <summary>How much of a level's authored kill requirement the difficulty asks for.</summary>
-    public static float KillScale => Levels[(int)Current].killScale;
+    public static string CurrentName => Names[(int)Current];
 
     // Which difficulty the level that is open was built with, and whether any level has been built at all.
-    // A level marks itself the first time its HUD asks for one of these two numbers, which is the only moment
+    // A level marks itself the first time its HUD asks for one of these numbers, which is the only moment
     // the choice is read; clearing the mark on every scene load is what makes the next level a fresh one.
     private static bool levelStarted;
     private static DifficultyLevel levelDifficulty = DifficultyLevel.Medium;
@@ -148,30 +117,52 @@ public static class GameDifficulty
     // ---------------------------------------------------------------- what a level asks for
 
     /// <summary>
-    /// The time a level's timer really counts down from, given the time the level was authored with.
+    /// The time a level's timer really counts down from: the time the level authored for the difficulty in
+    /// force. The three are read independently, so a level can be made harder or easier on its own.
     ///
     /// Also the moment the level is noted as started, which is what lets a screen in that level tell whether
     /// the choice has been changed since - so a tracker must take its number through here rather than reading
-    /// <see cref="TimeScale"/> for itself.
+    /// <see cref="Current"/> for itself.
     /// </summary>
-    public static float TimeLimit(float authoredSeconds)
+    public static float TimeLimit(float easySeconds, float mediumSeconds, float hardSeconds)
     {
         MarkLevelStarted();
 
-        return Mathf.Max(ShortestTime, authoredSeconds * TimeScale);
+        return Mathf.Max(ShortestTime, Pick(easySeconds, mediumSeconds, hardSeconds));
     }
 
     /// <summary>
-    /// The number of targets a level really asks for, given the number it was authored with. A level that asks
-    /// for nothing keeps asking for nothing, and one that asks for anything keeps asking for at least one.
+    /// The number of targets a level really asks for, at the difficulty in force. A level that asks for
+    /// nothing on the chosen difficulty keeps asking for nothing there, and one that asks for anything keeps
+    /// asking for at least one.
     /// </summary>
-    public static int KillTarget(int authoredKills)
+    public static int KillTarget(int easyKills, int mediumKills, int hardKills)
     {
-        if (authoredKills <= 0) return 0;
-
         MarkLevelStarted();
 
-        return Mathf.Max(1, Mathf.RoundToInt(authoredKills * KillScale));
+        int authored = Pick(easyKills, mediumKills, hardKills);
+
+        return authored <= 0 ? 0 : Mathf.Max(1, authored);
+    }
+
+    private static float Pick(float easy, float medium, float hard)
+    {
+        switch (Current)
+        {
+            case DifficultyLevel.Easy: return easy;
+            case DifficultyLevel.Hard: return hard;
+            default: return medium;
+        }
+    }
+
+    private static int Pick(int easy, int medium, int hard)
+    {
+        switch (Current)
+        {
+            case DifficultyLevel.Easy: return easy;
+            case DifficultyLevel.Hard: return hard;
+            default: return medium;
+        }
     }
 
     private static void MarkLevelStarted()

@@ -24,8 +24,16 @@ using System.Collections.Generic;
 ///    by advancing to the NEXT waypoint and drives forward. (Without this,
 ///    every car targets waypoint[0] first, turns around, and rams the cars
 ///    behind it - the "kangaroo jump / fly off the map" bug.)
-///  - All cars on a path share the SAME speed (random per direction), so they
-///    keep their spacing forever and can never catch up and ram each other.
+///  - Every car painted in one run shares the SAME speed, both directions. That
+///    is what keeps the fleet's spacing: the two paths are shuttle loops that
+///    drive out on one side of the road and back on the other, so both of them
+///    use both lanes, and a faster direction would slowly overtake the slower
+///    one in the same lane and shunt it.
+///  - Cars are spaced by DISTANCE around the loop, not by waypoint index. A leg
+///    is cut in even steps of the spline's own parameter, so tight bends pack
+///    their waypoints closer together and the U-turns are denser still; spacing
+///    by index therefore seated cars close together exactly where the waypoints
+///    bunch.
 ///  - Lane offset is derived from the road's own geometry (center of the
 ///    rightmost lane), so cars stay on the asphalt for any road width.
 ///  - Body paint is randomized from the palette in <see cref="PassingCarPalette"/> - the materials it
@@ -33,14 +41,13 @@ using System.Collections.Generic;
 ///    per car, applied to the same slots the prefab already paints. Every car prefab dropped in
 ///    Assets/Prefabs/Cars joins the fleet on its own; one built from a fresh model carries its body material
 ///    as "BODY", which is recognised here without any change to this list of prefabs.
-///  - "Lights On" decides whether spawned cars drive with their headlights on:
-///    the LightL/LightR spotlights are enabled and the lens material is swapped
-///    to its emissive "lit" variant (206: LightOff206 -> Light206).
-///  - Headlights are also tinted per car, from the small palette in
-///    <see cref="HeadlightColors"/>: four colours of lamp, each car drawing its
-///    own off a shuffled deck like the paint does, so a lane of traffic does not
-///    all glow the same white. Both the spotlight and the glow on the lens are
-///    tinted, so the pool of light on the road matches the lamp it comes from.
+///  - "Lights On" decides whether spawned cars drive with their headlights on.
+///    Nothing is baked into the scene for it: a car prefab ships its headlights
+///    switched off and its lamp colour is per car, so the painter only records
+///    the answer and AICarController lights each car when the level starts - the
+///    spotlights and the lens, in a lamp colour of its own. See
+///    <see cref="AICarController"/>'s ApplyHeadlights for why it cannot be
+///    painted in.
 ///
 /// Usage: open a scene with a RoadArchitect road, then:
 ///   Tools > Road Tools > Paint Passing Cars
@@ -57,6 +64,11 @@ public class PassingCarsSpawner : EditorWindow
     // Waypoint spacing along the road, in meters. Dense enough that cars hug
     // the curves, sparse enough to keep object counts low.
     private const float WaypointSpacing = 15f;
+
+    // The closest two cars on a path may be put to each other, in meters. Above one waypoint's worth of road,
+    // so no two cars are ever seated on the same waypoint, and far enough apart that a car never starts out
+    // looking like it is tailgating the one in front of it.
+    private const float MinCarSpacing = 16f;
 
     private Road targetRoad;
     private float startParam = 0.05f;
@@ -253,22 +265,21 @@ public class PassingCarsSpawner : EditorWindow
         minSpeedKPH = EditorGUILayout.Slider("Min Speed (KPH)", minSpeedKPH, 10f, 60f);
         maxSpeedKPH = EditorGUILayout.Slider("Max Speed (KPH)", maxSpeedKPH, minSpeedKPH, 60f);
         EditorGUILayout.LabelField(
-            "All cars in a lane share one random speed; forward cars use the " +
-            "lower half of the range, reverse cars the upper half.",
+            "One random speed for the whole run, both directions. The two paths " +
+            "share both lanes, so a faster direction would overtake the slower one " +
+            "in the same lane and shunt it; at one speed nothing changes relative " +
+            "position at all.",
             EditorStyles.miniLabel);
 
         EditorGUILayout.Space();
 
         // ---- Headlights -----------------------------------------------------
         lightsOn = EditorGUILayout.Toggle(new GUIContent("Lights On",
-            "Spawned cars drive with headlights on: LightL/LightR spotlights " +
-            "enabled, each car given its own headlight colour, and the lens " +
-            "material swapped to its emissive variant."), lightsOn);
+            "Spawned cars drive with their headlights on."), lightsOn);
         EditorGUILayout.LabelField(
-            "Enables the LightL/LightR spotlights and the emissive lens material " +
-            "(206: Light206). The 911 has no separate off-material, so it only " +
-            "gets the spotlights. Headlight colours: " + HeadlightColors.Length +
-            " (warm white, white, cool blue-white, amber), one per car.",
+            "Recorded per car here; AICarController switches the LightL/LightR " +
+            "spotlights on and gives each car a lamp colour of its own when the " +
+            "level starts.",
             EditorStyles.miniLabel);
 
         EditorGUILayout.Space();
@@ -361,15 +372,21 @@ public class PassingCarsSpawner : EditorWindow
         unpainted = 0;
         unpaintedSample = null;
 
+        // One speed for the whole run, both directions. The two paths share both lanes - each drives out on
+        // one side of the road and back on the other - so a faster direction slowly overtakes the slower one
+        // in the same lane, shunts it off line and leaves a wreck behind. At one speed nothing changes
+        // relative position at all: the fleet keeps the spacing it was painted with for the whole level.
+        float cruiseKPH = (float)(rng.NextDouble() * (maxSpeedKPH - minSpeedKPH) + minSpeedKPH);
+
         GameObject parent = FindOrCreateParent(ParentName);
         ClearPreviousPaint(parent);
 
         int created = 0;
 
         // Forward lane: shuttles out along the spline (+right side) to its turnaround.
-        created += PaintDirection(parent.transform, "Path_Forward", true, +laneOffset, splineDistance, rng, turnParam);
+        created += PaintDirection(parent.transform, "Path_Forward", true, +laneOffset, splineDistance, rng, turnParam, cruiseKPH);
         // Reverse lane: shuttles out against the spline (-right side) to its own turnaround.
-        created += PaintDirection(parent.transform, "Path_Reverse", false, -laneOffset, splineDistance, rng, revTurnParam);
+        created += PaintDirection(parent.transform, "Path_Reverse", false, -laneOffset, splineDistance, rng, revTurnParam, cruiseKPH);
 
         Debug.Log($"Painted {created} passing cars ({carsPerDirection} per direction)");
 
@@ -388,7 +405,7 @@ public class PassingCarsSpawner : EditorWindow
         }
     }
 
-    int PaintDirection(Transform parent, string pathName, bool forward, float offset, float splineDistance, System.Random rng, float turnParam)
+    int PaintDirection(Transform parent, string pathName, bool forward, float offset, float splineDistance, System.Random rng, float turnParam, float cruiseKPH)
     {
         // Build a closed "shuttle" loop for THIS direction. The turnaround is at
         // the END of this direction's own stretch (some percent before the end of
@@ -475,15 +492,23 @@ public class PassingCarsSpawner : EditorWindow
 
         // One speed for the whole direction: cars keep their spacing forever,
         // so they never catch up and ram each other (same as the manual setup).
-        // Forward cars get the lower half of the speed range, reverse cars the
-        // upper half, so the oncoming lane is always at least as fast.
-        float speedLo = minSpeedKPH;
-        float speedHi = forward ? (minSpeedKPH + maxSpeedKPH) * 0.5f : maxSpeedKPH;
-        float speedKPH = (float)(rng.NextDouble() * (speedHi - speedLo) + speedLo);
+        // Cars are seated by DISTANCE around the whole loop, not by waypoint index. Waypoints are only evenly
+        // spaced by and large: a leg is cut in even steps of the spline's own parameter, so a tight bend packs
+        // them closer together, and the two U-turns are denser still (five waypoints across the road). Spacing
+        // by index therefore seated cars close together exactly where the waypoints bunch. Spacing by arc
+        // length puts the same distance between them everywhere - and since the whole run shares one speed,
+        // that spacing is what the platoon keeps.
+        float[] arcTo = new float[points.Count + 1];
+        for (int i = 0; i < points.Count; i++)
+            arcTo[i + 1] = arcTo[i] + Vector3.Distance(points[i], points[(i + 1) % points.Count]);
 
-        // Spread the cars along the outbound leg (waypoints 0 .. perLeg-1).
-        int perLeg = Mathf.Max(8, Mathf.CeilToInt(Mathf.Abs(legEnd - legStart) * splineDistance / WaypointSpacing));
-        int toPlace = Mathf.Min(carsPerDirection, perLeg);
+        float loopLength = arcTo[points.Count];
+
+        // A car a second or two behind the one in front of it is traffic; two cars in the same place are a
+        // pile-up. This is the closest the loop may be asked to seat them, and a run asking for more cars
+        // than fit at this spacing places fewer and says so.
+        int toPlace = Mathf.Min(carsPerDirection,
+                                Mathf.Max(1, Mathf.FloorToInt(loopLength / MinCarSpacing)));
 
         int created = 0;
         for (int i = 0; i < toPlace; i++)
@@ -491,7 +516,7 @@ public class PassingCarsSpawner : EditorWindow
             // Sit each car exactly on its own waypoint and tell the controller
             // to start there - it advances to the NEXT waypoint and drives
             // forward with the platoon instead of turning back to waypoint[0].
-            int wpIndex = Mathf.RoundToInt((float)i * (perLeg - 1) / Mathf.Max(1, toPlace - 1));
+            int wpIndex = WaypointAtArc(arcTo, loopLength * i / toPlace);
             if (waypoints[wpIndex] == null) continue;
 
             GameObject prefab = carPrefabs[rng.Next(carPrefabs.Length)];
@@ -512,7 +537,11 @@ public class PassingCarsSpawner : EditorWindow
                 Undo.RecordObject(controller, "Configure Passing Car");
                 controller.waypointsRoot = pathObj.transform;
                 controller.startingWaypoint = wpIndex;
-                controller.speedKPH = speedKPH;
+                controller.speedKPH = cruiseKPH;
+                // The lights are the controller's own business: the prefab keeps them off and gives each car a
+                // lamp colour of its own when the level starts, so all the painter has to say is whether they
+                // are wanted. See AICarController.ApplyHeadlights.
+                controller.lightsOn = lightsOn;
                 // Same feel as the manual level-1 cars.
                 controller.turnSpeed = 3f;
                 controller.maxSteerAngle = 150f;
@@ -520,17 +549,33 @@ public class PassingCarsSpawner : EditorWindow
             }
 
             ApplyRandomColor(carObj, rng);
-            ApplyLightState(carObj, lightsOn, NextHeadlightColor(rng));
             created++;
         }
 
         if (toPlace < carsPerDirection)
         {
-            Debug.LogWarning($"{pathName}: only {perLeg} waypoints fit between the section start and the turnaround " +
-                             $"- reduce the car count or widen the section.");
+            Debug.LogWarning($"{pathName}: {loopLength:F0} m of loop does not hold {carsPerDirection} cars " +
+                             $"{MinCarSpacing:F0} m apart - {toPlace} were placed. Ask for fewer cars or widen " +
+                             "the section.");
         }
 
         return created;
+    }
+
+    /// <summary>
+    /// The waypoint at or just past a distance along the loop, as an index into the path's children. The loop
+    /// is only a few hundred waypoints long and the distances asked for come in order, but a scan from the
+    /// front is the simplest thing that is obviously right; the trailing entry of <paramref name="arcTo"/> is
+    /// the loop closing, so the index wraps back to the first waypoint there.
+    /// </summary>
+    static int WaypointAtArc(float[] arcTo, float target)
+    {
+        for (int i = 1; i < arcTo.Length; i++)
+        {
+            if (arcTo[i] >= target) return i % (arcTo.Length - 1);
+        }
+
+        return 0;
     }
 
     /// <summary>
@@ -719,175 +764,12 @@ public class PassingCarsSpawner : EditorWindow
         return false;
     }
 
-    // The lamp colours a passing car may be given. Deliberately the colours a bulb actually comes in - the
-    // warm white the prefabs already use, a plain white, a cool blue-white (xenon) and an amber - rather than
-    // anything that would read as an effect. Four is enough for a lane of traffic to look varied.
-    private static readonly Color[] HeadlightColors =
-    {
-        new Color(1f, 0.9725f, 0.8078f),   // warm white, the colour the car prefabs are authored with
-        new Color(1f, 1f, 0.9608f),        // plain white
-        new Color(0.78f, 0.87f, 1f),       // cool blue-white
-        new Color(1f, 0.76f, 0.42f),       // amber
-    };
-
-    // The headlight colours as a shuffled deck, so a run spreads over all four before any repeats.
-    private List<Color> headlightDeck;
-    private int headlightDeckIndex;
-
-    /// <summary>
-    /// The next lamp colour off a shuffled draw, the same way the body paint is handed out, so a fleet shows
-    /// every colour before one comes round again.
-    /// </summary>
-    Color NextHeadlightColor(System.Random rng)
-    {
-        if (headlightDeck == null || headlightDeckIndex >= headlightDeck.Count)
-        {
-            headlightDeck = new List<Color>(HeadlightColors);
-
-            for (int i = headlightDeck.Count - 1; i > 0; i--)
-            {
-                int j = rng.Next(i + 1);
-                Color swap = headlightDeck[i];
-                headlightDeck[i] = headlightDeck[j];
-                headlightDeck[j] = swap;
-            }
-
-            headlightDeckIndex = 0;
-        }
-
-        return headlightDeck[headlightDeckIndex++];
-    }
-
-    // Turns the car's headlights on/off after painting. Matches the manual
-    // level-1 setup: LightL/LightR spotlights plus an emissive lens material
-    // when available (206 ships Light206 / LightOff206).
-    void ApplyLightState(GameObject carObj, bool on, Color tint)
-    {
-        // 1) Real spotlight components (LightL / LightR), each car its own colour.
-        var lights = carObj.GetComponentsInChildren<Light>(true);
-        foreach (var l in lights)
-        {
-            if (l == null) continue;
-            Undo.RecordObject(l, "Set Passing Car Lights");
-            l.enabled = on;
-            l.color = tint;
-        }
-
-        // 2) The lens material, lit or not (206: Light206 <-> LightOff206).
-        ApplyLensMaterial(carObj, on);
-
-        // 3) And the glow on the lens, so the bright bit matches the pool of light the spotlight throws. Last,
-        //    because it is the LIT material that glows - tinting the unlit one would set a colour on something
-        //    that emits nothing, and the swap above would then put the untinted lit one back on.
-        TintLensGlow(carObj, tint);
-    }
-
-    /// <summary>
-    /// Swaps the car's lens between its lit and unlit materials (206: Light206 <-> LightOff206). The twin is a
-    /// separate asset sitting next to the lit one, so it is derived by name through the AssetDatabase rather
-    /// than searched for on the car - a prefab only ever carries one of the two. A car with no lens material of
-    /// its own, like the 911, is left alone.
-    /// </summary>
-    void ApplyLensMaterial(GameObject carObj, bool on)
-    {
-        Material lens = FindLensMaterial(carObj);
-        if (lens == null) return; // e.g. the 911 has no separate lens material
-
-        string litName = lens.name.StartsWith("LightOff")
-            ? "Light" + lens.name.Substring("LightOff".Length)
-            : lens.name;
-        string offName = "LightOff" + litName.Substring("Light".Length);
-        string targetName = on ? litName : offName;
-
-        if (lens.name == targetName) return; // already in the requested state
-
-        Material target = null;
-        string lensPath = AssetDatabase.GetAssetPath(lens);
-        if (!string.IsNullOrEmpty(lensPath))
-        {
-            string folder = System.IO.Path.GetDirectoryName(lensPath);
-            target = AssetDatabase.LoadAssetAtPath<Material>(
-                System.IO.Path.Combine(folder, targetName + ".mat"));
-        }
-        if (target == null)
-        {
-            Debug.LogWarning($"No '{targetName}' material found next to '{lens.name}' - lens stays as-is.");
-            return;
-        }
-
-        var renderers = carObj.GetComponentsInChildren<MeshRenderer>(true);
-        foreach (var renderer in renderers)
-        {
-            Material[] mats = renderer.sharedMaterials;
-            bool changed = false;
-
-            for (int i = 0; i < mats.Length; i++)
-            {
-                if (mats[i] == null) continue;
-                if (mats[i].name != litName && mats[i].name != offName) continue;
-                if (mats[i].name == targetName) continue;
-
-                mats[i] = target;
-                changed = true;
-            }
-
-            if (changed)
-            {
-                Undo.RecordObject(renderer, "Set Passing Car Lights");
-                renderer.sharedMaterials = mats;
-            }
-        }
-    }
-
-    /// <summary>
-    /// Tints the glow on a car's lens to match the lamp it belongs to.
-    ///
-    /// The lens is a shared material (206: Light206, yellow-white and hot), so the colour cannot go on the
-    /// material itself without recolouring every car in the level. It goes on the renderer as a property
-    /// block instead, which is per car and leaves the asset alone - and the material's own brightness is kept,
-    /// so the glow stays as hot as it was and only its colour changes.
-    /// </summary>
-    void TintLensGlow(GameObject carObj, Color tint)
-    {
-        var renderers = carObj.GetComponentsInChildren<MeshRenderer>(true);
-
-        foreach (var renderer in renderers)
-        {
-            foreach (Material mat in renderer.sharedMaterials)
-            {
-                if (mat == null) continue;
-                if (!mat.name.StartsWith("Light")) continue;
-                if (!mat.HasProperty("_EmissionColor")) return;
-
-                Color emission = mat.GetColor("_EmissionColor");
-                float brightness = Mathf.Max(emission.r, Mathf.Max(emission.g, emission.b));
-                if (brightness <= 0f) return;   // nothing glowing on this car
-
-                var block = new MaterialPropertyBlock();
-                renderer.GetPropertyBlock(block);
-                block.SetColor("_EmissionColor", tint * brightness);
-                renderer.SetPropertyBlock(block);
-                return;
-            }
-        }
-    }
-
-    // First headlight-lens material found on the car (206: "Light206" or
-    // "LightOff206"). Null when the car has none - then only the spotlights
-    // get toggled.
-    Material FindLensMaterial(GameObject carObj)
-    {
-        var renderers = carObj.GetComponentsInChildren<MeshRenderer>(true);
-        foreach (var renderer in renderers)
-        {
-            foreach (Material mat in renderer.sharedMaterials)
-            {
-                if (mat != null && mat.name.StartsWith("Light"))
-                    return mat;
-            }
-        }
-        return null;
-    }
+    // Lights are the one thing this tool deliberately does NOT paint into the scene. A car prefab ships its
+    // headlights switched off and its lamp colour is picked per car, so a colour baked into the scene is a
+    // colour that is either wrong (every car the same) or invisible (a material instance the scene cannot
+    // hold). AICarController lights each car when the level starts instead - see its ApplyHeadlights - and
+    // what is painted here is only the answer to "with the lights on or off", which is per car and does
+    // persist.
 
     /// <summary>
     /// Removes whatever the last paint run left under the parent, cars and paths alike.

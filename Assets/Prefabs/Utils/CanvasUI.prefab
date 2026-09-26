@@ -547,7 +547,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   targetTimeText: {fileID: 6890820110993715636}
   currentTimeText: {fileID: 6890820111579350898}
-  targetTimeSeconds: 200
+  easyTargetTimeSeconds: 250
+  mediumTargetTimeSeconds: 200
+  hardTargetTimeSeconds: 160
 --- !u!1 &6890820110134828635
 GameObject:
   m_ObjectHideFlags: 0
@@ -876,7 +878,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   targetKillText: {fileID: 6890820110849694595}
   currentKillText: {fileID: 6890820110081991684}
-  targetKills: 10
+  easyTargetKills: 7
+  mediumTargetKills: 10
+  hardTargetKills: 14
 --- !u!1 &6890820110302793911
 GameObject:
   m_ObjectHideFlags: 0

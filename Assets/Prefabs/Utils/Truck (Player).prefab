@@ -4826,6 +4826,7 @@ GameObject:
   - component: {fileID: 5411794254173547890}
   - component: {fileID: 5411794254173547891}
   - component: {fileID: 5411794254173547888}
+  - component: {fileID: 8830126470192837465}
   m_Layer: 7
   m_Name: Truck (Player)
   m_TagString: Player
@@ -44628,7 +44629,7 @@ Light:
   m_Cookie: {fileID: 0}
   m_DrawHalo: 0
   m_Flare: {fileID: 0}
-  m_RenderMode: 0
+  m_RenderMode: 1
   m_CullingMask:
     serializedVersion: 2
     m_Bits: 4294967295
@@ -49866,6 +49867,19 @@ BoxCollider:
   serializedVersion: 2
   m_Size: {x: 1, y: 1.3069111, z: 1}
   m_Center: {x: 0, y: 0.15345491, z: 0}
+--- !u!65 &8830126470192837465
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5411794254173547900}
+  m_Material: {fileID: 0}
+  m_IsTrigger: 0
+  m_Enabled: 1
+  serializedVersion: 2
+  m_Size: {x: 0.56228954, y: 0.37, z: 1.1819826}
+  m_Center: {x: 0, y: 0.4349, z: 0.05}
 --- !u!114 &5411794255626787976
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -54930,7 +54944,7 @@ Light:
   m_Cookie: {fileID: 0}
   m_DrawHalo: 0
   m_Flare: {fileID: 0}
-  m_RenderMode: 0
+  m_RenderMode: 1
   m_CullingMask:
     serializedVersion: 2
     m_Bits: 4294967295

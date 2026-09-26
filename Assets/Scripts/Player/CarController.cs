@@ -41,6 +41,22 @@ public class CarController : MonoBehaviour
 
     private Material brakeMat;
 
+    [Header("Tuned Mass Distribution")]
+    [Tooltip("Unity works a rigidbody's centre of mass, and how hard it is to roll and to pitch, out of " +
+             "every collider it has. The truck's collision is two boxes on purpose - the low chassis box the " +
+             "springs, the grip and the handling were all tuned around, and the body volume above it that " +
+             "stops the cab and the box passing through walls - and that second box would otherwise lift the " +
+             "weight up by half a ride height and make the truck lean and turn differently. With this on, the " +
+             "centre of mass and the inertia tensor keep the values the tuned chassis box gives them, and " +
+             "only the shape of the collision changes. Switch it off to feel the difference: the truck then " +
+             "carries its weight up where the body actually is.")]
+    public bool keepTunedMassDistribution = true;
+
+    [Tooltip("The collider the handling was tuned on: the low box on the Body object. Its size, its centre " +
+             "and the truck's mass are what the centre of mass and the inertia tensor above are worked out " +
+             "from. Left empty, the Body object is looked up by name.")]
+    public BoxCollider chassisCollider;
+
     [Header("Reset Cooldown")]
     public float resetCooldown = 2f;
     private float lastResetTime = -999f;
@@ -60,6 +76,22 @@ public class CarController : MonoBehaviour
              "never leaves it pointing sideways across the tarmac.")]
     public bool resetFacesForward = true;
 
+    [Tooltip("How far above the road a reset puts the truck. It rides about nineteen centimetres up on its " +
+             "springs, so a short hop is all that is wanted: the old 1.6-unit drop landed the chassis box on " +
+             "the tarmac hard enough to bounce it, and a truck that bounces settles leaning. Raise this for " +
+             "the dramatic version, keep it small for a reset that comes down flat.")]
+    public float resetHeight = 0.22f;
+
+    [Tooltip("Lay a reset truck parallel to the road under it - the road's own slope and camber - instead " +
+             "of level with the world. A level drop onto a climbing or a banked road lands on one corner of " +
+             "the chassis, which is what a reset settling off-balance looks like.")]
+    public bool resetToSurface = true;
+
+    [Tooltip("The lean a reset gives the truck, in degrees. This was a hand-tuned 2.6 degrees that propped " +
+             "the truck up on the way down; a reset that no longer bounces does not need one, so it is 0. " +
+             "Positive leans the truck's left side down.")]
+    public float resetRoll = 0f;
+
     [Tooltip("When the car is reset somewhere with no road under it - in mid air over the gap before a " +
              "jump, or down a bank - send it back to the last stretch of road it actually drove on " +
              "instead of onto whichever road happens to be nearest.")]
@@ -73,6 +105,33 @@ public class CarController : MonoBehaviour
              "ahead of the last place the car had road under it. A few metres covers the nearest point of a " +
              "road the car has wandered off the side of; a jump is longer than this.")]
     public float resetForwardTolerance = 6f;
+
+    [Header("Starting On The Road")]
+    [Tooltip("Put a truck that the level starts in the air - or buried in the tarmac - down on the road " +
+             "before the level begins. A truck dropped from any height lands on its chassis box, bounces, and " +
+             "settles somewhere it was not meant to be, which reads as the truck jittering and driving itself " +
+             "on the spot while the chase camera shakes around it.")]
+    public bool settleOnStart = true;
+
+    [Tooltip("How far from its ride height the truck may start before it is put down properly. This is a " +
+             "fine measurement on purpose: a truck that starts even a hand's width below the road surface " +
+             "starts with its chassis in the tarmac and its wheel rays inside the road mesh, and what comes " +
+             "out of that is a truck that shakes, creeps and drags its camera around with it.")]
+    public float settleTolerance = 0.05f;
+
+    [Tooltip("How far above the truck to look for the road under it when it starts. The spawn point of a " +
+             "level is usually within a metre or two of the tarmac; this only has to reach the road from " +
+             "wherever the level put the truck.")]
+    public float settleProbeAbove = 8f;
+
+    [Tooltip("How far below the truck to look for the road under it when it starts - a spawn on a bridge " +
+             "over a road, or over the edge of one, needs the probe to reach down past the deck.")]
+    public float settleProbeBelow = 2f;
+
+    [Tooltip("What may count as the surface under a starting truck: anything up to this far above it. " +
+             "This is what keeps a bridge deck, an overhead sign or a tree from being picked up as the " +
+             "ground the truck is standing on.")]
+    public float settleRoof = 2f;
 
     [Tooltip("When a reset sends the car back to the last road it drove on, how many road nodes back to put " +
              "it - and so on. The car is dropped a little way up the road it took off from rather than on its " +
@@ -128,6 +187,11 @@ public class CarController : MonoBehaviour
 
         if (brakeLightRenderer != null)
             brakeMat = brakeLightRenderer.material;
+
+        if (keepTunedMassDistribution)
+            ApplyTunedMassDistribution();
+
+        SettleOnStart();
     }
 
 
@@ -356,8 +420,9 @@ void Update()
 
         // Land the car on the road instead of wherever it got stuck: find the
         // closest road that runs the way the level needs and drop it into the
-        // matching lane. The lift keeps the old "reset from above" feel, it just
-        // comes down over asphalt now, facing the way the level goes.
+        // matching lane, facing the way the level goes. How far above the road it
+        // is put down is resetHeight and how it lies on it is resetToSurface, both
+        // of which are read further down.
         Vector3 resetPosition = transform.position;
 
         if (resetOntoRoad)
@@ -391,16 +456,88 @@ void Update()
             }
         }
 
-        Vector3 uprightEuler =
-            new Vector3(
-                0f,
-                yaw,
-                2.6f);
+        // Landing square on the road is what makes a reset look settled, and there are two halves to it.
+        // The truck is put down leaning with the road it lands on rather than with the world, so a banked
+        // or climbing stretch does not take it on one corner of the chassis, and it is put down a short hop
+        // above its ride height instead of the old 1.6-unit drop - a fall that long lands the chassis box
+        // on the tarmac, and what bounces back up is a truck that settles off-balance.
+        Vector3 surfacePoint = resetPosition;
+        Vector3 surfaceUp = Vector3.up;
+
+        if (resetToSurface)
+            FindRoadSurface(resetPosition, out surfacePoint, out surfaceUp);
+
+        Quaternion heading =
+            Quaternion.Euler(0f, yaw, 0f);
 
         transform.rotation =
-            Quaternion.Euler(uprightEuler);
+            Quaternion.LookRotation(heading * Vector3.forward, surfaceUp)
+            * Quaternion.Euler(0f, 0f, resetRoll);
 
-        transform.position = resetPosition + Vector3.up * 1.6f;
+        transform.position =
+            surfacePoint + surfaceUp * resetHeight;
+    }
+
+
+    /// <summary>
+    /// Puts a truck that the level started in the air - or, far more likely, a little way inside the road
+    /// mesh - down on the surface under it, at its ride height and parallel to it, before the first physics
+    /// step. The place and the heading the level gave it are kept: only the height and the lean are corrected,
+    /// so a spawn point only has to be roughly right.
+    ///
+    /// This is the one thing that makes a level's spawn point forgiving, and it is not a nicety. The truck's
+    /// suspension is worked out from a ray each wheel casts at the surface below it, and the whole of the
+    /// truck's weight goes through it: a truck that starts with its wheels a few centimetres inside the road
+    /// mesh has rays that report the road's surface as being at (or behind) the wheel, so the springs push far
+    /// harder than the truck weighs, it is thrown up, comes down inside the road again, and shakes there for
+    /// as long as the level runs - with the chassis box grinding along the tarmac underneath it and the camera
+    /// following every jolt. Starting a hair above the surface is what breaks that cycle.
+    /// </summary>
+    private void SettleOnStart()
+    {
+        if (!settleOnStart || rb == null)
+            return;
+
+        Vector3 surfacePoint, surfaceUp;
+
+        if (!FindRoadSurface(transform.position, out surfacePoint, out surfaceUp,
+                             settleProbeAbove, settleProbeBelow, settleRoof))
+            return;
+
+        // The height the truck rides at over the surface it is standing on. Where it is now, measured against
+        // that, is what decides whether anything needs doing at all.
+        float gap = transform.position.y - surfacePoint.y;
+
+        if (Mathf.Abs(gap - resetHeight) <= settleTolerance)
+            return;
+
+        Vector3 startedAt = transform.position;
+
+        Quaternion heading =
+            Quaternion.Euler(0f, transform.eulerAngles.y, 0f);
+
+        transform.rotation =
+            Quaternion.LookRotation(heading * Vector3.forward, surfaceUp)
+            * Quaternion.Euler(0f, 0f, resetRoll);
+
+        transform.position =
+            surfacePoint + surfaceUp * resetHeight;
+
+        rb.velocity = Vector3.zero;
+        rb.angularVelocity = Vector3.zero;
+
+        // Said out loud only when it is worth knowing about: every level's spawn is a few centimetres out and
+        // that is exactly what this is here to absorb, but a truck that started a long way from the road is a
+        // spawn point to go and fix.
+        float moved = Vector3.Distance(transform.position, startedAt);
+
+        if (moved > 0.25f)
+        {
+            Debug.LogWarning(
+                $"'{name}' starts {gap:F2} m above the surface below it, not the {resetHeight:F2} m it rides " +
+                $"at, and has been put down on it at {startedAt}. Check the truck's position in " +
+                $"'{gameObject.scene.name}' if it was meant to start somewhere else.", this);
+        }
     }
 
 
@@ -715,6 +852,150 @@ void Update()
         target = Mathf.Clamp(target, 0f, length);
 
         return Mathf.Clamp01(param + (target - travelled) / length);
+    }
+
+
+    /// <summary>
+    /// Puts the truck's weight where the tuned chassis box says it is.
+    ///
+    /// The body volume above the chassis is collision only: it is there so the cab and the box stop at walls
+    /// instead of passing through them. Left to itself Unity works a rigidbody's centre of mass and inertia
+    /// tensor out of every collider it has, so that box would move the weight up by ten centimetres of ride
+    /// height and roughly treble how hard the truck is to roll - a different vehicle to drive. Both are
+    /// therefore taken from the chassis box alone, worked out the way Unity works them out from a single
+    /// collider, which leaves the balance and the turn-in exactly as they were tuned and changes nothing
+    /// but the shape of what the truck runs into.
+    /// </summary>
+    private void ApplyTunedMassDistribution()
+    {
+        BoxCollider chassis =
+            ResolveChassisCollider();
+
+        if (chassis == null)
+            return;
+
+        // The collider's own size, scaled into world units - not its world bounds. A collider's bounds are
+        // an axis-aligned box drawn around it, so the further the truck is turned from the world axes the
+        // bigger that box gets: a tensor worked out from it would depend on which way the truck happens to
+        // face. A truck spawned facing north would roll and pitch one way and the same truck facing east
+        // another, and a level that puts its truck down at an angle (Core-3 spawns at 86 degrees) would be
+        // handed a vehicle with a quarter of the tuned roll inertia before the player had touched anything.
+        // A box collider's world size is its local size under its own scale, which is the same whichever
+        // way it faces.
+        Vector3 worldCenter =
+            chassis.transform.TransformPoint(chassis.center);
+
+        Vector3 size =
+            Vector3.Scale(chassis.size, chassis.transform.lossyScale);
+
+        rb.centerOfMass =
+            transform.InverseTransformPoint(worldCenter);
+
+        // Setting either of these from a script is what stops Unity recomputing it from the colliders, so
+        // they are written once here and left alone: the body box is collision, and nothing else.
+        float mass = rb.mass;
+
+        rb.inertiaTensor =
+            new Vector3(
+                mass / 12f * (size.y * size.y + size.z * size.z),
+                mass / 12f * (size.x * size.x + size.z * size.z),
+                mass / 12f * (size.x * size.x + size.y * size.y));
+
+        rb.inertiaTensorRotation =
+            Quaternion.identity;
+    }
+
+
+    private BoxCollider ResolveChassisCollider()
+    {
+        if (chassisCollider != null)
+            return chassisCollider;
+
+        Transform body =
+            transform.Find("Body");
+
+        return body != null ? body.GetComponent<BoxCollider>() : null;
+    }
+
+
+    /// <summary>
+    /// The surface under a point - the road if there is one, the ground if there is not - and the way it
+    /// leans there, so the truck can be put down on it and parallel to it.
+    ///
+    /// The road is recognised the way the rest of the game recognises one: by the level's RoadArchitect Road
+    /// the surface belongs to, not by a tag (see <see cref="HasRoadBeneath"/>, which does the same). That
+    /// matters more than it sounds: a level's road mesh is not tagged, and a level's terrain *is* (it carries
+    /// the '!Road' tag), so a tag-only search finds the ground underneath the road every single time and puts
+    /// the truck inside the road's own mesh, which is the one place it must not be.
+    ///
+    /// Of the surfaces found, the highest wins - the road, where it runs on top of the ground. A bridge deck
+    /// over the same spot is a separate matter: anything more than <paramref name="roof"/> above the point is
+    /// treated as overhead rather than underfoot and ignored.
+    ///
+    /// Loose things are not ground. A car, a log, a barrel and a target all carry a rigidbody, and standing a
+    /// truck on one of those is not what this is for; the truck's own colliders are the same rigidbody and go
+    /// with them.
+    ///
+    /// The probe distances are parameters because the two callers want different ones: a reset is always
+    /// within a couple of metres of the road it lands on, while a spawn point can be further off than that.
+    ///
+    /// Returns whether anything was found at all, which is what tells a spawn settle that the truck is over
+    /// the road rather than over a hole or off the side of the level.
+    /// </summary>
+    private bool FindRoadSurface(Vector3 point, out Vector3 surfacePoint, out Vector3 surfaceUp,
+                                 float probeAbove = 2f, float probeBelow = 2f, float roof = 2f)
+    {
+        surfacePoint = point;
+        surfaceUp = Vector3.up;
+
+        bool found = false;
+
+        int count =
+            Physics.RaycastNonAlloc(
+                point + Vector3.up * probeAbove,
+                Vector3.down,
+                roadHits,
+                probeAbove + probeBelow,
+                ~0,
+                QueryTriggerInteraction.Ignore);
+
+        float highest =
+            point.y + roof;
+
+        for (int i = 0; i < count; i++)
+        {
+            RaycastHit hit = roadHits[i];
+
+            if (hit.collider == null || hit.rigidbody != null)
+                continue;
+
+            if (!IsGround(hit.collider))
+                continue;
+
+            if (hit.point.y > highest)
+                continue;
+
+            highest = hit.point.y;
+            surfacePoint = hit.point;
+            surfaceUp = hit.normal;
+            found = true;
+        }
+
+        return found;
+    }
+
+
+    /// <summary>
+    /// Whether a collider is part of the surface a truck may be put down on: the level's road, or the ground
+    /// a level tags '!Road'. Anything else - a sign, a blinder, a target, a prop - is something to hit, not
+    /// something to stand on.
+    /// </summary>
+    private static bool IsGround(Collider collider)
+    {
+        if (collider.GetComponentInParent<Road>() != null)
+            return true;
+
+        return collider.CompareTag("!Road");
     }
 
 

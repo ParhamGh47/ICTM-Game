@@ -491,7 +491,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 589969157592520976, guid: 46bdbac3208241b409bba27b8072fcf1, type: 3}
       propertyPath: speedKPH
-      value: 32.567257
+      value: 29.6
       objectReference: {fileID: 0}
     - target: {fileID: 589969157592520976, guid: 46bdbac3208241b409bba27b8072fcf1, type: 3}
       propertyPath: waypointsRoot
@@ -1923,7 +1923,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 589969157592520976, guid: 46bdbac3208241b409bba27b8072fcf1, type: 3}
       propertyPath: speedKPH
-      value: 26.634735
+      value: 29.6
       objectReference: {fileID: 0}
     - target: {fileID: 589969157592520976, guid: 46bdbac3208241b409bba27b8072fcf1, type: 3}
       propertyPath: waypointsRoot
@@ -4311,7 +4311,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 589969157592520976, guid: 46bdbac3208241b409bba27b8072fcf1, type: 3}
       propertyPath: speedKPH
-      value: 26.634735
+      value: 29.6
       objectReference: {fileID: 0}
     - target: {fileID: 589969157592520976, guid: 46bdbac3208241b409bba27b8072fcf1, type: 3}
       propertyPath: waypointsRoot
@@ -6185,7 +6185,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3461332012046798336, guid: 9ce62f70048d6bd4986fd0550705b7f7, type: 3}
       propertyPath: speedKPH
-      value: 26.634735
+      value: 29.6
       objectReference: {fileID: 0}
     - target: {fileID: 3461332012046798336, guid: 9ce62f70048d6bd4986fd0550705b7f7, type: 3}
       propertyPath: waypointsRoot
@@ -8856,7 +8856,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 589969157592520976, guid: 46bdbac3208241b409bba27b8072fcf1, type: 3}
       propertyPath: speedKPH
-      value: 26.634735
+      value: 29.6
       objectReference: {fileID: 0}
     - target: {fileID: 589969157592520976, guid: 46bdbac3208241b409bba27b8072fcf1, type: 3}
       propertyPath: waypointsRoot
@@ -9114,7 +9114,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3461332012046798336, guid: 9ce62f70048d6bd4986fd0550705b7f7, type: 3}
       propertyPath: speedKPH
-      value: 32.567257
+      value: 29.6
       objectReference: {fileID: 0}
     - target: {fileID: 3461332012046798336, guid: 9ce62f70048d6bd4986fd0550705b7f7, type: 3}
       propertyPath: waypointsRoot
@@ -9605,7 +9605,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3461332012046798336, guid: 9ce62f70048d6bd4986fd0550705b7f7, type: 3}
       propertyPath: speedKPH
-      value: 26.634735
+      value: 29.6
       objectReference: {fileID: 0}
     - target: {fileID: 3461332012046798336, guid: 9ce62f70048d6bd4986fd0550705b7f7, type: 3}
       propertyPath: waypointsRoot
@@ -15800,7 +15800,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3461332012046798336, guid: 9ce62f70048d6bd4986fd0550705b7f7, type: 3}
       propertyPath: speedKPH
-      value: 26.634735
+      value: 29.6
       objectReference: {fileID: 0}
     - target: {fileID: 3461332012046798336, guid: 9ce62f70048d6bd4986fd0550705b7f7, type: 3}
       propertyPath: waypointsRoot
@@ -16701,7 +16701,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 589969157592520976, guid: 46bdbac3208241b409bba27b8072fcf1, type: 3}
       propertyPath: speedKPH
-      value: 32.567257
+      value: 29.6
       objectReference: {fileID: 0}
     - target: {fileID: 589969157592520976, guid: 46bdbac3208241b409bba27b8072fcf1, type: 3}
       propertyPath: waypointsRoot
@@ -16996,7 +16996,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3461332012046798336, guid: 9ce62f70048d6bd4986fd0550705b7f7, type: 3}
       propertyPath: speedKPH
-      value: 32.567257
+      value: 29.6
       objectReference: {fileID: 0}
     - target: {fileID: 3461332012046798336, guid: 9ce62f70048d6bd4986fd0550705b7f7, type: 3}
       propertyPath: waypointsRoot
@@ -19664,7 +19664,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3461332012046798336, guid: 9ce62f70048d6bd4986fd0550705b7f7, type: 3}
       propertyPath: speedKPH
-      value: 32.567257
+      value: 29.6
       objectReference: {fileID: 0}
     - target: {fileID: 3461332012046798336, guid: 9ce62f70048d6bd4986fd0550705b7f7, type: 3}
       propertyPath: waypointsRoot
@@ -20948,7 +20948,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 589969157592520976, guid: 46bdbac3208241b409bba27b8072fcf1, type: 3}
       propertyPath: speedKPH
-      value: 26.634735
+      value: 29.6
       objectReference: {fileID: 0}
     - target: {fileID: 589969157592520976, guid: 46bdbac3208241b409bba27b8072fcf1, type: 3}
       propertyPath: waypointsRoot
@@ -24066,7 +24066,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3461332012046798336, guid: 9ce62f70048d6bd4986fd0550705b7f7, type: 3}
       propertyPath: speedKPH
-      value: 26.634735
+      value: 29.6
       objectReference: {fileID: 0}
     - target: {fileID: 3461332012046798336, guid: 9ce62f70048d6bd4986fd0550705b7f7, type: 3}
       propertyPath: waypointsRoot
@@ -24452,7 +24452,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 589969157592520976, guid: 46bdbac3208241b409bba27b8072fcf1, type: 3}
       propertyPath: speedKPH
-      value: 32.567257
+      value: 29.6
       objectReference: {fileID: 0}
     - target: {fileID: 589969157592520976, guid: 46bdbac3208241b409bba27b8072fcf1, type: 3}
       propertyPath: waypointsRoot
@@ -27180,7 +27180,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2656974221160258678, guid: 4cd592c6a69223c4c85cec6a5185bf1a, type: 3}
       propertyPath: speedKPH
-      value: 26.634735
+      value: 29.6
       objectReference: {fileID: 0}
     - target: {fileID: 2656974221160258678, guid: 4cd592c6a69223c4c85cec6a5185bf1a, type: 3}
       propertyPath: turnSpeed
@@ -32165,7 +32165,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3461332012046798336, guid: 9ce62f70048d6bd4986fd0550705b7f7, type: 3}
       propertyPath: speedKPH
-      value: 32.567257
+      value: 29.6
       objectReference: {fileID: 0}
     - target: {fileID: 3461332012046798336, guid: 9ce62f70048d6bd4986fd0550705b7f7, type: 3}
       propertyPath: waypointsRoot
@@ -32923,7 +32923,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2656974221160258678, guid: 4cd592c6a69223c4c85cec6a5185bf1a, type: 3}
       propertyPath: speedKPH
-      value: 26.634735
+      value: 29.6
       objectReference: {fileID: 0}
     - target: {fileID: 2656974221160258678, guid: 4cd592c6a69223c4c85cec6a5185bf1a, type: 3}
       propertyPath: turnSpeed
@@ -34147,7 +34147,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2656974221160258678, guid: 4cd592c6a69223c4c85cec6a5185bf1a, type: 3}
       propertyPath: speedKPH
-      value: 26.634735
+      value: 29.6
       objectReference: {fileID: 0}
     - target: {fileID: 2656974221160258678, guid: 4cd592c6a69223c4c85cec6a5185bf1a, type: 3}
       propertyPath: turnSpeed
@@ -40403,7 +40403,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2656974221160258678, guid: 4cd592c6a69223c4c85cec6a5185bf1a, type: 3}
       propertyPath: speedKPH
-      value: 26.634735
+      value: 29.6
       objectReference: {fileID: 0}
     - target: {fileID: 2656974221160258678, guid: 4cd592c6a69223c4c85cec6a5185bf1a, type: 3}
       propertyPath: turnSpeed
@@ -46792,7 +46792,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2656974221160258678, guid: 4cd592c6a69223c4c85cec6a5185bf1a, type: 3}
       propertyPath: speedKPH
-      value: 26.634735
+      value: 29.6
       objectReference: {fileID: 0}
     - target: {fileID: 2656974221160258678, guid: 4cd592c6a69223c4c85cec6a5185bf1a, type: 3}
       propertyPath: turnSpeed
@@ -47094,7 +47094,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 589969157592520976, guid: 46bdbac3208241b409bba27b8072fcf1, type: 3}
       propertyPath: speedKPH
-      value: 32.567257
+      value: 29.6
       objectReference: {fileID: 0}
     - target: {fileID: 589969157592520976, guid: 46bdbac3208241b409bba27b8072fcf1, type: 3}
       propertyPath: waypointsRoot
@@ -49177,7 +49177,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2656974221160258678, guid: 4cd592c6a69223c4c85cec6a5185bf1a, type: 3}
       propertyPath: speedKPH
-      value: 26.634735
+      value: 29.6
       objectReference: {fileID: 0}
     - target: {fileID: 2656974221160258678, guid: 4cd592c6a69223c4c85cec6a5185bf1a, type: 3}
       propertyPath: turnSpeed
@@ -51645,7 +51645,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 589969157592520976, guid: 46bdbac3208241b409bba27b8072fcf1, type: 3}
       propertyPath: speedKPH
-      value: 32.567257
+      value: 29.6
       objectReference: {fileID: 0}
     - target: {fileID: 589969157592520976, guid: 46bdbac3208241b409bba27b8072fcf1, type: 3}
       propertyPath: waypointsRoot
@@ -51977,7 +51977,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3461332012046798336, guid: 9ce62f70048d6bd4986fd0550705b7f7, type: 3}
       propertyPath: speedKPH
-      value: 32.567257
+      value: 29.6
       objectReference: {fileID: 0}
     - target: {fileID: 3461332012046798336, guid: 9ce62f70048d6bd4986fd0550705b7f7, type: 3}
       propertyPath: waypointsRoot
@@ -52912,7 +52912,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3461332012046798336, guid: 9ce62f70048d6bd4986fd0550705b7f7, type: 3}
       propertyPath: speedKPH
-      value: 32.567257
+      value: 29.6
       objectReference: {fileID: 0}
     - target: {fileID: 3461332012046798336, guid: 9ce62f70048d6bd4986fd0550705b7f7, type: 3}
       propertyPath: waypointsRoot
@@ -53031,7 +53031,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3461332012046798336, guid: 9ce62f70048d6bd4986fd0550705b7f7, type: 3}
       propertyPath: speedKPH
-      value: 26.634735
+      value: 29.6
       objectReference: {fileID: 0}
     - target: {fileID: 3461332012046798336, guid: 9ce62f70048d6bd4986fd0550705b7f7, type: 3}
       propertyPath: waypointsRoot
@@ -55688,7 +55688,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3461332012046798336, guid: 9ce62f70048d6bd4986fd0550705b7f7, type: 3}
       propertyPath: speedKPH
-      value: 32.567257
+      value: 29.6
       objectReference: {fileID: 0}
     - target: {fileID: 3461332012046798336, guid: 9ce62f70048d6bd4986fd0550705b7f7, type: 3}
       propertyPath: waypointsRoot
@@ -56275,7 +56275,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 589969157592520976, guid: 46bdbac3208241b409bba27b8072fcf1, type: 3}
       propertyPath: speedKPH
-      value: 32.567257
+      value: 29.6
       objectReference: {fileID: 0}
     - target: {fileID: 589969157592520976, guid: 46bdbac3208241b409bba27b8072fcf1, type: 3}
       propertyPath: waypointsRoot
@@ -58274,7 +58274,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 589969157592520976, guid: 46bdbac3208241b409bba27b8072fcf1, type: 3}
       propertyPath: speedKPH
-      value: 26.634735
+      value: 29.6
       objectReference: {fileID: 0}
     - target: {fileID: 589969157592520976, guid: 46bdbac3208241b409bba27b8072fcf1, type: 3}
       propertyPath: waypointsRoot
@@ -59502,7 +59502,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 589969157592520976, guid: 46bdbac3208241b409bba27b8072fcf1, type: 3}
       propertyPath: speedKPH
-      value: 32.567257
+      value: 29.6
       objectReference: {fileID: 0}
     - target: {fileID: 589969157592520976, guid: 46bdbac3208241b409bba27b8072fcf1, type: 3}
       propertyPath: waypointsRoot
@@ -62015,7 +62015,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 589969157592520976, guid: 46bdbac3208241b409bba27b8072fcf1, type: 3}
       propertyPath: speedKPH
-      value: 32.567257
+      value: 29.6
       objectReference: {fileID: 0}
     - target: {fileID: 589969157592520976, guid: 46bdbac3208241b409bba27b8072fcf1, type: 3}
       propertyPath: waypointsRoot
@@ -64163,7 +64163,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 589969157592520976, guid: 46bdbac3208241b409bba27b8072fcf1, type: 3}
       propertyPath: speedKPH
-      value: 26.634735
+      value: 29.6
       objectReference: {fileID: 0}
     - target: {fileID: 589969157592520976, guid: 46bdbac3208241b409bba27b8072fcf1, type: 3}
       propertyPath: waypointsRoot
@@ -64905,7 +64905,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 589969157592520976, guid: 46bdbac3208241b409bba27b8072fcf1, type: 3}
       propertyPath: speedKPH
-      value: 26.634735
+      value: 29.6
       objectReference: {fileID: 0}
     - target: {fileID: 589969157592520976, guid: 46bdbac3208241b409bba27b8072fcf1, type: 3}
       propertyPath: waypointsRoot
@@ -65479,7 +65479,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 589969157592520976, guid: 46bdbac3208241b409bba27b8072fcf1, type: 3}
       propertyPath: speedKPH
-      value: 32.567257
+      value: 29.6
       objectReference: {fileID: 0}
     - target: {fileID: 589969157592520976, guid: 46bdbac3208241b409bba27b8072fcf1, type: 3}
       propertyPath: waypointsRoot
@@ -65964,7 +65964,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3461332012046798336, guid: 9ce62f70048d6bd4986fd0550705b7f7, type: 3}
       propertyPath: speedKPH
-      value: 32.567257
+      value: 29.6
       objectReference: {fileID: 0}
     - target: {fileID: 3461332012046798336, guid: 9ce62f70048d6bd4986fd0550705b7f7, type: 3}
       propertyPath: waypointsRoot
@@ -73817,7 +73817,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 589969157592520976, guid: 46bdbac3208241b409bba27b8072fcf1, type: 3}
       propertyPath: speedKPH
-      value: 26.634735
+      value: 29.6
       objectReference: {fileID: 0}
     - target: {fileID: 589969157592520976, guid: 46bdbac3208241b409bba27b8072fcf1, type: 3}
       propertyPath: waypointsRoot
@@ -74892,7 +74892,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2656974221160258678, guid: 4cd592c6a69223c4c85cec6a5185bf1a, type: 3}
       propertyPath: speedKPH
-      value: 32.567257
+      value: 29.6
       objectReference: {fileID: 0}
     - target: {fileID: 2656974221160258678, guid: 4cd592c6a69223c4c85cec6a5185bf1a, type: 3}
       propertyPath: turnSpeed
@@ -77164,7 +77164,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3461332012046798336, guid: 9ce62f70048d6bd4986fd0550705b7f7, type: 3}
       propertyPath: speedKPH
-      value: 26.634735
+      value: 29.6
       objectReference: {fileID: 0}
     - target: {fileID: 3461332012046798336, guid: 9ce62f70048d6bd4986fd0550705b7f7, type: 3}
       propertyPath: waypointsRoot
@@ -78352,7 +78352,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2656974221160258678, guid: 4cd592c6a69223c4c85cec6a5185bf1a, type: 3}
       propertyPath: speedKPH
-      value: 32.567257
+      value: 29.6
       objectReference: {fileID: 0}
     - target: {fileID: 2656974221160258678, guid: 4cd592c6a69223c4c85cec6a5185bf1a, type: 3}
       propertyPath: turnSpeed
@@ -78804,7 +78804,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3461332012046798336, guid: 9ce62f70048d6bd4986fd0550705b7f7, type: 3}
       propertyPath: speedKPH
-      value: 32.567257
+      value: 29.6
       objectReference: {fileID: 0}
     - target: {fileID: 3461332012046798336, guid: 9ce62f70048d6bd4986fd0550705b7f7, type: 3}
       propertyPath: waypointsRoot
@@ -79639,8 +79639,16 @@ PrefabInstance:
     m_TransformParent: {fileID: 1262020875}
     m_Modifications:
     - target: {fileID: 6890820110102325944, guid: 81c7d71664e97214bb3397d11772ac21, type: 3}
-      propertyPath: targetTimeSeconds
+      propertyPath: easyTargetTimeSeconds
+      value: 200
+      objectReference: {fileID: 0}
+    - target: {fileID: 6890820110102325944, guid: 81c7d71664e97214bb3397d11772ac21, type: 3}
+      propertyPath: mediumTargetTimeSeconds
       value: 160
+      objectReference: {fileID: 0}
+    - target: {fileID: 6890820110102325944, guid: 81c7d71664e97214bb3397d11772ac21, type: 3}
+      propertyPath: hardTargetTimeSeconds
+      value: 128
       objectReference: {fileID: 0}
     - target: {fileID: 6890820110102325947, guid: 81c7d71664e97214bb3397d11772ac21, type: 3}
       propertyPath: m_LocalPosition.z

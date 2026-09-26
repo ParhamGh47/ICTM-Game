@@ -819,8 +819,16 @@ PrefabInstance:
     m_TransformParent: {fileID: 1262020875}
     m_Modifications:
     - target: {fileID: 6890820110102325944, guid: 81c7d71664e97214bb3397d11772ac21, type: 3}
-      propertyPath: targetTimeSeconds
+      propertyPath: easyTargetTimeSeconds
+      value: 38
+      objectReference: {fileID: 0}
+    - target: {fileID: 6890820110102325944, guid: 81c7d71664e97214bb3397d11772ac21, type: 3}
+      propertyPath: mediumTargetTimeSeconds
       value: 30
+      objectReference: {fileID: 0}
+    - target: {fileID: 6890820110102325944, guid: 81c7d71664e97214bb3397d11772ac21, type: 3}
+      propertyPath: hardTargetTimeSeconds
+      value: 24
       objectReference: {fileID: 0}
     - target: {fileID: 6890820110232687943, guid: 81c7d71664e97214bb3397d11772ac21, type: 3}
       propertyPath: m_IsActive

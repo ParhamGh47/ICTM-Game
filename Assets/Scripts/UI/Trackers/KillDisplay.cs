@@ -8,10 +8,17 @@ public class KillDisplay : MonoBehaviour
     public Text currentKillText;
 
     [Header("Kill Settings")]
-    [Tooltip("The number of targets the level is built to ask for. This is the Medium requirement: the " +
-             "difficulty the player has set takes its share off it (see GameDifficulty), and the target shown " +
-             "on the HUD is the number really asked for.")]
-    public int targetKills = 10;
+    [Tooltip("The number of targets the level asks for on Easy. Each difficulty has its own value, so a " +
+             "level can be made easier or harder on its own rather than as a fixed fraction of Medium; the " +
+             "one the player has chosen is what the HUD shows (see GameDifficulty).")]
+    public int easyTargetKills = 7;
+
+    [Tooltip("The number of targets the level asks for on Medium - the game as authored.")]
+    public int mediumTargetKills = 10;
+
+    [Tooltip("The number of targets the level asks for on Hard.")]
+    public int hardTargetKills = 14;
+
     private int currentKills = 0;
 
     // The requirement at the difficulty the level started with. Read once, in Start, so a difficulty chosen
@@ -22,7 +29,8 @@ public class KillDisplay : MonoBehaviour
     
     void Start()
     {
-        requiredKills = GameDifficulty.KillTarget(targetKills);
+        requiredKills =
+            GameDifficulty.KillTarget(easyTargetKills, mediumTargetKills, hardTargetKills);
 
         UpdateDisplay();
     }

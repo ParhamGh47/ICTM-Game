@@ -31,9 +31,15 @@ public class CarController : MonoBehaviour
              "fades away, reaching Min Steer Percent at top speed.")]
     public float steerFadeSpeed = 30f;
 
-    [Tooltip("Extra steering the truck gets when it is barely moving, so it can be turned around on " +
-             "the spot. Fades to 1 by the steer fade speed.")]
-    public float lowSpeedSteerBoost = 1.6f;
+    [Tooltip("Extra steering the truck gets at a crawl, so it can be turned around on the spot and " +
+             "pointed into a corner it has arrived at almost stopped. Held in full up to the low-speed " +
+             "hold speed, then fades back to 1 by the steer fade speed.")]
+    public float lowSpeedSteerBoost = 2f;
+
+    [Tooltip("Speed (km/h) up to which the low-speed steering boost is applied in full. Below this the " +
+             "truck steers with the whole boost - which is what makes it turn quickly when it is crawling " +
+             "- and above it the boost eases back to none by the steer fade speed.")]
+    public float lowSpeedSteerHoldSpeed = 15f;
 
     [Header("Brake Lights")]
     public Renderer brakeLightRenderer;
@@ -343,8 +349,9 @@ void Update()
 
     /// <summary>
     /// How much of the wheels' lock the truck is allowed to use right now, as a multiplier on the
-    /// wheel angle: a little more than 1 at a standstill so it can be turned around, 1 up to the
-    /// steer fade speed, then progressively less as it goes faster.
+    /// wheel angle: the low speed boost, held in full up to the low speed hold speed so a crawling
+    /// truck turns quickly, eased back to 1 by the steer fade speed, then progressively less than 1
+    /// as it goes faster.
     ///
     /// This is the whole of the speed based steering. The wheels are what turn the truck, so scaling
     /// their angle here is what makes a fast truck feel planted while a slow one stays nimble - it is
@@ -354,14 +361,24 @@ void Update()
     {
         float s = currentSpeedKPH;
 
+        // The extra steering a crawling truck gets. It used to be a straight ramp from the boost at 0 to
+        // nothing at the steer fade speed, so a truck at walking pace had already given away a third of
+        // it - and low speed is exactly where a heavy truck needs the help. The whole boost is therefore
+        // held up to the hold speed and only then eased off, which is what lets the truck be turned
+        // quickly below it while leaving the fast end of the range alone.
+        float hold =
+            Mathf.Min(lowSpeedSteerHoldSpeed, steerFadeSpeed);
+
         float boost =
-            Mathf.Lerp(
-                lowSpeedSteerBoost,
-                1f,
-                Mathf.InverseLerp(
-                    0f,
-                    steerFadeSpeed,
-                    s));
+            s <= hold
+                ? lowSpeedSteerBoost
+                : Mathf.Lerp(
+                    lowSpeedSteerBoost,
+                    1f,
+                    Mathf.InverseLerp(
+                        hold,
+                        Mathf.Max(steerFadeSpeed, hold + 0.01f),
+                        s));
 
         if (s <= steerFadeSpeed)
             return boost;

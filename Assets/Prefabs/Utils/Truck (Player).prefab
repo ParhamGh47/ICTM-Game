@@ -4925,7 +4925,8 @@ MonoBehaviour:
   currentSpeedKPH: 0
   minSteerPercent: 0.2
   steerFadeSpeed: 30
-  lowSpeedSteerBoost: 1.6
+  lowSpeedSteerBoost: 2
+  lowSpeedSteerHoldSpeed: 15
   brakeLightRenderer: {fileID: 8263559091470395916}
   brakeThreshold: -0.1
   resetCooldown: 2

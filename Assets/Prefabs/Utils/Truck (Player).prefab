@@ -4827,6 +4827,7 @@ GameObject:
   - component: {fileID: 5411794254173547891}
   - component: {fileID: 5411794254173547888}
   - component: {fileID: 8830126470192837465}
+  - component: {fileID: 8830126470192837466}
   m_Layer: 7
   m_Name: Truck (Player)
   m_TagString: Player
@@ -66018,3 +66019,23 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   channel: 3
   includeChildren: 0
+--- !u!114 &8830126470192837466
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5411794254173547900}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0ac6dc68a4ac6180d6f995d91134d8d9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  enableAssist: 1
+  groundProbe: 1.5
+  roadProbe: 6
+  activationSpeedKPH: 25
+  assistSpeedKPH: 80
+  assistAcceleration: 8
+  airborneDelay: 0.15
+  maxAirTime: 3

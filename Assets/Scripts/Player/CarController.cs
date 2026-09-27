@@ -47,6 +47,10 @@ public class CarController : MonoBehaviour
 
     private Material brakeMat;
 
+    // How broken the brake lamps are, 0 (whole) to 1 (gone), and whether they are gone for good. Set by
+    // the truck's damage system. Only the glow is affected - the braking itself is untouched.
+    private bool brakeLampDead;
+
     [Header("Tuned Mass Distribution")]
     [Tooltip("Unity works a rigidbody's centre of mass, and how hard it is to roll and to pitch, out of " +
              "every collider it has. The truck's collision is two boxes on purpose - the low chassis box the " +
@@ -139,19 +143,25 @@ public class CarController : MonoBehaviour
              "ground the truck is standing on.")]
     public float settleRoof = 2f;
 
-    [Tooltip("When a reset sends the car back to the last road it drove on, how many road nodes back to put " +
-             "it - and so on. The car is dropped a little way up the road it took off from rather than on its " +
-             "last centimetre, where the next nudge tips it straight back over the edge.")]
+    [Tooltip("When a reset puts the car back on the road without the car having had road under it - the side " +
+             "of the road, the grass beyond it, off a bank - how many road nodes back up the road to put it, " +
+             "so the driver is not dropped at the exact spot they left.")]
     public int resetBackOffNodes = 2;
 
-    [Tooltip("The furthest back that may put it, in metres. A level's own nodes are 15-90 m apart, so this " +
-             "is a generous ceiling on the two-node walk above rather than a distance the car is always sent " +
-             "back: far enough that the walk decides where it lands, close enough that a reset never drops " +
-             "the driver half a level behind what they had driven.")]
-    public float resetBackOffMetres = 150f;
+    [Tooltip("The furthest back that walk may put the car, in metres, when the car came off the road anywhere " +
+             "but a jump. A level's own nodes are 15-90 m apart, so this ceiling is what decides the distance: " +
+             "about twenty metres, which reads as a little way back rather than as being sent back down the " +
+             "level.")]
+    public float resetBackOffMetres = 20f;
+
+    [Tooltip("The same ceiling in metres for the case that is not ordinary: the car has just left the road " +
+             "over a gap, which is a jump it did not clear. The reset then goes much further back up the road " +
+             "it took off from, so there is a real run-up between the car and the ramp it has to try again.")]
+    public float resetJumpBackOffMetres = 150f;
 
     private Road[] cachedRoads;
     private CheckpointIndicator cachedCompass;
+    private JumpAssist cachedJumpAssist;
 
     // The last pose at which the car had road beneath it: what a reset in mid air goes back to.
     private Vector3 lastRoadPosition;
@@ -321,6 +331,16 @@ void Update()
     }
 
 
+    /// <summary>
+    /// The brake lamps have been knocked off the truck: they never light again, however hard the driver
+    /// brakes. A lamp that is still on the truck is left alone and works exactly as it always did, however
+    /// battered the truck around it looks.
+    /// </summary>
+    public void KillBrakeLamp()
+    {
+        brakeLampDead = true;
+    }
+
     private void UpdateBrakeLights()
     {
         if (brakeLightRenderer == null)
@@ -335,6 +355,12 @@ void Update()
 
         if (brakeMat == null)
             return;
+
+        if (brakeLampDead)
+        {
+            brakeMat.DisableKeyword("_EMISSION");
+            return;
+        }
 
         if (throttleInput < brakeThreshold)
         {
@@ -416,18 +442,23 @@ void Update()
     {
         TrackLastRoadPose();
 
-        if (GameInput.ResetPressed())
-        {
-            if (Time.time - lastResetTime >= resetCooldown)
-            {
-                ResetCar();
+        // Read every step, because it is an edge - true only on the frame the button goes down - and
+        // reading it is what keeps that edge up to date.
+        bool reset = GameInput.ResetPressed();
 
-                lastResetTime = Time.time;
-            }
+        if (reset && Time.time - lastResetTime >= resetCooldown)
+        {
+            ResetCar();
+
+            lastResetTime = Time.time;
         }
     }
 
 
+    /// <summary>
+    /// Puts the truck back on the road, keeping whatever damage it has picked up: a reset moves the truck,
+    /// it does not mend it.
+    /// </summary>
     private void ResetCar()
     {
         rb.velocity = Vector3.zero;
@@ -444,22 +475,32 @@ void Update()
 
         if (resetOntoRoad)
         {
+            // A reset only steps back up the road when the car has no road under it. How far back is
+            // decided by why it is off the road at all: a jump it did not clear means the ramp it took
+            // off from, a long way back, so the jump can be tried again; anything else - a wheel onto the
+            // grass, off a bank - means a short step, which just puts the driver back on the tarmac.
+            bool offRoad = !HasRoadBeneath();
+
+            float backOffMetres =
+                LeftRoadOverGap() ? resetJumpBackOffMetres : resetBackOffMetres;
+
             Vector3 onRoad, roadForward;
 
-            if (TryGetRoadResetPosition(transform.position, yaw, out onRoad, out roadForward))
+            if (TryGetRoadResetPosition(transform.position, yaw, out onRoad, out roadForward,
+                                        offRoad, backOffMetres))
             {
                 // A reset must never hand the driver ground for free. Over the gap before a jump the
                 // nearest tarmac is the landing road ahead, and dropping the car onto it would skip the
                 // jump it was meant to clear - so when the car is off the road and the search has come up
                 // with a spot further along the level than the last place it had tarmac under it, the
                 // search is run again from that place instead, which finds the ramp it took off from.
-                if (resetToLastRoad && hasLastRoadPose && !HasRoadBeneath() &&
+                if (resetToLastRoad && hasLastRoadPose && offRoad &&
                     IsAheadOfLastRoad(onRoad, yaw))
                 {
                     Vector3 onRamp, rampForward;
 
                     if (TryGetRoadResetPosition(lastRoadPosition, lastRoadYaw, out onRamp,
-                                                out rampForward, true))
+                                                out rampForward, true, backOffMetres))
                     {
                         onRoad = onRamp;
                         roadForward = rampForward;
@@ -631,6 +672,24 @@ void Update()
     }
 
 
+    /// <summary>
+    /// Whether the time the truck is currently spending off the road began at a gap in it - a jump that
+    /// has not been cleared yet - rather than with the truck simply wandering off the side.
+    ///
+    /// The answer is kept by the jump assist, which is the one place that already knows what a gap in the
+    /// road looks like, and it holds on to it for as long as the truck is away from the road: coming down in
+    /// the ravine at the bottom of a missed jump is still that jump, and a reset there belongs back at the
+    /// ramp rather than at whichever road happens to be nearest.
+    /// </summary>
+    private bool LeftRoadOverGap()
+    {
+        if (cachedJumpAssist == null)
+            cachedJumpAssist = GetComponent<JumpAssist>();
+
+        return cachedJumpAssist != null && cachedJumpAssist.LeftRoadAtGap;
+    }
+
+
     /// <summary>The way a heading points, flattened onto the ground plane.</summary>
     private static Vector3 HeadingOf(float yaw)
     {
@@ -665,12 +724,14 @@ void Update()
     /// <summary>
     /// Finds where on a road a reset from <paramref name="from"/> belongs, and which way it should face.
     ///
-    /// <paramref name="backOff"/> is for the reset that sends a driver back to the road they last drove on:
-    /// that pose is usually right at the lip of a jump, so the spot is walked a little further back up the
-    /// road instead of being dropped on the edge.
+    /// <paramref name="backOff"/> is for the resets that send a driver to a road the car has not got under
+    /// it: the spot is walked back up the road instead of being dropped where the car left it.
+    /// <paramref name="backOffMetres"/> is how far that walk may go - a short step for an ordinary off-road
+    /// reset, a long one for the ramp a jump was taken from.
     /// </summary>
     private bool TryGetRoadResetPosition(Vector3 from, float yaw, out Vector3 result,
-                                         out Vector3 roadForward, bool backOff = false)
+                                         out Vector3 roadForward, bool backOff = false,
+                                         float backOffMetres = 0f)
     {
         result = from;
         roadForward = Vector3.zero;
@@ -762,13 +823,16 @@ void Update()
         float direction =
             alongRoad >= 0f ? 1f : -1f;
 
-        // A reset that has sent the driver back to the road they took off from should not put them on its
-        // last few centimetres: walk the spot back up the road by whole nodes, so there is run-up between
-        // them and the edge they fell off.
+        // A reset should not put the driver on the last few centimetres of a road they are standing
+        // beside - or, worse, on the edge of the ramp they fell off: walk the spot back up the road by
+        // whole nodes, as far as the ceiling the caller asked for.
         if (backOff && resetBackOffNodes > 0)
         {
+            float ceiling =
+                backOffMetres > 0f ? backOffMetres : resetBackOffMetres;
+
             float backed =
-                BackOffAlongRoad(bestRoad, bestParam, direction, resetBackOffNodes, resetBackOffMetres);
+                BackOffAlongRoad(bestRoad, bestParam, direction, resetBackOffNodes, ceiling);
 
             if (Mathf.Abs(backed - bestParam) > 0.00001f)
             {

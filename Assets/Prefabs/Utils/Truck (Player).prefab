@@ -4829,6 +4829,7 @@ GameObject:
   - component: {fileID: 8830126470192837465}
   - component: {fileID: 8830126470192837466}
   - component: {fileID: 8830126470192837467}
+  - component: {fileID: 8830126470192837468}
   m_Layer: 7
   m_Name: Truck (Player)
   m_TagString: Player
@@ -4940,7 +4941,8 @@ MonoBehaviour:
   roadCheckDistance: 2.5
   resetForwardTolerance: 6
   resetBackOffNodes: 2
-  resetBackOffMetres: 150
+  resetBackOffMetres: 20
+  resetJumpBackOffMetres: 150
   enableFocus: 1
   focusTag: Adamak
   focusDistance: 10
@@ -66067,3 +66069,72 @@ MonoBehaviour:
   blendInSeconds: 0.4
   blendOutSeconds: 0.4
   shotPriority: 2500
+--- !u!114 &8830126470192837468
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5411794254173547900}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0b925cfa9fb2d91828acea78309e1d31, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  enableDamage: 1
+  parts:
+  - name: gelgir
+    toughness: 1.4
+    breaksOff: 1
+  - name: plate
+    toughness: 0.35
+    breaksOff: 1
+    attached:
+    - Text
+  - name: lightFront
+    toughness: 2.6
+    breaksOff: 1
+  - name: lightBack
+    toughness: 1.8
+    breaksOff: 1
+  - name: leftExhaust
+    toughness: 0.8
+    breaksOff: 1
+  - name: rightExhaust
+    toughness: 0.8
+    breaksOff: 1
+  - name: backDoor
+    toughness: 1
+    breaksOff: 1
+  - name: backWindow
+    toughness: 0.55
+    breaksOff: 1
+  - name: iceCream
+    toughness: 0.45
+    breaksOff: 1
+  - name: cone
+    toughness: 0.3
+    breaksOff: 1
+  - name: wheelsFront
+    toughness: 2
+    breaksOff: 1
+  - name: wheelsBack
+    toughness: 2
+    breaksOff: 1
+  undersideAngle: 55
+  minimumImpactSpeed: 3
+  damagePerSpeed: 0.055
+  impactCooldown: 0.15
+  maxBendDegrees: 16
+  maxBendOffset: 0.04
+  health: 1
+  breakImpactSpeed: 16
+  debrisLifetime: 14
+  knockOnChance: 0.35
+  knockOnRadius: 0.6
+  knockOnFraction: 0.5
+  debrisThrow: 0.6
+  debrisKick: 2
+  debrisMinSpin: 90
+  debrisMaxSpin: 420
+  logDamage: 1

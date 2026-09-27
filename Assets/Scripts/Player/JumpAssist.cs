@@ -74,6 +74,18 @@ public class JumpAssist : MonoBehaviour
     /// <summary>How long the truck has been over the gap, in simulated seconds.</summary>
     public float OverGapTime { get; private set; }
 
+    /// <summary>
+    /// Whether the time the truck is currently spending away from the road began at a gap in it: a jump
+    /// that has not been cleared, whether the truck is still in the air over the gap or has come down
+    /// somewhere without road under it.
+    ///
+    /// The reset reads this to tell a jump gone wrong - which belongs back at the ramp it took off from, a
+    /// long way up the road - from the truck merely having wandered off the side, which belongs a short step
+    /// back. It is set the moment the truck is over a gap and cleared only once its wheels are over tarmac
+    /// again, so it survives the whole of a missed jump.
+    /// </summary>
+    public bool LeftRoadAtGap { get; private set; }
+
     private void FixedUpdate()
     {
         if (rb == null)
@@ -81,14 +93,24 @@ public class JumpAssist : MonoBehaviour
 
         // On the ground, or still over road: not a jump. Whichever it is, the truck is back on something,
         // so the air clock starts again for the next time it leaves the ground.
-        if (HasGroundBelow(groundProbe) || HasRoadBelow(roadProbe))
+        bool onRoad = HasRoadBelow(groundProbe);
+
+        if (onRoad || HasGroundBelow(groundProbe) || HasRoadBelow(roadProbe))
         {
             IsOverGap = false;
             OverGapTime = 0f;
+
+            // Wheels over tarmac again: whatever detour began at a gap in the road is over, so the next
+            // reset can be an ordinary one. Coming down on ground instead - the floor of the ravine, the
+            // grass - deliberately leaves it set, because the truck is still stranded by that same jump.
+            if (onRoad)
+                LeftRoadAtGap = false;
+
             return;
         }
 
         IsOverGap = true;
+        LeftRoadAtGap = true;
         OverGapTime += Time.fixedDeltaTime;
 
         if (!enableAssist)

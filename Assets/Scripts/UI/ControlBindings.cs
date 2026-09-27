@@ -56,7 +56,7 @@ public static class ControlBindings
             new ControlBinding("Horn", "H", "X"),
             new ControlBinding("Headlights", "L", "B"),
             new ControlBinding("Change camera", "C", "Y"),
-            new ControlBinding("Reset vehicle", "R", "D-pad up"),
+            new ControlBinding("Reset vehicle", "R", "D-pad down"),
             new ControlBinding("Pause", "Escape", "Start")),
 
         new ControlGroup("MENUS",

@@ -17,7 +17,8 @@ using UnityEngine;
 ///   Left stick        steering
 ///   A / cross         focus               B / circle        headlights
 ///   X / square        horn                Y / triangle      change camera
-///   D-pad up          reset the vehicle   Start / Options   pause
+///   D-pad down        reset the vehicle
+///   Start / Options   pause
 ///
 /// The face buttons are read by position - bottom, right, left, top - through the generic
 /// <c>KeyCode.JoystickButton</c> values, which is how a controller reports them on every platform: an
@@ -140,7 +141,8 @@ public static class GameInput
     }
 
     /// <summary>
-    /// Reset the vehicle: R, or up on the D-pad.
+    /// Reset the vehicle: R, or down on the D-pad. It puts the truck back on the road, facing the way the
+    /// level goes - it does not mend the damage the truck is carrying.
     ///
     /// The D-pad is an axis rather than a button, so it is turned into a press here - holding it down
     /// must not reset the car again every time the cooldown runs out.
@@ -150,15 +152,26 @@ public static class GameInput
         if (Input.GetKeyDown(KeyCode.R))
             return true;
 
-        bool up = Input.GetAxis(ControllerDPadVerticalAxis) > 0.5f;
-        bool pressed = up && !dpadUpWasHeld;
+        return DPadPressed(-1f, ref dpadDownWasHeld);
+    }
 
-        dpadUpWasHeld = up;
+    /// <summary>
+    /// One direction of the D-pad as a press rather than as an axis: true on the frame it is pushed, and
+    /// not again until it has been let go.
+    /// </summary>
+    private static bool DPadPressed(float direction, ref bool wasHeld)
+    {
+        float vertical = Input.GetAxis(ControllerDPadVerticalAxis);
+        bool held = direction > 0f ? vertical > 0.5f : vertical < -0.5f;
+
+        bool pressed = held && !wasHeld;
+
+        wasHeld = held;
 
         return pressed;
     }
 
-    private static bool dpadUpWasHeld;
+    private static bool dpadDownWasHeld;
 
     // ---------------------------------------------------------------- shaping
 

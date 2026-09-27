@@ -23,18 +23,22 @@ public class LightToggle : MonoBehaviour
 
     private Material targetMat;
 
+    // Whether the lamps have been knocked off the truck. Set by the damage system. A lamp that is still
+    // on the truck works exactly as it always did, however battered it looks; this only says whether
+    // there is still a lamp there to light. Nothing here touches the truck's driving.
+    private bool lampDead;
+
     void Awake()
     {
         headlightsOn = startOn;
-
-        SetHeadlights(headlightsOn);
 
         Material lens = LensMaterial();
         if (lens != null)
         {
             targetMat = lens;
-            UpdateEmission();
         }
+
+        ApplyLamp();
     }
 
     /// <summary>
@@ -83,11 +87,38 @@ public class LightToggle : MonoBehaviour
 
             headlightsOn = !headlightsOn;
 
-            SetHeadlights(headlightsOn);
-            UpdateEmission();
+            ApplyLamp();
 
             lastToggleTime = Time.time;
         }
+    }
+
+    /// <summary>
+    /// The lamps are gone - knocked clean off the truck. They never light again, however the driver works
+    /// the switch. While there is still a lamp on the truck it lights exactly as it always did, however
+    /// badly bent the rest of the truck is.
+    /// </summary>
+    public void KillLamp()
+    {
+        lampDead = true;
+
+        ApplyLamp();
+    }
+
+    /// <summary>Whether the lamps have been knocked off the truck.</summary>
+    public bool LampDead { get { return lampDead; } }
+
+    /// <summary>Whether the lamps are lit now - the switch, and whether there is still a lamp to light.</summary>
+    private bool LampShouldBeOn
+    {
+        get { return headlightsOn && !lampDead; }
+    }
+
+    /// <summary>Puts the switch and the damage together onto the lamps and the lens.</summary>
+    private void ApplyLamp()
+    {
+        SetHeadlights(LampShouldBeOn);
+        UpdateEmission();
     }
 
     private void SetHeadlights(bool state)
@@ -126,7 +157,7 @@ public class LightToggle : MonoBehaviour
     {
         if (targetMat == null) return;
 
-        if (headlightsOn)
+        if (LampShouldBeOn)
         {
             targetMat.EnableKeyword("_EMISSION");
         }

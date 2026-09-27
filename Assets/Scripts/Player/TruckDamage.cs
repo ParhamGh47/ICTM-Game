@@ -6,8 +6,8 @@ using UnityEngine;
 /// enough of them break it off to fall on the road as its own piece of wreckage.
 ///
 /// It is an experiment, and it is built so that an experiment cannot cost the driving. Every part it
-/// touches is a piece of the model - the grille, the rear door and its glass, the ice cream, the wheel
-/// meshes - and none of them carries a collider or is read by the car controller. Moving one of them
+/// touches is a piece of the model - the grille, the rear door and its glass, the ice cream, the front
+/// wheel meshes - and none of them carries a collider or is read by the car controller. Moving one of them
 /// therefore moves only what is drawn; it cannot change the truck's mass, its centre of gravity, its
 /// inertia, its suspension, its grip or the shape of what it collides with. The chassis mesh is
 /// deliberately not in the list for exactly that reason: the truck's own collision is built into it, so
@@ -18,6 +18,13 @@ using UnityEngine;
 /// damage in proportion to how hard it was hit, at the point it was hit: the nearest part to the contact
 /// point bends, further hits bend it more, and past its limit it comes off. A single very hard hit can
 /// take a part off outright.
+///
+/// The load on the roof is looser than the panels around it: it is the part that is meant to be seen
+/// taking a knock: it leans further than the rest, and it is the one part that can be set to shake - a fast
+/// spring that swings out, swings back smaller and is gone in about a second - rather than simply being
+/// nudged. That shake is switched off, because it read as too much on the ice cream; it is one Wobble Scale
+/// away from coming back. The roof load also takes a few hits to come away, so it leans for a while rather
+/// than being lost on the first contact.
 ///
 /// When a part comes off it stops being part of the truck. It is given its own box collider worked out
 /// from what it was drawn as, its own rigidbody, the speed the truck had at the moment of the crash and
@@ -62,6 +69,18 @@ public class TruckDamage : MonoBehaviour
                  "hit.")]
         public bool breaksOff = true;
 
+        [Tooltip("How much further this part bends and shifts than the standard, on the same hits. 1 is the " +
+                 "standard; 2 moves it twice as far by the time it is about to come off. It does not make the " +
+                 "part any easier to break - toughness does that.")]
+        [Range(0f, 4f)]
+        public float bendScale = 1f;
+
+        [Tooltip("How much this part takes part in the quick shake a hit sets off. 0 - the standard for " +
+                 "everything but the load on the roof - leaves the part with only its bend; 1 shakes it by " +
+                 "the standard above, 2 by twice that.")]
+        [Range(0f, 4f)]
+        public float wobbleScale = 0f;
+
         [Tooltip("Other pieces of the model that are drawn on this part and should move and come off with " +
                  "it, matched by the same rules as the name above. The plate's lettering is a model of its " +
                  "own, so without this it would be left hanging in the air when the plate came away.")]
@@ -75,21 +94,37 @@ public class TruckDamage : MonoBehaviour
     public BreakablePart[] parts =
     {
         // The model's parts, from the truck's own file. Toughness says what each is made of: the plate
-        // and the ice cream's cone are flimsy and come away early, the lamps are thin, the body panels and
-        // exhausts are ordinary, and the wheels and the truck's nose need a real crash.
+        // and the glass are flimsy and come away early, the lamps are thin, the body panels and exhausts are
+        // ordinary, and the load on the roof is flimsy too - but it takes a few knocks now, because it is the
+        // part the driver is meant to watch being knocked about.
+        // exhausts are ordinary, the grille takes a real knock, and a wheel is the hardest thing on the
+        // truck to lose: it barely shifts on its axle and only gives up after a real beating.
         new BreakablePart { name = "gelgir",      toughness = 1.4f },   // the front grille and its surround
         new BreakablePart { name = "plate",       toughness = 0.35f,    // the number plate
                             attached = new[] { "Text" } },             // and the lettering on it
-        new BreakablePart { name = "lightFront",  toughness = 2.6f },   // the headlamps - the hardest thing on the truck to knock off
+        new BreakablePart { name = "lightFront",  toughness = 2.6f },   // the headlamps - thin, but bolted to the body
         new BreakablePart { name = "lightBack",   toughness = 1.8f },   // the tail and brake lamps
         new BreakablePart { name = "leftExhaust", toughness = 0.8f },
         new BreakablePart { name = "rightExhaust", toughness = 0.8f },
         new BreakablePart { name = "backDoor",    toughness = 1.0f },   // the rear door
         new BreakablePart { name = "backWindow",  toughness = 0.55f },  // the glass in it
-        new BreakablePart { name = "iceCream",    toughness = 0.45f },  // the load on the roof
-        new BreakablePart { name = "cone",        toughness = 0.3f },   // its cone
-        new BreakablePart { name = "wheelsFront", toughness = 2.0f },   // the front wheel meshes
-        new BreakablePart { name = "wheelsBack",  toughness = 2.0f },   // and the rear ones
+        new BreakablePart { name = "iceCream",    toughness = 1.8f, bendScale = 2.2f },   // the load on the roof
+        new BreakablePart { name = "cone",        toughness = 0.3f, bendScale = 2.2f },   // its cone, which leans with it
+        new BreakablePart { name = "wheelsFront", toughness = 3.5f, bendScale = 0.35f },   // the front wheel meshes
+        // The rear wheels - 'wheelsBack' in the model - are left out on purpose: the pair the truck is driven
+        // and braked on should not shift on its axle or come away, because a wheel that has shifted, or left,
+        // reads as the truck broken rather than as the truck battered. They were in the list before, and both
+        // were being bent and thrown on every hit: only the front pair can be lost now, and only after a real
+        // beating.
+
+
+        // The roof load, in short: it takes about four times the beating it used to (toughness 0.45 -> 1.8),
+        // and it leans twice as far as a panel (Bend Scale 2.2). It is the only part that would take part in
+        // the quick shake a hit sets off, and that shake is switched off on it (Wobble Scale 0).
+
+        // Bending, as a rule: the body panels and the lamps hold their shape (Bend Scale 1), the load on the
+        // roof is loose on its base and rocks about more (2.2), and a wheel barely shifts at all (0.35), so
+        // that it stays where the model put it until it finally gives up and leaves.
     };
 
     [Tooltip("How far a contact's surface may lean towards the truck's own up and still count as coming " +
@@ -114,12 +149,35 @@ public class TruckDamage : MonoBehaviour
 
     [Header("Bending")]
     [Tooltip("How far a part can bend, in degrees, from where the model put it - reached when it is one " +
-             "hit away from coming off.")]
+             "hit away from coming off. The part's own Bend Scale multiplies it.")]
     public float maxBendDegrees = 16f;
 
     [Tooltip("How far a part can shift, in metres, from where the model put it - reached at the same " +
-             "point as the bend.")]
+             "point as the bend. The part's own Bend Scale multiplies it.")]
     public float maxBendOffset = 0.04f;
+
+    [Header("Wobble")]
+    [Tooltip("Whether a hit throws the truck's loose parts into a quick shake as well as bending them. Only " +
+             "parts with a Wobble Scale of their own take part in it, which is the load on the roof.")]
+    public bool wobble = true;
+
+    [Tooltip("How far the shake throws a part about, in metres at the peak of its first swing, per metre per " +
+             "second of impact. A 15 m/s crash shakes the roof load about ten centimetres.")]
+    public float wobblePerSpeed = 0.0045f;
+
+    [Tooltip("How far the shake tilts a part, in degrees at the peak of its first swing.")]
+    public float wobbleDegrees = 7f;
+
+    [Tooltip("How quick the shake is, in swings per second. Higher is a tighter, more rapid jiggle.")]
+    public float wobbleFrequency = 10f;
+
+    [Tooltip("How long the shake takes to die down, in seconds - the time for it to fall to about a third of " +
+             "its first swing. At 0.45 it is still moving a little a second after the hit.")]
+    public float wobbleSettle = 0.45f;
+
+    [Tooltip("The hardest a crash may shake the truck, in metres per second, so one enormous hit cannot throw " +
+             "the roof load off its own springs.")]
+    public float wobbleMaxSpeed = 25f;
 
     [Header("Breaking")]
     [Tooltip("How much of a part's health it takes to bend it to breaking point. It is 1 by design: " +
@@ -188,6 +246,8 @@ public class TruckDamage : MonoBehaviour
 
         public float toughness;         // how much punishment it takes, from the part's own setting
         public bool breaksOff;          // whether it may come off at all
+        public float bendScale;         // how much further than the standard it bends and shifts
+        public float wobbleScale;       // how much it shakes when the truck is hit
 
         // The lamps this part is: the headlamp lens the light toggle switches on, or the brake lamps the
         // car controller lights. Worked out from the references those two already hold rather than from a
@@ -218,6 +278,16 @@ public class TruckDamage : MonoBehaviour
     private Vector3 lastVelocity;
 
     private float lastImpactTime = -999f;
+
+    // The shake a hit sets off, for the parts that take part in it: how hard the truck was hit (capped),
+    // which way the part is being thrown, and how long ago it happened.
+    private float shakeSpeed;
+    private Vector3 shakeDirection = Vector3.up;
+    private float shakeTime = -1f;
+
+    // Whether any part on this truck takes part in the shake at all. With none, a hit costs nothing: the
+    // whole thing is skipped rather than looped over and found empty.
+    private bool anyWobble;
 
     private void Awake()
     {
@@ -315,6 +385,81 @@ public class TruckDamage : MonoBehaviour
         if (rb != null) lastVelocity = rb.velocity;
     }
 
+    /// <summary>
+    /// Starts the shake a hit sets off. One shake at a time: a new hit replaces whatever was left of the
+    /// last one, which keeps the motion reading as the crash it came from rather than as an accumulation.
+    /// </summary>
+    private void StartShake(float impactSpeed, Vector3 contactNormal)
+    {
+        Vector3 push = -contactNormal;
+        if (!anyWobble) return;
+        if (push.sqrMagnitude < 0.0001f) return;
+
+        shakeSpeed = Mathf.Min(impactSpeed, Mathf.Max(1f, wobbleMaxSpeed));
+        shakeDirection = push.normalized;
+        shakeTime = 0f;
+    }
+
+    /// <summary>
+    /// The quick shake a hit leaves behind in the parts that take part in it. It is a spring rather than a
+    /// slower lean: it swings out fast, swings back smaller, and is over in about a second - so a knock on
+    /// the roof load reads as something being knocked about rather than as the part being moved for good.
+    ///
+    /// It runs on the frame rather than the physics step on purpose: it moves what is drawn and nothing
+    /// else, so the smoother it is the better, and nothing about the truck's driving depends on it.
+    /// </summary>
+    private void Update()
+    {
+        if (shakeTime < 0f) return;
+
+        shakeTime += Time.deltaTime;
+
+        float decay = Mathf.Exp(-shakeTime / Mathf.Max(0.02f, wobbleSettle));
+        float swing = Mathf.Sin(shakeTime * wobbleFrequency * Mathf.PI * 2f) * decay;
+
+        if (decay < 0.02f)
+        {
+            shakeTime = -1f;
+            Settle();
+
+            return;
+        }
+
+        for (int i = 0; i < foundParts.Count; i++)
+        {
+            Part part = foundParts[i];
+
+            if (part.wobbleScale <= 0f || part.broken || part.transform == null) continue;
+
+            // The throw is worked out in the world and brought into each part's own parent, so a part whose
+            // parent is turned - or turned differently from its neighbour - is still thrown the same way as
+            // the one beside it, and the two do not drift apart while they shake.
+            Vector3 direction = part.transform.parent != null
+                ? part.transform.parent.InverseTransformDirection(shakeDirection)
+                : shakeDirection;
+
+            part.transform.localPosition = part.homePosition + part.bendOffset +
+                                           direction * (wobblePerSpeed * shakeSpeed * part.wobbleScale * swing);
+
+            part.transform.localRotation = part.homeRotation * Quaternion.AngleAxis(
+                part.bendDegrees + wobbleDegrees * part.wobbleScale * swing, part.bendAxis);
+        }
+    }
+
+    /// <summary>Puts the parts that shake onto the pose their own damage gives them, the shake over.</summary>
+    private void Settle()
+    {
+        for (int i = 0; i < foundParts.Count; i++)
+        {
+            Part part = foundParts[i];
+
+            if (part.wobbleScale <= 0f || part.broken || part.transform == null) continue;
+
+            part.transform.localPosition = part.homePosition + part.bendOffset;
+            part.transform.localRotation = part.homeRotation * Quaternion.AngleAxis(part.bendDegrees, part.bendAxis);
+        }
+    }
+
     // ---------------------------------------------------------------- discovery
 
     /// <summary>
@@ -355,9 +500,13 @@ public class TruckDamage : MonoBehaviour
                 part.attachedCount = Attach(child, wanted.attached);
                 part.toughness = Mathf.Max(0.05f, wanted.toughness);
                 part.breaksOff = wanted.breaksOff;
+                part.bendScale = Mathf.Max(0f, wanted.bendScale);
+                part.wobbleScale = Mathf.Max(0f, wanted.wobbleScale);
                 part.renderers = child.GetComponentsInChildren<Renderer>(true);
 
                 foundParts.Add(part);
+
+                if (part.wobbleScale > 0f) anyWobble = true;
             }
         }
     }
@@ -472,6 +621,9 @@ public class TruckDamage : MonoBehaviour
                        part.toughness;
 
         Apply(part, collision.contacts[worst], damage);
+
+        // The quick shake the hit sets off, in the parts that take part in it.
+        if (wobble) StartShake(impactSpeed, collision.contacts[worst].normal);
 
         // A single crash hard enough tears a part off whatever it had left, which is what makes a big
         // one read differently from a series of small ones - and the threshold scales with toughness, so
@@ -603,10 +755,10 @@ public class TruckDamage : MonoBehaviour
         axis.Normalize();
 
         part.bendAxis = axis;
-        part.bendDegrees = maxBendDegrees * amount;
+        part.bendDegrees = maxBendDegrees * amount * part.bendScale;
 
         Vector3 localPush = part.transform.parent.InverseTransformDirection(push);
-        part.bendOffset = localPush * (maxBendOffset * amount);
+        part.bendOffset = localPush * (maxBendOffset * amount * part.bendScale);
 
         part.transform.localPosition = part.homePosition + part.bendOffset;
         part.transform.localRotation = part.homeRotation * Quaternion.AngleAxis(part.bendDegrees, part.bendAxis);
@@ -708,6 +860,7 @@ public class TruckDamage : MonoBehaviour
         }
 
         lastImpactTime = -999f;
+        shakeTime = -1f;
     }
 
     /// <summary>The damage the truck is carrying, 0 to 1, over all of its parts. For a level or a HUD

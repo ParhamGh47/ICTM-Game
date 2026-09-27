@@ -66072,47 +66072,72 @@ MonoBehaviour:
   - name: gelgir
     toughness: 1.4
     breaksOff: 1
+    bendScale: 1
+    wobbleScale: 0
   - name: plate
     toughness: 0.35
     breaksOff: 1
+    bendScale: 1
+    wobbleScale: 0
     attached:
     - Text
   - name: lightFront
     toughness: 2.6
     breaksOff: 1
+    bendScale: 1
+    wobbleScale: 0
   - name: lightBack
     toughness: 1.8
     breaksOff: 1
+    bendScale: 1
+    wobbleScale: 0
   - name: leftExhaust
     toughness: 0.8
     breaksOff: 1
+    bendScale: 1
+    wobbleScale: 0
   - name: rightExhaust
     toughness: 0.8
     breaksOff: 1
+    bendScale: 1
+    wobbleScale: 0
   - name: backDoor
     toughness: 1
     breaksOff: 1
+    bendScale: 1
+    wobbleScale: 0
   - name: backWindow
     toughness: 0.55
     breaksOff: 1
+    bendScale: 1
+    wobbleScale: 0
   - name: iceCream
-    toughness: 0.45
+    toughness: 1.8
     breaksOff: 1
+    bendScale: 2.2
+    wobbleScale: 0
   - name: cone
     toughness: 0.3
     breaksOff: 1
+    bendScale: 2.2
+    wobbleScale: 0
   - name: wheelsFront
-    toughness: 2
+    toughness: 3.5
     breaksOff: 1
-  - name: wheelsBack
-    toughness: 2
-    breaksOff: 1
+    bendScale: 0.35
+    wobbleScale: 0
   undersideAngle: 55
   minimumImpactSpeed: 3
   damagePerSpeed: 0.055
   impactCooldown: 0.15
   maxBendDegrees: 16
   maxBendOffset: 0.04
+  wobble: 1
+  wobblePerSpeed: 0.0045
+  wobbleDegrees: 7
+  wobbleFrequency: 10
+  wobbleSettle: 0.45
+  wobbleMaxSpeed: 25
   health: 1
   breakImpactSpeed: 16
   debrisLifetime: 14

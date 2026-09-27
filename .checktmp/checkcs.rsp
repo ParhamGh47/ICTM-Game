@@ -369,3 +369,6 @@
 "Assets/Scripts/UI/EscBack.cs"
 "Assets/Scripts/Player/CarController.cs"
 "Assets/Scripts/UI/Trackers/ProgressTracker/ProgressDisplay.cs"
+"Assets/Scripts/Player/Hud/BoostDisplay.cs"
+"Assets/Scripts/Boost/BoostClip.cs"
+"Assets/Scripts/Boost/BoostSounds.cs"

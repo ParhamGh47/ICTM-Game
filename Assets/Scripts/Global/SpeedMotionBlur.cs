@@ -63,6 +63,13 @@ public class SpeedMotionBlur : MonoBehaviour
              "impact, a scripted moment. Left at 1 it does nothing.")]
     public float pull = 1f;
 
+    [Tooltip("How much longer the smear gets while a collected boost is being spent, nearly doubling it at " +
+             "the default. This multiplies the length of the streak on top of whatever the speed already asked " +
+             "for, which is what lets a boost show at all: the speed part is already full at the truck's top " +
+             "speed, and a boost is spent at speed or not at all.")]
+    [Range(1f, 3f)]
+    public float boostPull = 1.9f;
+
     [Header("Reach")]
     [Tooltip("How far the far band reaches into the picture, on top of the tight band around the truck. 0 " +
              "leaves only the ring around the player; 1 means the smear is at its cap from fairly close in. " +
@@ -204,6 +211,10 @@ public class SpeedMotionBlur : MonoBehaviour
 
     // 0 - 1, how much of the blur is asked for right now: eased towards the speed so it never snaps.
     private float intensity;
+
+    // How much of the boost's extra pull is in effect, 0 - 1, eased the same way the speed is so the blur
+    // lengthens into a boost rather than snapping on with it.
+    private float boost;
 
     // 0 - 1, how much of a top-down view the camera is giving at the moment. This is the switch between the
     // chase shaping and the top-down shaping, and it is eased because the camera cuts between the two.
@@ -363,6 +374,7 @@ public class SpeedMotionBlur : MonoBehaviour
 
         float wanted = 0f;
         float wantedSteer = 0f;
+        float wantedBoost = 0f;
 
         if (car != null)
         {
@@ -375,11 +387,17 @@ public class SpeedMotionBlur : MonoBehaviour
             wanted = wanted * wanted * (3f - 2f * wanted);
 
             wantedSteer = Mathf.Clamp(car.steerInput, -1f, 1f);
+
+            // The boost is asked for separately rather than as more speed, because the speed part is already
+            // full at the truck's top speed: without this, the fastest moment in a level would look exactly
+            // like the fastest corner in it.
+            wantedBoost = car.IsBoosting ? 1f : 0f;
         }
 
         float follow = CameraView.FollowFraction(smoothTime);
 
         intensity = Mathf.Lerp(intensity, wanted, follow);
+        boost = Mathf.Lerp(boost, wantedBoost, follow);
 
         if (intensity < 0.0005f) intensity = 0f;
 
@@ -532,7 +550,9 @@ public class SpeedMotionBlur : MonoBehaviour
         // band covers the frame rather than hugging the truck, the clear disc can shrink (the truck is cut
         // out of the smear by its own outline instead) and the sides no longer lead the top and bottom,
         // because from above there is no sky and no road ahead - it is all ground rushing past.
-        float amount = maxBlur * force * Mathf.Lerp(1f, topDownBlur, topDown);
+        float amount =
+            maxBlur * force * Mathf.Lerp(1f, Mathf.Max(1f, boostPull), boost)
+            * Mathf.Lerp(1f, topDownBlur, topDown);
         float clear = clearRadius * Mathf.Lerp(1f, topDownClear, topDown);
         float wide = Mathf.Lerp(wideReach, Mathf.Max(wideReach, topDownWide), topDown);
         float sides = Mathf.Lerp(Mathf.Max(1f, sideBoost), 1f, topDown);

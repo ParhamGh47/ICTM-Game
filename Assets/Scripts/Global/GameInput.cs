@@ -15,10 +15,13 @@ using UnityEngine;
 ///   RT / 10th axis    gas, forward
 ///   LT / 9th axis     brake, and reverse once the car has stopped
 ///   Left stick        steering
-///   A / cross         focus               B / circle        headlights
-///   X / square        horn                Y / triangle      change camera
-///   D-pad down        reset the vehicle
-///   Start / Options   pause
+///   LB / L1           focus (hold)        Space             focus (hold)
+///   A / cross         boost               Left Shift        boost
+///   B / circle        headlights          L                 headlights
+///   X / square        horn                H                 horn
+///   Y / triangle      change camera       C                 change camera
+///   D-pad down        reset the vehicle   R                 reset the vehicle
+///   Start / Options   pause               Escape            pause
 ///
 /// The face buttons are read by position - bottom, right, left, top - through the generic
 /// <c>KeyCode.JoystickButton</c> values, which is how a controller reports them on every platform: an
@@ -43,8 +46,15 @@ public static class GameInput
 
     // ---------------------------------------------------------------- buttons
 
+    /// <summary>
+    /// Left shoulder: LB on an Xbox pad, L1 on a PlayStation pad. Focus is held down, so it belongs on a
+    /// button a finger rests on rather than one it has to travel to - which is what leaves the bottom face
+    /// button free for the boost, a tap that is meant to be found instantly.
+    /// </summary>
+    public const KeyCode FocusButton = KeyCode.JoystickButton4;
+
     /// <summary>Bottom face button: A on an Xbox pad, cross on a PlayStation pad.</summary>
-    public const KeyCode FocusButton = KeyCode.JoystickButton0;
+    public const KeyCode BoostButton = KeyCode.JoystickButton0;
 
     /// <summary>Right face button: B / circle.</summary>
     public const KeyCode LightsButton = KeyCode.JoystickButton1;
@@ -110,10 +120,21 @@ public static class GameInput
 
     // ---------------------------------------------------------------- actions
 
-    /// <summary>Focus is held, not tapped - space, or the bottom face button.</summary>
+    /// <summary>Focus is held, not tapped - space, or the left shoulder button.</summary>
     public static bool FocusHeld()
     {
         return Input.GetKey(KeyCode.Space) || Input.GetKey(FocusButton);
+    }
+
+    /// <summary>
+    /// Spend one of the boosts the truck is carrying: Left Shift, or the bottom face button. An edge
+    /// rather than a hold, so leaning on it does not spend them one after another.
+    /// </summary>
+    public static bool BoostPressed()
+    {
+        return Input.GetKeyDown(KeyCode.LeftShift)
+            || Input.GetKeyDown(KeyCode.RightShift)
+            || Input.GetKeyDown(BoostButton);
     }
 
     /// <summary>Headlights: L, or B / circle.</summary>

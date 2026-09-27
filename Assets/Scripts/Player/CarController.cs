@@ -193,6 +193,23 @@ public class CarController : MonoBehaviour
     public bool isShiftingUp = false;
     public bool isShiftingDown = false;
 
+    /// <summary>
+    /// Whether one of the boost the truck is carrying is being spent right now.
+    ///
+    /// The boost itself belongs to the truck's <see cref="BoostManager"/>, which decides when one starts and
+    /// when it has run out; this is that same answer, published here because everything that reacts to a
+    /// boost - the motion blur, the speed lines, a sound - already looks at the car for the rest of its
+    /// state, and a second opinion about whether the truck is boosting is exactly the kind of thing that
+    /// drifts apart from the first one.
+    /// </summary>
+    public bool IsBoosting { get; private set; }
+
+    /// <summary>Called by the boost manager as a boost starts, and again as it runs out.</summary>
+    public void SetBoosting(bool boosting)
+    {
+        IsBoosting = boosting;
+    }
+
 
     void Start()
     {

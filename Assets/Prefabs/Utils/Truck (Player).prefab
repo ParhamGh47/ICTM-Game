@@ -39703,11 +39703,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c518bc5ed68b22a45934094e3989271f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  startingBoosts: 0
+  maximumBoosts: 5
+  boostDuration: 2.5
+  boostAcceleration: 12
+  boostTopSpeed: 170
   particleA: {fileID: 5411794254721128491}
   particleB: {fileID: 5411794254280318057}
   particleC: {fileID: 5411794255697958803}
-  particleD: {fileID: 0}
-  boostDuration: 1.5
+  particleD: {fileID: 5411794254654129723}
 --- !u!1 &5411794255317347817
 GameObject:
   m_ObjectHideFlags: 0
@@ -49828,7 +49832,6 @@ GameObject:
   - component: {fileID: 5411794255626788020}
   - component: {fileID: 5411794255626787979}
   - component: {fileID: 5411794255626788021}
-  - component: {fileID: 5411794255626787976}
   m_Layer: 7
   m_Name: Body
   m_TagString: Player
@@ -49885,23 +49888,6 @@ BoxCollider:
   serializedVersion: 2
   m_Size: {x: 0.56228954, y: 0.37, z: 1.1819826}
   m_Center: {x: 0, y: 0.4349, z: 0.05}
---- !u!114 &5411794255626787976
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 5411794255626788023}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: c518bc5ed68b22a45934094e3989271f, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  particleA: {fileID: 5411794254721128491}
-  particleB: {fileID: 5411794254280318057}
-  particleC: {fileID: 5411794255697958803}
-  particleD: {fileID: 5411794254654129723}
-  boostDuration: 1.5
 --- !u!1 &5411794255647605756
 GameObject:
   m_ObjectHideFlags: 0

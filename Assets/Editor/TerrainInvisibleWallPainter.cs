@@ -31,6 +31,31 @@ public class TerrainInvisibleWallPainter : EditorWindow
         public bool groundMissing;          // nothing under it, so it hangs off the road height instead
     }
 
+    /// <summary>A sampled point of one verge's wall line, before it is cut into segments.</summary>
+    private struct VergePoint
+    {
+        public Vector3 point;               // where the wall stands at this sample
+        public Vector3 centre;              // the road centre line it was measured from
+        public Vector3 right;               // flat, away from the road on this verge's side
+        public Vector3 tangent;             // flat, the way the road runs here
+        public float lateral;               // how far out from the centre line the wall stands here
+        public float along;                 // flat distance from the first sample of this verge
+        public bool byBend;                 // the bend was tighter than the offset, so the wall came in
+        public bool byRoad;                 // another road was in the way, so the wall came in
+        public bool placeable;              // false when there is nowhere legal for a wall at all here
+    }
+
+    /// <summary>The end of one verge, kept so that the ends of the level can be closed.</summary>
+    private struct VergeEnd
+    {
+        public Road road;
+        public int side;
+        public float drivableHalf;          // asphalt plus shoulders, which is what a cap has to stay clear of
+        public Vector3 point;               // the wall's own stand at this end
+        public Vector3 inner;               // the same place pulled in to just off the asphalt
+        public Vector3 outward;             // flat, leading off the end of the road
+    }
+
     // ------------------------------------------------------------------ settings
 
     private Road targetRoad;
@@ -50,6 +75,22 @@ public class TerrainInvisibleWallPainter : EditorWindow
     private float wallHeight = 50f;         // how far above the highest ground nearby the wall reaches
     private float segmentOverlap = 1f;      // each segment is lengthened by this, so the joints are filled
 
+    [Tooltip("How far a wall must keep from the asphalt of *any* road in the scene, its own included. A wall " +
+             "thirty metres out from one road lands on the next one wherever a level hairpins or a second road " +
+             "runs alongside, and a wall in the middle of a road the player drives on is worse than no wall at " +
+             "all - it is an invisible crash. Walls come in towards the road until they clear this.")]
+    private float keepOffRoads = 1f;
+
+    [Tooltip("Close the ends of the wall: where two roads meet, the two wall lines are joined across the " +
+             "corner between them, and where the route simply stops - the start and the end of the level - each " +
+             "wall is folded back in towards the road, leaving only the road's own width open. Without this, a " +
+             "driver who reaches the end of the last wall can go round the back of it and off the map.")]
+    private bool sealEnds = true;
+
+    [Tooltip("How close two road ends have to be to count as one junction - where the wall of one road carries " +
+             "on into the wall of the next - rather than as two separate ends of the level.")]
+    private float junctionTolerance = 25f;
+
     [Tooltip("How far a straight segment may stray from the true curve before the segment is cut in two. " +
              "This is what keeps the chain of boxes following the road instead of cutting the corner.")]
     private float maxDeviation = 0.25f;
@@ -63,8 +104,22 @@ public class TerrainInvisibleWallPainter : EditorWindow
     private bool planDirty = true;
     private readonly List<Wall> plan = new List<Wall>();
     private readonly List<string> plannedRoads = new List<string>();
-    private int pulledInCount;
+    private readonly List<VergeEnd> vergeEnds = new List<VergeEnd>();
+
+    // Every road in the scene, sampled, so a spot can be measured against all of them at once. Rebuilt with
+    // the plan, not per query: the plan asks it a few thousand questions.
+    private RoadField field;
+
+    private int pulledInCount;              // came in because of a bend
+    private int roadPulledCount;            // came in because of another road
     private int groundMissingCount;
+    private int unplaceableCount;           // no legal place for a wall here at all
+    private int joinedCount;                // junctions sealed across the corner
+    private int cappedCount;                // ends of the level folded shut
+    private int unsealedCount;              // ends that could not be sealed at all
+    private int skippedCount;               // walls dropped because they would have stood on a road
+    private int auditViolations;
+    private float auditMinClearance = float.MaxValue;
 
     private Vector2 scrollPos;
 
@@ -156,8 +211,9 @@ public class TerrainInvisibleWallPainter : EditorWindow
             new GUIContent("Offset From Road Edge (m)", "How far past the asphalt and shoulder the wall " +
                                                         "stands. This is the room the player has to go " +
                                                         "offroad before the wall stops them. It is always " +
-                                                        "at least 1 m past the asphalt itself"),
-            offsetFromRoadEdge, 1f, 50f);
+                                                        "at least 1 m past the asphalt itself, and it comes " +
+                                                        "in on its own wherever it would stand on a road"),
+            offsetFromRoadEdge, 1f, 60f);
         maxDeviation = EditorGUILayout.Slider(
             new GUIContent("Max Bend Deviation (m)", "How far a straight segment may stray from the curve. " +
                                                      "Smaller makes the wall follow the road more closely " +
@@ -191,6 +247,25 @@ public class TerrainInvisibleWallPainter : EditorWindow
             groundSearch, 10f, 400f);
 
         EditorGUILayout.Space();
+        EditorGUILayout.Space();
+        EditorGUILayout.LabelField("Sealing", EditorStyles.boldLabel);
+        keepOffRoads = EditorGUILayout.Slider(
+            new GUIContent("Keep Clear Of Roads (m)", "How far a wall keeps from the asphalt of any road in " +
+                                                      "the scene, its own included. Walls come in towards the " +
+                                                      "road, and are dropped, until they clear it"),
+            keepOffRoads, 0.25f, 10f);
+        sealEnds = EditorGUILayout.ToggleLeft(
+            new GUIContent("Seal The Ends", "Join the wall across each junction and fold it shut at the ends " +
+                                             "of the route, so the player cannot go round the back of it"),
+            sealEnds);
+        GUI.enabled = sealEnds;
+        junctionTolerance = EditorGUILayout.Slider(
+            new GUIContent("Junction Reach (m)", "How close two road ends have to be to count as one " +
+                                                  "junction rather than as two ends of the level"),
+            junctionTolerance, 2f, 80f);
+        GUI.enabled = true;
+
+        EditorGUILayout.Space();
         EditorGUILayout.LabelField("Presets", EditorStyles.boldLabel);
         EditorGUILayout.BeginHorizontal();
         if (GUILayout.Button("Tight (2m)")) offsetFromRoadEdge = 2f;
@@ -198,6 +273,15 @@ public class TerrainInvisibleWallPainter : EditorWindow
         if (GUILayout.Button("Wide (15m)")) offsetFromRoadEdge = 15f;
         if (GUILayout.Button("Very Wide (25m)")) offsetFromRoadEdge = 25f;
         EditorGUILayout.EndHorizontal();
+        EditorGUILayout.BeginHorizontal();
+        if (GUILayout.Button("Far (30m)")) offsetFromRoadEdge = 30f;
+        if (GUILayout.Button("Further (35m)")) offsetFromRoadEdge = 35f;
+        if (GUILayout.Button("Open (45m)")) offsetFromRoadEdge = 45f;
+        if (GUILayout.Button("Everything Else")) offsetFromRoadEdge = 60f;
+        EditorGUILayout.EndHorizontal();
+        EditorGUILayout.LabelField("  A wall further out meets more of the level: any road it would stand on " +
+                                   "pulls it back in, and the summary says how many were pulled.",
+                                   EditorStyles.miniLabel);
 
         if (EditorGUI.EndChangeCheck()) planDirty = true;
 
@@ -276,13 +360,53 @@ public class TerrainInvisibleWallPainter : EditorWindow
         EditorGUILayout.LabelField("  Roads: " + plannedRoads.Count + "   Wall offset: " +
                                    offsetFromRoadEdge.ToString("F1") + "m past the asphalt and shoulder");
 
+        if (sealEnds)
+        {
+            EditorGUILayout.LabelField("  " + joinedCount + " junction(s) sealed across the corner, " +
+                                       cappedCount + " end(s) of the route folded shut");
+        }
+
         if (pulledInCount > 0)
             EditorGUILayout.LabelField("  " + pulledInCount + " segments pulled in by a tight bend, so the wall " +
                                        "does not fold over the road");
 
+        if (roadPulledCount > 0)
+            EditorGUILayout.LabelField("  " + roadPulledCount + " segments pulled in by another road, so the wall " +
+                                       "does not stand on one");
+
         if (groundMissingCount > 0)
             EditorGUILayout.LabelField("  " + groundMissingCount + " segments had no terrain under them, so they " +
                                        "hang off the road height");
+
+        // The audit: what the plan promises, checked against every road in the scene rather than assumed.
+        if (skippedCount == 0 && unsealedCount == 0 && auditViolations == 0 && unplaceableCount == 0)
+        {
+            EditorGUILayout.HelpBox(
+                "Checked against every road in the scene: no segment stands within " + keepOffRoads.ToString("F1") +
+                " m of any asphalt (the closest is " +
+                (auditMinClearance > 9000f ? "nothing near" : auditMinClearance.ToString("F1") + " m") +
+                "), every verge is one unbroken chain, and both ends of the route are closed.",
+                MessageType.Info);
+        }
+        else
+        {
+            string report = "This plan has holes in it:\n";
+
+            if (unplaceableCount > 0)
+                report += "\u2022 " + unplaceableCount + " place(s) where no wall fits beside the road at all " +
+                          "(another road is too close) - lower the offset or wall that road too.\n";
+            if (unsealedCount > 0)
+                report += "\u2022 " + unsealedCount + " end(s) could not be sealed: no straight wall from there " +
+                          "stays off the roads.\n";
+            if (skippedCount > 0)
+                report += "\u2022 " + skippedCount + " wall(s) were dropped rather than laid on a road, which " +
+                          "leaves a gap there.\n";
+
+            report += "\nPress Preview Walls to see the plan, then PLACE. Every skipped spot is named in the " +
+                      "console.";
+
+            EditorGUILayout.HelpBox(report, MessageType.Warning);
+        }
     }
 
     void OnSceneGUI(SceneView sceneView)
@@ -382,8 +506,17 @@ public class TerrainInvisibleWallPainter : EditorWindow
 
         plan.Clear();
         plannedRoads.Clear();
+        vergeEnds.Clear();
         pulledInCount = 0;
+        roadPulledCount = 0;
         groundMissingCount = 0;
+        unplaceableCount = 0;
+        joinedCount = 0;
+        cappedCount = 0;
+        unsealedCount = 0;
+        skippedCount = 0;
+        auditViolations = 0;
+        auditMinClearance = float.MaxValue;
         planDirty = false;
 
         float from = Mathf.Clamp01(Mathf.Min(startParam, endParam));
@@ -391,16 +524,27 @@ public class TerrainInvisibleWallPainter : EditorWindow
         if (to - from < 0.0001f) return;
 
         List<Road> roads = SelectedRoads();
+        if (roads.Count == 0) return;
+
+        // Every road in the scene, not just the chosen ones: a wall has to keep off the roads it is not
+        // walling exactly as much as off its own, and it is the ones it is not walling that turn up under it.
+        // Sampled every two metres, which is fine enough that a wall cannot be placed on an asphalt edge
+        // without the measurement saying so (see RoadField.Slack).
+        field = new RoadField(FindObjectsOfType<Road>(), 2f);
 
         for (int r = 0; r < roads.Count; r++)
         {
-            BuildPlanFor(roads[r], from, to);
+            BuildPlanFor(roads[r], from, to, Mathf.Max(0.25f, keepOffRoads));
             plannedRoads.Add(roads[r].name);
         }
+
+        // A wall that runs past the end of the level, or past a junction, is a wall the player can walk
+        // round. This is what turns the chains into one closed boundary.
+        if (sealEnds) SealEnds(Mathf.Max(0.25f, keepOffRoads));
     }
 
     /// <summary>The walls down both verges of one road.</summary>
-    private void BuildPlanFor(Road road, float from, float to)
+    private void BuildPlanFor(Road road, float from, float to, float margin)
     {
         SplineC spline = road != null ? road.spline : null;
         if (spline == null || spline.distance <= 0.01f) return;
@@ -408,157 +552,437 @@ public class TerrainInvisibleWallPainter : EditorWindow
         float total = spline.distance;
 
         float desired = WallOffset(road);
-        float halfRoad = RoadHalfWidth(road);
-        float longest = Mathf.Max(1f, wallSegmentLength);
 
-        // Room between the wall and the asphalt: the shoulders, plus the offset. A segment's straight chord
-        // is never allowed to stray by more than this, which is what keeps the wall off the road surface.
-        float asphaltHalf = halfRoad - road.shoulderWidth;
-        float clearance = desired - asphaltHalf;
+        // The shoulders count as road: they are wide, they are flat and a truck can drive on them, so a wall
+        // that took them for verge is a wall in the road. Everything below measures from this, not from the
+        // asphalt, and a wall pulled in stops outside it rather than on it.
+        float drivableHalf = RoadHalfWidth(road);
+
+        // Room between the wall and the drivable edge: what a segment's straight chord may stray by, since on
+        // the outside of a bend a chord dips towards the road by exactly its stray.
+        float tolerance = DeviationTolerance(desired - drivableHalf);
 
         for (int side = -1; side <= 1; side += 2)
         {
-            float param = from;
+            List<VergePoint> line = SampleVerge(spline, total, from, to, desired, drivableHalf, margin, side);
 
-            while (param < to - 0.00005f)
+            if (line.Count < 2) continue;
+
+            // Cut the verge into segments: each one takes as many samples as it can while a straight wall
+            // between its two ends still follows the line. Consecutive segments share an end by construction,
+            // which is why there is no joint to leave a gap in.
+            int start = 0;
+
+            while (start < line.Count - 1)
             {
-                float step = NextStep(spline, param, to, desired, clearance, side, total, longest);
-                if (step <= 0.00005f) break;
+                int last = FurthestWithin(line, start, tolerance);
 
-                Vector3 a = OffsetPoint(spline, param, desired, side, total, out bool pulledA);
-                Vector3 b = OffsetPoint(spline, param + step, desired, side, total, out bool pulledB);
+                bool byBend = line[start].byBend || line[last].byBend;
+                bool byRoad = line[start].byRoad || line[last].byRoad;
 
-                float length = Vector3.Distance(a, b);
-
-                // The two ends are the same point a neighbouring segment ends on - unless the road doubles
-                // back so far that they land on top of each other, which is a segment not worth having.
-                if (length > 0.01f)
+                if (line[start].placeable && line[last].placeable)
                 {
-                    Wall wall = new Wall();
-                    wall.size = new Vector3(wallThickness, 1f, length + Mathf.Max(0f, segmentOverlap));
-                    wall.pulledIn = pulledA || pulledB;
+                    AddWall(line[start].point, line[last].point, wallThickness, byBend, byRoad, false, margin);
 
-                    Vector3 middle = (a + b) * 0.5f;
-                    Vector3 flat = b - a;
-                    flat.y = 0f;
-
-                    if (flat.sqrMagnitude > 0.0001f)
-                    {
-                        wall.rotation = Quaternion.LookRotation(flat.normalized, Vector3.up);
-
-                        // The offset point is the wall's *near* face, so the box is pushed out by half its
-                        // thickness: thickening the wall then moves it away from the road instead of making
-                        // its inner face eat into the asphalt.
-                        Vector3 outward = new Vector3(flat.z, 0f, -flat.x).normalized * side;
-                        middle += outward * (wallThickness * 0.5f);
-
-                        // The wall has to reach the ground rather than float at road height: a verge higher
-                        // than the road would otherwise be driven over, and one below it driven under.
-                        float roadLow = Mathf.Min(a.y, b.y);
-                        float roadHigh = Mathf.Max(a.y, b.y);
-                        float groundA = GroundAt(a, a.y, out bool foundA);
-                        float groundB = GroundAt(b, b.y, out bool foundB);
-
-                        if (!foundA || !foundB) groundMissingCount++;
-
-                        // A wall reaching down as far as it reaches up is already more than anything can dig
-                        // through, so a verge that falls away into a valley does not make a 200 m collider.
-                        float floor = Mathf.Min(roadLow, roadHigh) - wallHeight;
-                        float low = Mathf.Max(Mathf.Min(roadLow, Mathf.Min(groundA, groundB)) - 3f, floor);
-                        float high = Mathf.Max(roadHigh, Mathf.Max(groundA, groundB)) + wallHeight;
-
-                        middle.y = (low + high) * 0.5f;
-                        wall.size.y = Mathf.Max(1f, high - low);
-                        wall.position = middle;
-
-                        plan.Add(wall);
-                    }
+                    if (byBend) pulledInCount++;
+                    if (byRoad) roadPulledCount++;
+                }
+                else
+                {
+                    for (int i = start; i <= last; i++)
+                        if (!line[i].placeable) unplaceableCount++;
                 }
 
-                if (pulledA || pulledB) pulledInCount++;
-                param += step;
+                start = last;
             }
+
+            // The two ends of this verge, for the sealing pass: a wall that stops in open country is a wall
+            // the player can walk round.
+            vergeEnds.Add(MakeEnd(road, side, drivableHalf, line[0], false, margin));
+            vergeEnds.Add(MakeEnd(road, side, drivableHalf, line[line.Count - 1], true, margin));
         }
     }
 
-    /// <summary>
-    /// How far the next segment runs, in param. It starts at the longest a segment may be and halves until a
-    /// straight line between the two offset points - and the middle of it - all stay within the deviation
-    /// tolerance, so a bend is described by as many short segments as it takes rather than by one chord that
-    /// cuts the corner.
-    /// </summary>
-    private float NextStep(SplineC spline, float from, float limit, float desired, float clearance, int side,
-                           float total, float longest)
-    {
-        float step = Mathf.Min(longest / total, limit - from);
-        float tolerance = DeviationTolerance(clearance);
-
-        for (int attempt = 0; attempt < 10; attempt++)
-        {
-            if (step <= 0.00005f) return 0f;
-
-            bool ignored;
-
-            Vector3 a = OffsetPoint(spline, from, desired, side, total, out ignored);
-            Vector3 b = OffsetPoint(spline, from + step, desired, side, total, out ignored);
-
-            // The chord is tested at its quarters as well as its middle: a stretch of road that bends one way
-            // and then the other can bulge between the ends without the middle of the segment showing it.
-            float stray = 0f;
-
-            for (int sample = 1; sample <= 3; sample++)
-            {
-                float t = sample * 0.25f;
-
-                Vector3 onCurve = OffsetPoint(spline, from + step * t, desired, side, total, out ignored);
-                Vector3 onChord = Vector3.Lerp(a, b, t);
-
-                float offsetHere = Vector3.Distance(onChord, onCurve);
-                if (offsetHere > stray) stray = offsetHere;
-            }
-
-            if (stray <= tolerance) break;
-
-            step *= 0.5f;
-        }
-
-        return step;
-    }
+    /// <summary>Metres between samples along a road while a plan is built. Every wall is measured at these
+    /// points, so this is what decides how closely the wall follows a bend.</summary>
+    private const float SampleStep = 2f;
 
     /// <summary>
-    /// A point the given distance to one side of the road - the verge the wall runs down.
+    /// One verge of one road, sampled every couple of metres: where a wall may stand at each sample, and why
+    /// it stands no further out.
     ///
-    /// Where the road bends tighter than that distance the offset would fold back over the road itself (a
-    /// point that far out simply does not exist on that side of a tight bend), so it is pulled in to most of
-    /// the bend's radius, never inside the asphalt edge. Which segments were pulled in is reported.
+    /// Everything the plan does is worked out here and then only cut into segments afterwards, which keeps the
+    /// expensive half - measuring a spot against every road in the scene - to one pass per sample rather than
+    /// one per attempt.
     /// </summary>
-    private Vector3 OffsetPoint(SplineC spline, float param, float desired, int side, float total,
-                                out bool pulledIn)
+    private List<VergePoint> SampleVerge(SplineC spline, float total, float from, float to, float desired,
+                                         float drivableHalf, float margin, int side)
     {
-        Vector3 position, tangent;
-        spline.GetSplineValueBoth(Mathf.Clamp01(param), out position, out tangent);
+        List<VergePoint> line = new List<VergePoint>();
 
-        Vector3 right = new Vector3(tangent.z, 0f, -tangent.x);
+        float length = Mathf.Max(0.01f, (to - from) * total);
+        int count = Mathf.Max(2, Mathf.CeilToInt(length / SampleStep));
 
-        if (right.sqrMagnitude < 0.0001f)
-            right = Vector3.right;
-        else
-            right.Normalize();
+        float travelled = 0f;
+        Vector3 previous = Vector3.zero;
 
-        // On a bend tighter than the wall stands out, the point that far to the side simply does not exist:
-        // past the bend's own centre it comes back out on the *other* side, which is how a straight wall ends
-        // up lying across the road. So the wall is pulled in to 85% of the bend's radius instead - still
-        // outside the asphalt, because 0.85 of a radius a road can actually be built with is wider than the
-        // asphalt's own half, and a bend tighter than that is a road folded through itself.
-        float radius = CurvatureRadius(spline, param, total);
-        float lateral = Mathf.Min(desired, radius * 0.85f);
+        for (int i = 0; i <= count; i++)
+        {
+            float param = Mathf.Clamp01(Mathf.Lerp(from, to, i / (float)count));
 
-        pulledIn = lateral < desired - 0.01f;
+            Vector3 position, tangent;
+            spline.GetSplineValueBoth(param, out position, out tangent);
 
-        Vector3 point = position + right * (lateral * side);
-        point.y = position.y;
+            Vector3 right = new Vector3(tangent.z, 0f, -tangent.x);
 
-        return point;
+            if (right.sqrMagnitude < 0.0001f)
+                right = Vector3.right;
+            else
+                right.Normalize();
+
+            VergePoint point = new VergePoint();
+            point.centre = position;
+            point.right = right;
+
+            point.tangent = tangent;
+            point.tangent.y = 0f;
+            if (point.tangent.sqrMagnitude < 0.0001f) point.tangent = Vector3.forward;
+            else point.tangent.Normalize();
+
+            float lateral;
+            bool byBend;
+            bool byRoad;
+
+            point.placeable = ChooseLateral(position, right, side, desired, drivableHalf,
+                                            CurvatureRadius(spline, param, total), margin,
+                                            out lateral, out byBend, out byRoad);
+
+            point.lateral = lateral;
+            point.byBend = byBend;
+            point.byRoad = byRoad;
+            point.point = position + right * (lateral * side);
+            point.point.y = position.y;
+
+            if (i > 0) travelled += FlatDistance(previous, point.point);
+            point.along = travelled;
+            previous = point.point;
+
+            line.Add(point);
+        }
+
+        return line;
+    }
+
+    /// <summary>
+    /// How far out the wall may stand at one sample, and whether it had to come in to get there.
+    ///
+    /// Three things can hold it in. The asphalt and shoulders, which it may never touch. A bend tighter than
+    /// the offset, where the point that far to the side does not exist - past the bend's own centre it comes
+    /// back out on the other side of the road, which is how a straight wall ends up lying across the asphalt.
+    /// And another road: with the offset far out, a wall runs into the carriageway of the next road along,
+    /// round the inside of a hairpin, or across a road that passes underneath the one being walled. That last
+    /// one is the reason this measures against every road in the scene and not just its own.
+    ///
+    /// <paramref name="thickness"/> is counted in because a wall is a box: it is the far face, not the line
+    /// the wall was measured along, that would stand on the next road.
+    ///
+    /// Returns whether there is anywhere legal to stand at all.
+    /// </summary>
+    private bool ChooseLateral(Vector3 position, Vector3 right, int side, float desired, float drivableHalf,
+                               float bendRadius, float margin, out float lateral, out bool byBend,
+                               out bool byRoad)
+    {
+        float required = margin + RoadField.Slack;
+
+        // Closest the wall may come: just off the drivable surface, and never further in than the offset the
+        // tool was asked for - a wall that has to come in to get round a bend or another road still stands as
+        // far out as it legally can, rather than being pushed onto the shoulders.
+        float minimum = Mathf.Min(desired, drivableHalf + required);
+        float bendLimit = bendRadius * 0.85f;
+
+        byBend = bendLimit < desired - 0.01f;
+        byRoad = false;
+
+        float maximum = Mathf.Min(desired, bendLimit);
+
+        // A road narrower than the room the wall needs has nowhere legal to stand beside it: reported, and the
+        // wall skipped, rather than a wall laid in a road.
+        if (maximum <= minimum)
+        {
+            lateral = minimum;
+            return false;
+        }
+
+        // Out from the closest legal stand to the wanted one, keeping the furthest that is clear. Eight steps
+        // are enough to place a wall within a few centimetres of the best it could be, and it costs nothing on
+        // the overwhelmingly common sample where the wanted offset is already clear.
+        const int probes = 8;
+
+        for (int i = probes; i >= 0; i--)
+        {
+            float candidate = Mathf.Lerp(minimum, maximum, i / (float)probes);
+
+            Vector3 stand = position + right * (candidate * side);
+            Vector3 outer = position + right * ((candidate + wallThickness) * side);
+
+            if (field.Clearance(stand) < required) continue;
+            if (field.Clearance(outer) < required) continue;
+
+            lateral = candidate;
+            byRoad = candidate < maximum - 0.01f;
+
+            return true;
+        }
+
+        lateral = minimum;
+
+        return false;
+    }
+
+    /// <summary>
+    /// How far along the verge one straight segment may run from a given sample: as many samples ahead as the
+    /// longest allowed segment reaches, and then back off while a straight wall between the two ends strays
+    /// further from the sampled line than it may.
+    /// </summary>
+    private int FurthestWithin(List<VergePoint> line, int start, float tolerance)
+    {
+        float longest = Mathf.Max(1f, wallSegmentLength);
+        int limit = start + 1;
+
+        while (limit < line.Count - 1 && line[limit + 1].along - line[start].along <= longest) limit++;
+
+        while (limit > start + 1 && !ChordFollowsLine(line, start, limit, tolerance)) limit--;
+
+        return limit;
+    }
+
+    /// <summary>
+    /// Whether a straight wall between two samples follows the line between them. Every sample in between is
+    /// measured against the chord, not just the middle: a stretch of road that bends one way and then the other
+    /// bulges between its ends without the middle of the segment showing it.
+    /// </summary>
+    private static bool ChordFollowsLine(List<VergePoint> line, int start, int end, float tolerance)
+    {
+        float span = line[end].along - line[start].along;
+        if (span <= 0.0001f) return true;
+
+        for (int i = start + 1; i < end; i++)
+        {
+            float t = (line[i].along - line[start].along) / span;
+            Vector3 onChord = Vector3.Lerp(line[start].point, line[end].point, t);
+
+            if (FlatDistance(onChord, line[i].point) > tolerance) return false;
+        }
+
+        return true;
+    }
+
+    private static float FlatDistance(Vector3 a, Vector3 b)
+    {
+        float dx = a.x - b.x;
+        float dz = a.z - b.z;
+
+        return Mathf.Sqrt(dx * dx + dz * dz);
+    }
+
+    /// <summary>
+    /// The end of one verge, in the form the sealing pass wants it: where the wall stops, and the same place
+    /// pulled in to just off the asphalt, which is where a cap at the end of the level begins.
+    /// <paramref name="outgoing"/> says which end of the road this is, and so which way leads off it.
+    /// </summary>
+    private static VergeEnd MakeEnd(Road road, int side, float drivableHalf, VergePoint end, bool outgoing,
+                                    float margin)
+    {
+        VergeEnd verge = new VergeEnd();
+        verge.road = road;
+        verge.side = side;
+        verge.drivableHalf = drivableHalf;
+        verge.point = end.point;
+        verge.inner = end.centre + end.right * (side * (drivableHalf + margin + RoadField.Slack));
+        verge.inner.y = end.point.y;
+        verge.outward = end.tangent * (outgoing ? 1f : -1f);
+
+        return verge;
+    }
+
+    /// <summary>
+    /// Adds one wall between two points, if it can stand there legally. Returns whether it was added.
+    ///
+    /// The two points are the wall's <b>near</b> face, so the box is pushed out from them by half its
+    /// thickness - out being whichever side has more room, which on a verge is away from the road it belongs
+    /// to. The wall then has to reach the ground rather than float at road height, because a verge higher than
+    /// the road is otherwise driven over and one below it driven under.
+    ///
+    /// The whole box is measured against every road in the scene before it is kept. A wall that would stand on
+    /// a road is dropped and counted instead: an invisible wall in the middle of a road the player is meant to
+    /// be driving on is worse than a gap they can see.
+    /// </summary>
+    private bool AddWall(Vector3 a, Vector3 b, float thickness, bool byBend, bool byRoad, bool seal,
+                         float margin)
+    {
+        Vector3 flat = b - a;
+        flat.y = 0f;
+
+        float length = flat.magnitude;
+        if (length <= 0.01f) return false;
+
+        Vector3 along = flat / length;
+        Vector3 perp = new Vector3(along.z, 0f, -along.x);
+        Vector3 middle = (a + b) * 0.5f;
+
+        if (field.Clearance(middle + perp) < field.Clearance(middle - perp)) perp = -perp;
+
+        Vector3 push = perp * (thickness * 0.5f);
+
+        float required = margin + RoadField.Slack;
+        float clearance = BoxClearance(a, b, push);
+
+        if (clearance < required)
+        {
+            skippedCount++;
+            auditViolations++;
+
+            if (seal) unsealedCount++;
+
+            Debug.LogWarning("Invisible Walls: a wall was dropped rather than laid " + clearance.ToString("F1") +
+                             " m from a road at " + middle + ", which is inside the " + required.ToString("F1") +
+                             " m it keeps clear of.");
+
+            return false;
+        }
+
+        if (clearance < auditMinClearance) auditMinClearance = clearance;
+
+        Wall wall = new Wall();
+        wall.size = new Vector3(thickness, 1f, length + Mathf.Max(0f, segmentOverlap));
+        wall.pulledIn = byBend || byRoad;
+        wall.rotation = Quaternion.LookRotation(along, Vector3.up);
+
+        float roadLow = Mathf.Min(a.y, b.y);
+        float roadHigh = Mathf.Max(a.y, b.y);
+        float groundA = GroundAt(a, a.y, out bool foundA);
+        float groundB = GroundAt(b, b.y, out bool foundB);
+
+        if (!foundA || !foundB)
+        {
+            groundMissingCount++;
+            wall.groundMissing = true;
+        }
+
+        // A wall reaching down as far as it reaches up is already more than anything can dig through, so a
+        // verge that falls away into a valley does not make a 200 m collider.
+        float low = Mathf.Max(Mathf.Min(roadLow, Mathf.Min(groundA, groundB)) - 3f, roadLow - wallHeight);
+        float high = Mathf.Max(roadHigh, Mathf.Max(groundA, groundB)) + wallHeight;
+
+        Vector3 centre = middle + push;
+        centre.y = (low + high) * 0.5f;
+
+        wall.size.y = Mathf.Max(1f, high - low);
+        wall.position = centre;
+
+        plan.Add(wall);
+
+        return true;
+    }
+
+    /// <summary>
+    /// How clear a wall box is of every road: the two ends of the line it was measured along, the two ends of
+    /// its far face, and the far face's own length. The far face is the one that matters - a wall whose near
+    /// face is a metre off the asphalt can still have its back half standing on the road behind it.
+    /// </summary>
+    private float BoxClearance(Vector3 a, Vector3 b, Vector3 push)
+    {
+        Vector3 outerA = a + push;
+        Vector3 outerB = b + push;
+
+        float best = Mathf.Min(field.Clearance(a), field.Clearance(b));
+        best = Mathf.Min(best, Mathf.Min(field.Clearance(outerA), field.Clearance(outerB)));
+
+        for (int i = 1; i < 4; i++)
+            best = Mathf.Min(best, field.Clearance(Vector3.Lerp(outerA, outerB, i * 0.25f)));
+
+        return best;
+    }
+
+    /// <summary>
+    /// Closes the wall where the level turns a corner or simply stops.
+    ///
+    /// A chain of walls down two verges is an open tube: the player who reaches its end can drive round the
+    /// back of it and away across the map. Two things fix that. Where two roads meet - which is most of a
+    /// level's road ends, the roads being laid end to end - the verge of one is joined to the verge of the
+    /// other across the corner between them. And where the route really does stop, the start and the end of
+    /// the level, the wall is folded back in towards the road, stopping just short of the asphalt, so the only
+    /// way past it is along the road itself.
+    /// </summary>
+    private void SealEnds(float margin)
+    {
+        bool[] used = new bool[vergeEnds.Count];
+        float required = margin + RoadField.Slack;
+
+        // How far apart two road ends may be and still be one junction. The user's own reach is the floor, but
+        // it is raised to match the offset: a wall thirty metres out meets thirty metres back from the corner,
+        // so at a wide offset the two ends of a junction can be fifty metres apart and still be the same
+        // corner. Without this, a wide wall would be capped at each junction instead of joined, and the pocket
+        // beside the corner is a way off the map.
+        float reach = Mathf.Max(2f, junctionTolerance);
+
+        List<Road> chosen = SelectedRoads();
+        for (int i = 0; i < chosen.Count; i++) reach = Mathf.Max(reach, WallOffset(chosen[i]) * 1.5f);
+
+        for (int i = 0; i < vergeEnds.Count; i++)
+        {
+            if (used[i]) continue;
+
+            int best = -1;
+            float bestDistance = reach;
+
+            for (int j = 0; j < vergeEnds.Count; j++)
+            {
+                if (j == i || used[j]) continue;
+
+                // A road's own two ends are never a junction with each other, however close a hairpin brings
+                // them: what is between them is the road itself.
+                if (vergeEnds[j].road == vergeEnds[i].road) continue;
+
+                float distance = FlatDistance(vergeEnds[i].point, vergeEnds[j].point);
+                if (distance >= bestDistance) continue;
+
+                // The join is a wall across the land between two road ends, so it has to be checked for roads
+                // on the way and not only at its ends.
+                if (field.ClearanceAlong(vergeEnds[i].point, vergeEnds[j].point, null, 8) < required) continue;
+
+                bestDistance = distance;
+                best = j;
+            }
+
+            if (best < 0) continue;
+
+            Vector3 a = vergeEnds[i].point;
+            Vector3 b = vergeEnds[best].point;
+
+            if (AddWall(a, b, wallThickness, false, false, true, margin))
+            {
+                joinedCount++;
+                used[i] = true;
+                used[best] = true;
+            }
+        }
+
+        for (int i = 0; i < vergeEnds.Count; i++)
+        {
+            if (used[i]) continue;
+
+            VergeEnd end = vergeEnds[i];
+
+            // Off the end of the road by half the wall's thickness, so none of it overlaps the last metres of
+            // asphalt: the cap is what closes the mouth of the corridor, not what blocks the road.
+            Vector3 outward = end.outward * (wallThickness * 0.5f + 0.5f);
+
+            if (AddWall(end.inner + outward, end.point + outward, wallThickness, false, false, true, margin))
+                cappedCount++;
+            else
+                unsealedCount++;
+        }
     }
 
     /// <summary>

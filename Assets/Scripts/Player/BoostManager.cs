@@ -18,8 +18,9 @@ using UnityEngine;
 /// The boost is spent as one unit: pressing the button uses one milkshake and runs for the whole of
 /// <see cref="boostDuration"/>, however many are left. There is nothing to hold down.
 ///
-/// The two moments worth hearing - a milkshake going into the tank and one being spent - are sounded by
-/// <see cref="BoostSounds"/>, so a level gets them by having a truck in it and nothing else.
+/// The moments worth hearing - a milkshake going into the tank, one being spent, and the button being pressed
+/// on an empty tank - are sounded by <see cref="BoostSounds"/>, so a level gets them by having a truck in it
+/// and nothing else.
 /// </summary>
 public class BoostManager : MonoBehaviour
 {
@@ -56,9 +57,20 @@ public class BoostManager : MonoBehaviour
     public ParticleSystem particleC;
     public ParticleSystem particleD;
 
+    /// <summary>
+    /// How often the empty knock may be played. Short enough that a deliberate second press is answered, long
+    /// enough that a key held down is not a machine gun of knocks - and long enough now that the sound, which
+    /// runs for eight tenths of a second, is not cut off by the next one: it plays out and dies away before
+    /// the button can answer again.
+    /// </summary>
+    private const float EmptySoundCooldown = 0.6f;
+
     private Rigidbody rb;
     private CarController car;
     private CameraController cameraController;
+
+    // When the empty knock last played, so a held button is answered once.
+    private float lastEmptySound = -999f;
 
     // The boost that is running right now, as a countdown in physics seconds so that a pause stops it dead
     // rather than leaving it to run out behind the pause menu.
@@ -144,8 +156,25 @@ public class BoostManager : MonoBehaviour
         if (PauseTracker.Instance != null && PauseTracker.Instance.isPaused)
             return;
 
-        if (!boosting && Boosts > 0 && GameInput.BoostPressed())
+        if (boosting || !GameInput.BoostPressed())
+            return;
+
+        if (Boosts > 0)
+        {
             BeginBoost();
+
+            return;
+        }
+
+        // Nothing in the tank, so the press is answered with the empty knock rather than with a boost. It is
+        // played at most once every EmptySoundCooldown: a held key repeats, and the point of the sound is to
+        // say the button was heard, not to keep saying it while it is held.
+        if (Time.unscaledTime - lastEmptySound < EmptySoundCooldown)
+            return;
+
+        lastEmptySound = Time.unscaledTime;
+
+        BoostSounds.PlayEmpty();
     }
 
     private void FixedUpdate()

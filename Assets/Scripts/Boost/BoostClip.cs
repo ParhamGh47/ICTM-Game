@@ -1,17 +1,19 @@
 using UnityEngine;
 
 /// <summary>
-/// The three sounds a boost makes, made rather than shipped: the wet <b>slurp</b> of a milkshake being drunk as
-/// the truck drives over it, the small bright <b>chime</b> that says one has gone into the tank, and the
-/// <b>whoosh</b> of one being spent.
+/// The four sounds a boost makes, made rather than shipped: the wet <b>slurp</b> of a milkshake being drunk as
+/// the truck drives over it, the small bright <b>chime</b> that says one has gone into the tank, the
+/// <b>whoosh</b> of one being spent, and the dry <b>knock</b> of the button being pressed with nothing left to
+/// spend.
 ///
 /// There is no boost recording in the project, and a pickup with no sound is a pickup the driver does not
 /// notice - so <see cref="BoostSounds"/> asks for these. Making them costs a couple of milliseconds once,
-/// puts nothing in the build, and means the three sounds are a matched set, since they are built from the same
+/// puts nothing in the build, and means the four sounds are a matched set, since they are built from the same
 /// handful of voices: filtered noise, a low body under it and a tone. The milkshake is wet and rising, which
 /// is the sound of drinking something; the chime is a reward, three notes climbing an octave with a click and
 /// a breath of froth on the front of them; the boost is longer, opens its top wide and swells, which is what
-/// reads as being shoved forward.
+/// reads as being shoved forward. The empty tank is the one sound in the set that is not a reward: it is the
+/// only one whose notes fall, so the ear hears that nothing happened without having to be told.
 ///
 /// Both are deterministic: the same seed every run, so a level sounds the same in every session and a change
 /// to one of them can be compared against the last. Each is a one-shot with a tail that is faded to silence,
@@ -26,11 +28,31 @@ public static class BoostClip
     private const float PickupSeconds = 0.42f;
     private const float CollectSeconds = 0.9f;
     private const float BoostSeconds = 1.1f;
+    private const float EmptySeconds = 0.8f;
 
     /// <summary>The peak each finished sound is scaled to, before the player's own settings.</summary>
     private const float PickupPeak = 0.7f;
     private const float CollectPeak = 0.8f;
     private const float BoostPeak = 0.85f;
+    private const float EmptyPeak = 0.95f;
+
+    /// <summary>
+    /// The empty tank's two knocks and the puff of air between them, in Hz.
+    ///
+    /// These sit around ten times higher than the first version of this sound did, and that is the whole
+    /// reason it was inaudible: knocks at 130-210 Hz are almost entirely inside the range a laptop or a phone
+    /// speaker cannot reproduce at all, so the sound was being played and simply not coming out. Everything
+    /// that matters here is between 250 Hz and 3 kHz, which any speaker can manage, with the two lowest
+    /// partials only filling in weight on something with a woofer.
+    /// </summary>
+    private const float EmptyKnockPitch = 430f;
+    private const float EmptyKnockFall = 300f;
+    private const float EmptySecondPitch = 360f;
+    private const float EmptySecondFall = 250f;
+
+    /// <summary>Where the second knock lands, and how loud it is against the first.</summary>
+    private const float EmptySecondAt = 0.19f;
+    private const float EmptySecondLevel = 0.62f;
 
     /// <summary>
     /// The chime's three notes: when each lands and what it is. C6, G6 and then C7 - the fifth and then the
@@ -53,10 +75,12 @@ public static class BoostClip
     private const int PickupSeed = 20260928;
     private const int BoostSeed = 20260929;
     private const int CollectSeed = 20260930;
+    private const int EmptySeed = 20260931;
 
     private static AudioClip pickup;
     private static AudioClip collect;
     private static AudioClip boost;
+    private static AudioClip empty;
 
     /// <summary>The milkshake going into the tank.</summary>
     public static AudioClip Pickup
@@ -88,6 +112,17 @@ public static class BoostClip
             if (boost == null) boost = BuildBoost();
 
             return boost;
+        }
+    }
+
+    /// <summary>The boost button pressed with nothing in the tank.</summary>
+    public static AudioClip Empty
+    {
+        get
+        {
+            if (empty == null) empty = BuildEmpty();
+
+            return empty;
         }
     }
 
@@ -273,6 +308,121 @@ public static class BoostClip
         FadeOut(samples, 0.25f);
 
         return Make("Boost fire (generated)", samples);
+    }
+
+    // ---------------------------------------------------------------- the empty tank
+
+    /// <summary>
+    /// A dry double knock over a puff of escaping air, and nothing else: the button travelled, the tank
+    /// answered, and there was nothing behind it. Both knocks fall as they die - 430 Hz down to 300, then
+    /// 360 down to 250 - and that is what makes it read as something being asked of an empty tank rather
+    /// than as something happening. The second is further behind and quieter than the first, so the pair
+    /// trails off rather than sounding like two hits.
+    ///
+    /// Three things make it a sound rather than a thud. The knock is <b>wooden</b>: its partials are set at
+    /// inharmonic ratios of the fundamental, which is what the ear hears as plastic and dead rather than as
+    /// metal or as a note. It is opened by a <b>snap</b> - a few milliseconds of broadband noise, which is
+    /// the button travelling and is most of what makes the press feel answered. And under it is a
+    /// <b>puff</b>: noise whose top falls from 3.6 kHz to 800 Hz as it dies, the sound of air leaving
+    /// something that has nothing to give, which is the part that gives the sound its length and its
+    /// character.
+    /// </summary>
+    private static AudioClip BuildEmpty()
+    {
+        System.Random random = new System.Random(EmptySeed);
+
+        int length = Mathf.RoundToInt(EmptySeconds * SampleRate);
+        float[] samples = new float[length];
+
+        float snap = 0f;
+        float puff = 0f;
+        float firstPhase = 0f;
+        float secondPhase = 0f;
+        float bodyPhase = 0f;
+
+        // The first knock is struck a moment after the snap, so the button is heard to travel before the
+        // thing it was pressed against answers.
+        const float firstAt = 0.01f;
+
+        for (int i = 0; i < length; i++)
+        {
+            float t = i / (float)SampleRate;
+
+            // The button, and the frame around the tank: the top of the noise, gone in four milliseconds.
+            snap = OnePole(ref snap, Noise(random), Coefficient(6000f));
+
+            float click =
+                snap * Attack(t, 0.0006f) * Mathf.Exp(-t / 0.008f);
+
+            // The first knock: a woody one, with its partials at inharmonic ratios so it is a knock and not
+            // a note, falling as it dies.
+            float first = 0f;
+
+            if (t >= firstAt)
+            {
+                float since = t - firstAt;
+
+                firstPhase +=
+                    2f * Mathf.PI * Mathf.Lerp(EmptyKnockPitch, EmptyKnockFall, Mathf.Clamp01(since / 0.07f)) /
+                    SampleRate;
+
+                first = Knock(firstPhase, since, 0.055f);
+            }
+
+            // The second knock, behind it and quieter: the same answer, given up on.
+            float second = 0f;
+
+            if (t >= EmptySecondAt)
+            {
+                float since = t - EmptySecondAt;
+
+                secondPhase +=
+                    2f * Mathf.PI *
+                    Mathf.Lerp(EmptySecondPitch, EmptySecondFall, Mathf.Clamp01(since / 0.07f)) / SampleRate;
+
+                second = Knock(secondPhase, since, 0.05f);
+            }
+
+            // The puff: air leaving it, its top falling away as it goes, which is what gives the sound its
+            // length without adding a tone to it. This is the part that runs on - a refusing button that is
+            // over in a quarter of a second is a click, and what the driver should hear is the tank letting
+            // the air out of them.
+            float corner =
+                Mathf.Lerp(3600f, 700f, Mathf.Clamp01(t / 0.35f));
+
+            puff = OnePole(ref puff, Noise(random), Coefficient(corner));
+
+            float air =
+                puff * Attack(t, 0.008f) * Mathf.Exp(-t / 0.3f);
+
+            // And a low body under all of it, for the weight that only a bigger speaker will show.
+            bodyPhase += 2f * Mathf.PI * 95f / SampleRate;
+
+            float body =
+                Mathf.Sin(bodyPhase) * Attack(t, 0.004f) * Mathf.Exp(-t / 0.18f);
+
+            samples[i] = 0.38f * click + 1.05f * first +
+                         0.5f * EmptySecondLevel * second + 0.5f * air + 0.32f * body;
+        }
+
+        Normalise(samples, EmptyPeak);
+        FadeOut(samples, 0.12f);
+
+        return Make("Boost empty (generated)", samples);
+    }
+
+    /// <summary>
+    /// One struck knock: a fundamental with two partials over it at deliberately <b>inharmonic</b> ratios
+    /// (2.35 and 3.9, rather than the 2 and 3 of a musical note), each dying faster than the one below it.
+    /// Inharmonic partials are what the ear calls wood, plastic or a dull clack; evenly spaced ones would
+    /// make it a drum or a bell.
+    /// </summary>
+    private static float Knock(float phase, float since, float decay)
+    {
+        return Attack(since, 0.0012f) * (
+            Mathf.Sin(phase) * Mathf.Exp(-since / decay) +
+            0.6f * Mathf.Sin(phase * 2.35f) * Mathf.Exp(-since / (decay * 0.66f)) +
+            0.34f * Mathf.Sin(phase * 3.9f) * Mathf.Exp(-since / (decay * 0.42f)));
     }
 
     // ---------------------------------------------------------------- helpers

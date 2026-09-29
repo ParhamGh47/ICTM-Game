@@ -102,6 +102,24 @@ public class CarController : MonoBehaviour
              "Positive leans the truck's left side down.")]
     public float resetRoll = 0f;
 
+    [Tooltip("How far above the spot a reset is aiming at the search for the tarmac starts. This is generous " +
+             "on purpose: the spot comes from the road's own spline, and on a climb, a bank or a stretch that " +
+             "climbs and turns at once the tarmac can sit a good way from it. A search that starts below the " +
+             "road meets its underside on the way down instead, and the underside is how a truck ends up " +
+             "buried in the road with only its roof showing.")]
+    public float resetProbeAbove = 30f;
+
+    [Tooltip("How far below the same spot that search reaches, so a reset over a cutting, an embankment or " +
+             "past the edge of a road still finds the surface it was sent to.")]
+    public float resetProbeBelow = 30f;
+
+    [Tooltip("How far above a finished reset to look for road the truck has been put inside, so it can be " +
+             "lifted onto it. This is the reset's last word, and what makes 'a reset is always on the road' " +
+             "true rather than likely: the search above can be defeated by geometry nobody predicted, and this " +
+             "cannot. Keep it modest - a bridge deck higher than this is a road to drive under, not one to be " +
+             "teleported onto.")]
+    public float resetLiftProbe = 5f;
+
     [Tooltip("When the car is reset somewhere with no road under it - in mid air over the gap before a " +
              "jump, or down a bank - send it back to the last stretch of road it actually drove on " +
              "instead of onto whichever road happens to be nearest.")]
@@ -169,8 +187,9 @@ public class CarController : MonoBehaviour
     private bool hasLastRoadPose;
 
     // Shared so the check costs no allocation every frame. Several colliders can sit under the car at once
-    // (the car's own body, the road, a bridge deck), so a few slots are needed, not one.
-    private static readonly RaycastHit[] roadHits = new RaycastHit[8];
+    // (the car's own body, the road, a bridge deck), so a few slots are needed, not one - and a reset now
+    // looks a long way up and down for the road, which is more surfaces than a two-metre probe could meet.
+    private static readonly RaycastHit[] roadHits = new RaycastHit[16];
 
     [Header("Focus System")]
     public bool enableFocus = true;
@@ -490,6 +509,11 @@ void Update()
         // of which are read further down.
         Vector3 resetPosition = transform.position;
 
+        // Which road the reset lands on, when it lands on one. The surface under the spot is then looked for
+        // on that road in particular rather than on whatever happens to be nearest it - see FindRoadSurface -
+        // and the same road is what the finished reset is checked against before it is left alone.
+        Road resetRoad = null;
+
         if (resetOntoRoad)
         {
             // A reset only steps back up the road when the car has no road under it. How far back is
@@ -504,7 +528,7 @@ void Update()
             Vector3 onRoad, roadForward;
 
             if (TryGetRoadResetPosition(transform.position, yaw, out onRoad, out roadForward,
-                                        offRoad, backOffMetres))
+                                        out resetRoad, offRoad, backOffMetres))
             {
                 // A reset must never hand the driver ground for free. Over the gap before a jump the
                 // nearest tarmac is the landing road ahead, and dropping the car onto it would skip the
@@ -515,12 +539,16 @@ void Update()
                     IsAheadOfLastRoad(onRoad, yaw))
                 {
                     Vector3 onRamp, rampForward;
+                    Road rampRoad;
 
+                    // The road comes from the retry rather than the first search: a failed retry leaves the
+                    // first search's road where it was, which is the answer the reset is going on with.
                     if (TryGetRoadResetPosition(lastRoadPosition, lastRoadYaw, out onRamp,
-                                                out rampForward, true, backOffMetres))
+                                                out rampForward, out rampRoad, true, backOffMetres))
                     {
                         onRoad = onRamp;
                         roadForward = rampForward;
+                        resetRoad = rampRoad;
                     }
                 }
 
@@ -540,7 +568,8 @@ void Update()
         Vector3 surfaceUp = Vector3.up;
 
         if (resetToSurface)
-            FindRoadSurface(resetPosition, out surfacePoint, out surfaceUp);
+            FindRoadSurface(resetPosition, out surfacePoint, out surfaceUp,
+                            resetProbeAbove, resetProbeBelow, 2f, resetRoad);
 
         Quaternion heading =
             Quaternion.Euler(0f, yaw, 0f);
@@ -551,6 +580,104 @@ void Update()
 
         transform.position =
             surfacePoint + surfaceUp * resetHeight;
+
+        // The last word on it, before the truck is left to fall and settle: a reset may never leave the truck
+        // inside the road it was sent to. See LiftOutOfRoad for why the search above is not trusted to be the
+        // end of the matter.
+        Vector3 standing = transform.position;
+        Quaternion stance = transform.rotation;
+
+        if (LiftOutOfRoad(ref standing, ref stance, resetRoad))
+        {
+            transform.position = standing;
+            transform.rotation = stance;
+        }
+    }
+
+
+    /// <summary>
+    /// A reset's last word: if the truck has been put down inside a road rather than on it, this lifts it onto
+    /// the surface it is buried under.
+    ///
+    /// The search in <see cref="FindRoadSurface"/> is what a reset is meant to work from, and it is generous:
+    /// it starts high above the spot and asks the road the reset chose where its surface is. This exists
+    /// because meaning to be right is not the same as being unable to be wrong. A level can always be shaped in
+    /// a way nobody predicted - a road that crosses back over itself, a stretch built at an angle to its own
+    /// spline, a mesh with a hole where the reset landed - and what comes out of that is a truck sitting inside
+    /// the road with only its roof showing. That is not something a reset should be able to do at all, so the
+    /// reset checks its own answer before it stops.
+    ///
+    /// The check is a ray straight up from the truck, and only surfaces that face up count: that is the road's
+    /// own tarmac, whereas the underside of the same road faces down and is skipped. Only the road the reset
+    /// was sent to counts when it was sent to one, so a bridge deck the level's road runs underneath is a road
+    /// to drive under rather than one to be lifted onto, and only surfaces within <see cref="resetLiftProbe"/>
+    /// do, so nothing is ever put down on a road overhead.
+    ///
+    /// Returns whether the truck was moved, and says so in the console when it was: a reset that had to be
+    /// rescued is a spot worth knowing about.
+    /// </summary>
+    private bool LiftOutOfRoad(ref Vector3 position, ref Quaternion rotation, Road road)
+    {
+        int count =
+            Physics.RaycastNonAlloc(
+                position,
+                Vector3.up,
+                roadHits,
+                Mathf.Max(0.5f, resetLiftProbe),
+                ~0,
+                QueryTriggerInteraction.Ignore);
+
+        float nearest = float.MaxValue;
+        Vector3 point = position;
+        Vector3 up = Vector3.up;
+        bool found = false;
+
+        for (int i = 0; i < count; i++)
+        {
+            RaycastHit hit = roadHits[i];
+
+            // Loose things are not road: a car, a log or a barrel over the truck is something to hit, not
+            // something to be put down on. The truck's own panels go with them, being its own rigidbody.
+            if (hit.collider == null || hit.rigidbody != null)
+                continue;
+
+            if (hit.collider.transform.IsChildOf(transform))
+                continue;
+
+            if (!IsGround(hit.collider))
+                continue;
+
+            if (road != null && hit.collider.GetComponentInParent<Road>() != road)
+                continue;
+
+            if (!FacesUp(hit.normal))
+                continue;
+
+            if (hit.distance < nearest)
+            {
+                nearest = hit.distance;
+                point = hit.point;
+                up = hit.normal;
+                found = true;
+            }
+        }
+
+        if (!found)
+            return false;
+
+        position = point + up * resetHeight;
+
+        rotation =
+            Quaternion.LookRotation(
+                Quaternion.Euler(0f, rotation.eulerAngles.y, 0f) * Vector3.forward,
+                up)
+            * Quaternion.Euler(0f, 0f, resetRoll);
+
+        Debug.LogWarning(
+            $"'{name}' was reset {nearest:F2} m inside the road and has been put on top of it instead.",
+            this);
+
+        return true;
     }
 
 
@@ -745,13 +872,18 @@ void Update()
     /// it: the spot is walked back up the road instead of being dropped where the car left it.
     /// <paramref name="backOffMetres"/> is how far that walk may go - a short step for an ordinary off-road
     /// reset, a long one for the ramp a jump was taken from.
+    ///
+    /// <paramref name="chosenRoad"/> is the road the spot is on, which is the road the caller should go on to
+    /// treat as the one the truck belongs on - looking for the surface to put it down on, and checking
+    /// afterwards that it is not inside it. It is only set when the search succeeds.
     /// </summary>
     private bool TryGetRoadResetPosition(Vector3 from, float yaw, out Vector3 result,
-                                         out Vector3 roadForward, bool backOff = false,
-                                         float backOffMetres = 0f)
+                                         out Vector3 roadForward, out Road chosenRoad,
+                                         bool backOff = false, float backOffMetres = 0f)
     {
         result = from;
         roadForward = Vector3.zero;
+        chosenRoad = null;
 
         if (cachedRoads == null || cachedRoads.Length == 0)
             cachedRoads = FindObjectsOfType<Road>();
@@ -878,6 +1010,8 @@ void Update()
 
         result =
             position + right * (direction > 0f ? laneOffset : -laneOffset);
+
+        chosenRoad = bestRoad;
 
         return true;
     }
@@ -1026,22 +1160,32 @@ void Update()
     /// the '!Road' tag), so a tag-only search finds the ground underneath the road every single time and puts
     /// the truck inside the road's own mesh, which is the one place it must not be.
     ///
-    /// Of the surfaces found, the highest wins - the road, where it runs on top of the ground. A bridge deck
-    /// over the same spot is a separate matter: anything more than <paramref name="roof"/> above the point is
-    /// treated as overhead rather than underfoot and ignored.
+    /// When a road is asked for, that road's own surface wins outright, and it is the piece of it nearest the
+    /// point's own height that is taken. Without one - a spawn settle - the highest surface found wins, which
+    /// is the road where it runs on top of the ground; a bridge deck over the same spot is a separate matter,
+    /// and anything more than <paramref name="roof"/> above the point is treated as overhead rather than
+    /// underfoot and ignored.
     ///
     /// Loose things are not ground. A car, a log, a barrel and a target all carry a rigidbody, and standing a
     /// truck on one of those is not what this is for; the truck's own colliders are the same rigidbody and go
     /// with them.
     ///
-    /// The probe distances are parameters because the two callers want different ones: a reset is always
-    /// within a couple of metres of the road it lands on, while a spawn point can be further off than that.
+    /// The probe distances are parameters because the two callers want different ones: a reset looks a long
+    /// way above and below the spot it is aiming at, while a spawn settle looks nearby, where the level's own
+    /// truck was placed.
+    ///
+    /// A road worth asking for in particular is a parameter for the other half of the same reason. The point a
+    /// reset works from is a point on a road's spline, so the surface it belongs to is that road's own, and it
+    /// is the only surface that can be trusted to be the right one: it is also what makes a long probe safe,
+    /// because the road that happens to be overhead - a bridge over the one being reset onto - is skipped
+    /// rather than reached.
     ///
     /// Returns whether anything was found at all, which is what tells a spawn settle that the truck is over
     /// the road rather than over a hole or off the side of the level.
     /// </summary>
     private bool FindRoadSurface(Vector3 point, out Vector3 surfacePoint, out Vector3 surfaceUp,
-                                 float probeAbove = 2f, float probeBelow = 2f, float roof = 2f)
+                                 float probeAbove = 2f, float probeBelow = 2f, float roof = 2f,
+                                 Road preferredRoad = null)
     {
         surfacePoint = point;
         surfaceUp = Vector3.up;
@@ -1057,6 +1201,47 @@ void Update()
                 ~0,
                 QueryTriggerInteraction.Ignore);
 
+        // The road that was asked for wins, and it is taken by height rather than by being the first hit or
+        // the highest one. The point comes from that road's spline, so the piece of tarmac it belongs to is
+        // the one nearest the point's own height - the highest would be a bridge deck where the road crosses
+        // back over itself, and whatever the ray met first is how a truck is put inside the road: a probe that
+        // starts below a road's surface meets its underside on the way down, and an underside faces down.
+        if (preferredRoad != null)
+        {
+            float nearest = float.MaxValue;
+
+            for (int i = 0; i < count; i++)
+            {
+                RaycastHit hit = roadHits[i];
+
+                if (hit.collider == null || hit.rigidbody != null)
+                    continue;
+
+                if (hit.collider.GetComponentInParent<Road>() != preferredRoad)
+                    continue;
+
+                if (!FacesUp(hit.normal))
+                    continue;
+
+                float gap =
+                    Mathf.Abs(hit.point.y - point.y);
+
+                if (gap >= nearest)
+                    continue;
+
+                nearest = gap;
+                surfacePoint = hit.point;
+                surfaceUp = hit.normal;
+                found = true;
+            }
+        }
+
+        if (found)
+            return true;
+
+        // Nothing of the road that was asked for - a spawn settle asks for none at all: the general search.
+        // The highest surface inside the probe wins, and the roof is what keeps a bridge deck, an overhead
+        // sign or a tree from being taken for the ground the truck is standing on.
         float highest =
             point.y + roof;
 
@@ -1080,6 +1265,20 @@ void Update()
         }
 
         return found;
+    }
+
+
+    /// <summary>
+    /// Whether a surface is one a truck can stand on: its face looks upwards.
+    ///
+    /// A road is a solid slab, so a search that reaches it from underneath meets the underside on the way
+    /// down, and the underside is the one face a truck may never be put down on - that is exactly how a truck
+    /// ends up inside a road with only its roof showing. The tolerance is a few degrees off vertical, so a
+    /// banked or a climbing stretch still counts as a surface rather than being mistaken for a wall.
+    /// </summary>
+    private static bool FacesUp(Vector3 normal)
+    {
+        return normal.y > 0.05f;
     }
 
 

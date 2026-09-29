@@ -416,3 +416,102 @@ public static class RoadRoute
             UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
     }
 }
+
+/// <summary>
+/// A bag of world positions, bucketed into a grid, for the question the placement tools ask more than any
+/// other: is anything of this kind already within so many metres of here?
+///
+/// The points that matter to a painter are the ones it can never see as objects - the trees a terrain draws,
+/// which are instances in terrain data, and the buildings, which are renderers somewhere in the scene. There
+/// can be thousands of each, and a candidate tree has to be checked against all of them, so the answer is kept
+/// in a grid of buckets and a query only looks at the handful of buckets the radius actually reaches.
+/// </summary>
+public class PointGrid
+{
+    private readonly Dictionary<long, List<Vector2>> buckets = new Dictionary<long, List<Vector2>>();
+    private readonly float cell;
+
+    public int Count { get { return count; } }
+
+    private readonly int count;
+
+    public PointGrid(List<Vector2> points, float cell = 8f)
+    {
+        this.cell = Mathf.Max(1f, cell);
+
+        if (points == null) return;
+
+        count = points.Count;
+
+        for (int i = 0; i < points.Count; i++)
+        {
+            long key = Key(points[i].x, points[i].y);   // a Vector2's y is the world's z
+
+            List<Vector2> bucket;
+            if (!buckets.TryGetValue(key, out bucket))
+            {
+                bucket = new List<Vector2>(4);
+                buckets.Add(key, bucket);
+            }
+
+            bucket.Add(points[i]);
+        }
+    }
+
+    /// <summary>Whether any point is within the radius, measured flat.</summary>
+    public bool Any(Vector2 centre, float radius)
+    {
+        return CountWithin(centre, radius, true) > 0;
+    }
+
+    /// <summary>How many points are within the radius, measured flat.</summary>
+    public int Near(Vector2 centre, float radius)
+    {
+        return CountWithin(centre, radius, false);
+    }
+
+    private int CountWithin(Vector2 centre, float radius, bool stopAtOne)
+    {
+        if (buckets.Count == 0) return 0;
+
+        radius = Mathf.Max(0f, radius);
+
+        int fromX = Mathf.FloorToInt((centre.x - radius) / cell);
+        int toX = Mathf.FloorToInt((centre.x + radius) / cell);
+        int fromZ = Mathf.FloorToInt((centre.y - radius) / cell);
+        int toZ = Mathf.FloorToInt((centre.y + radius) / cell);
+
+        float squared = radius * radius;
+        int found = 0;
+
+        for (int x = fromX; x <= toX; x++)
+        {
+            for (int z = fromZ; z <= toZ; z++)
+            {
+                List<Vector2> bucket;
+                if (!buckets.TryGetValue(Key(x, z), out bucket)) continue;
+
+                for (int i = 0; i < bucket.Count; i++)
+                {
+                    if ((bucket[i] - centre).sqrMagnitude > squared) continue;
+
+                    found++;
+
+                    if (stopAtOne) return found;
+                }
+            }
+        }
+
+        return found;
+    }
+
+    private long Key(float x, float z)
+    {
+        return Key(Mathf.FloorToInt(x / cell), Mathf.FloorToInt(z / cell));
+    }
+
+    private static long Key(int x, int z)
+    {
+        return ((long)x << 32) ^ (uint)z;
+    }
+}

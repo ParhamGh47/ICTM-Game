@@ -1,8 +1,8 @@
 using UnityEngine;
 
 /// <summary>
-/// Plays the game's three boost sounds: the milkshake going into the tank, the little jingle that says one has
-/// gone in, and the shove of one being spent.
+/// Plays the game's four boost sounds: the milkshake going into the tank, the little jingle that says one has
+/// gone in, the shove of one being spent, and the dry knock that answers the button when the tank is empty.
 ///
 /// The clips are made rather than shipped (<see cref="BoostClip"/>), and this is the one place that plays them
 /// - so every level sounds the same without a single object being wired up, and there is one volume and one
@@ -18,22 +18,27 @@ using UnityEngine;
 /// The sip and the jingle are separate sounds on separate sources because they answer different questions: the
 /// sip says what the driver just drove through, and the jingle answers it by saying the tank went up. A
 /// milkshake collected with the tank already full is still heard - it was still drunk - but it does not get
-/// the jingle.
+/// the jingle. The empty tank has a source of its own for the same reason: it answers the *button* rather than
+/// the world, and it must never cut a boost short or be cut short by one.
 ///
-/// Who calls it: <see cref="BoostManager"/> - when a milkshake is collected and when a boost is spent - so
-/// these follow the tank wherever a level keeps it.
+/// Who calls it: <see cref="BoostManager"/> - when a milkshake is collected, when a boost is spent, and when
+/// the button is pressed with nothing left to spend - so these follow the tank wherever a level keeps it.
 /// </summary>
 public static class BoostSounds
 {
     /// <summary>
-    /// How loud each sound is before the player's own settings. The milkshake is the quietest of the three: it
+    /// How loud each sound is before the player's own settings. The milkshake is the quietest of the four: it
     /// happens often, sometimes several times a corner, and it is there to be noticed rather than to be an
     /// event. The jingle is the loudest, because it is the reward - it is the sound of the count going up, and
-    /// it is worth hearing over the engine. The boost keeps its own level underneath both of them.
+    /// it is worth hearing over the engine. The boost keeps its own level underneath both of them, and the
+    /// empty tank is up with the jingle rather than below it: it is a refusal, and a refusal the driver does
+    /// not hear is a button that reads as broken. It is short and dry, so being this loud never makes it
+    /// tiring, and it is played at most every third of a second - see <see cref="BoostManager"/>.
     /// </summary>
     private const float PickupVolume = 0.5f;
     private const float CollectVolume = 0.7f;
     private const float BoostVolume = 0.65f;
+    private const float EmptyVolume = 0.85f;
 
     /// <summary>
     /// How far the pitch is allowed to wander from one play to the next. Milkshakes come in runs - a straight
@@ -43,16 +48,18 @@ public static class BoostSounds
     private const float PickupPitchSpread = 0.08f;
     private const float CollectPitchSpread = 0.06f;
     private const float BoostPitchSpread = 0.03f;
+    private const float EmptyPitchSpread = 0.07f;
 
     private static GameObject host;
     private static AudioSource pickup;
     private static AudioSource collect;
     private static AudioSource boost;
+    private static AudioSource empty;
 
     // ---------------------------------------------------------------- startup
 
     /// <summary>
-    /// Makes all three sources before the first scene, so the first milkshake in a level already has a sound.
+    /// Makes all four sources before the first scene, so the first milkshake in a level already has a sound.
     /// </summary>
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void Boot()
@@ -62,6 +69,7 @@ public static class BoostSounds
         if (pickup == null) pickup = Create("Pickup", BoostClip.Pickup);
         if (collect == null) collect = Create("Collect", BoostClip.Collect);
         if (boost == null) boost = Create("Boost", BoostClip.Boost);
+        if (empty == null) empty = Create("Empty", BoostClip.Empty);
     }
 
     // ---------------------------------------------------------------- playing
@@ -88,6 +96,14 @@ public static class BoostSounds
         if (boost == null) boost = Create("Boost", BoostClip.Boost);
 
         Play(boost, BoostClip.Boost, BoostVolume, BoostPitchSpread);
+    }
+
+    /// <summary>The boost button was pressed and there was nothing in the tank to spend.</summary>
+    public static void PlayEmpty()
+    {
+        if (empty == null) empty = Create("Empty", BoostClip.Empty);
+
+        Play(empty, BoostClip.Empty, EmptyVolume, EmptyPitchSpread);
     }
 
     private static void Play(AudioSource source, AudioClip clip, float volume, float pitchSpread)

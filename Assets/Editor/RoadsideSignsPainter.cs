@@ -17,6 +17,13 @@ using UnityEngine;
 ///  - The rumble strip is the odd one out: it goes ON the asphalt, lying across the lane, and only where the
 ///    level is built up - a strip of it before the building site, which is how Core-1 uses it by hand.
 ///
+/// An on-road strip is sized to the road rather than picked from a scale range: its own geometry is measured
+/// and it is scaled to reach across the asphalt, and stood on the centre line so it meets both edges. That is
+/// the point of such a strip - it has to cover the lane the player drives over - and it means the same tool
+/// gives a level's narrow road and its wide one strips that both fit, without renumbering anything. The
+/// 'Span' slider decides how much of the road it covers; switching 'Fit Across The Road' off puts the sizing
+/// back in the kind's own hands, with its Scale range and a wander across the lane.
+///
 /// The models are imported Z-up turned Y-up, so in Unity a sign's face lies across its own Z - the side a
 /// driver reads is the model's -Z - and its base sits on its own pivot. That is what the yaw here is built on:
 /// a verge sign is turned to face back down the road, so the traffic coming at it reads it head on, and an
@@ -86,6 +93,17 @@ public class RoadsideSignsPainter : EditorWindow
         public bool junction;
         public float forest;
         public float town;
+
+        /// <summary>How far the strip reaches across the road, for an on-road kind that was fitted to it.
+        /// Zero when nothing was fitted and the kind's own scale was used.</summary>
+        public float acrossSpan;
+
+        /// <summary>The direction the fitted span is measured along - across the road - for the preview.</summary>
+        public Vector3 across;
+
+        /// <summary>Where the middle of that fitted span lies, for the preview. The pivot is placed back from
+        /// it, because the geometry is not centred on the pivot.</summary>
+        public Vector3 acrossCentre;
     }
 
     // ------------------------------------------------------------------ settings
@@ -121,6 +139,8 @@ public class RoadsideSignsPainter : EditorWindow
     // How they sit
     private float facingOffset = 0f;
     private float onRoadYaw = 90f;                      // 90 lies a strip across the lane, 0 runs it along
+    private bool fitStripsToRoad = true;                // size on-road strips to reach across the asphalt
+    private float stripSpanOfRoad = 1f;                 // and how much of it they cover (1 = edge to edge)
     private float groundProbeHeight = 5f;
     private float groundMaxDrop = 15f;
     private float minGroundSlope = 0.75f;
@@ -140,6 +160,8 @@ public class RoadsideSignsPainter : EditorWindow
     private List<Vector2> trees;
     private List<Vector2> structures;
     private GameObject[] painterRoots = new GameObject[0];
+    private float stripSpanLow;
+    private float stripSpanHigh;
 
     [MenuItem("Tools/Road Tools/Paint Roadside Signs")]
     static void OpenWindow()
@@ -173,6 +195,8 @@ public class RoadsideSignsPainter : EditorWindow
     private void OnActiveSceneChanged(UnityEngine.SceneManagement.Scene previous,
                                       UnityEngine.SceneManagement.Scene current)
     {
+        stripSpanLow = 0f;
+        stripSpanHigh = 0f;
         roads.Clear();
         roads.AddRange(RoadRoute.FindRoadsInScene());
         cachedPlan = null;
@@ -233,7 +257,8 @@ public class RoadsideSignsPainter : EditorWindow
             "Places the signs and roadside obstacles where they belong: Stop signs before junctions (the tool " +
             "finds them by looking for other roads crossing the route), Share The Road signs along the verge, " +
             "the mast further out where it is built up, and the rumble strip lying across the asphalt before a " +
-            "building site. Nothing is ever placed on the road except a kind that asks for it.",
+            "building site - sized from the road's own width so it reaches from one edge of the lane to the " +
+            "other. Nothing is ever placed on the road except a kind that asks for it.",
             MessageType.Info);
 
         EditorGUI.BeginChangeCheck();
@@ -282,7 +307,9 @@ public class RoadsideSignsPainter : EditorWindow
             GUI.enabled = kind.enabled;
 
             GUILayout.Label("Scale", GUILayout.Width(38f));
+            GUI.enabled = kind.enabled && !Fitting(kind);
             kind.scaleRange = EditorGUILayout.Vector2Field(GUIContent.none, kind.scaleRange, GUILayout.Width(100f));
+            GUI.enabled = kind.enabled;
             kind.flipFacing = EditorGUILayout.ToggleLeft(
                 new GUIContent("Flip", "Turn this kind the other way round"), kind.flipFacing, GUILayout.Width(52f));
 
@@ -301,6 +328,23 @@ public class RoadsideSignsPainter : EditorWindow
         EditorGUILayout.LabelField("Place: Verge stands beside the road, OnRoad lies on the asphalt, " +
                                    "Junction goes before a junction", EditorStyles.miniLabel);
         EditorGUILayout.EndHorizontal();
+
+        EditorGUILayout.Space();
+        EditorGUILayout.LabelField("Strips On The Road", EditorStyles.boldLabel);
+        fitStripsToRoad = EditorGUILayout.ToggleLeft(
+            new GUIContent("Fit Across The Road", "Size each strip that lies on the asphalt so it reaches from " +
+                                                   "one side of the road to the other, and stand it on the centre " +
+                                                   "line. The road decides the size, so the kind's own Scale and " +
+                                                   "the On-Road angle are not used for it"),
+            fitStripsToRoad);
+        GUI.enabled = fitStripsToRoad;
+        stripSpanOfRoad = EditorGUILayout.Slider(
+            new GUIContent("Span Of The Road", "How much of the asphalt a strip covers: 1 is edge to edge, " +
+                                               "1.1 a little past it onto the shoulders"),
+            stripSpanOfRoad, 0.3f, 1.6f);
+        GUI.enabled = true;
+        EditorGUILayout.LabelField("  A strip fitted this way is centred on the lane; with the fit off, its " +
+                                   "Scale range and the angle below are used again.", EditorStyles.miniLabel);
 
         EditorGUILayout.Space();
         EditorGUILayout.LabelField("Spacing", EditorStyles.boldLabel);
@@ -385,11 +429,14 @@ public class RoadsideSignsPainter : EditorWindow
             new GUIContent("Facing Offset (deg)", "Nudge every object's facing by this much if the models do not " +
                                                   "sit square to the road"),
             facingOffset, -180f, 180f);
+        GUI.enabled = !fitStripsToRoad;
         onRoadYaw = EditorGUILayout.Slider(
             new GUIContent("On-Road Strips (deg)", "90 lies a strip across the lane - from one side of the road " +
                                                    "to the other, which is how the levels' own strips are laid - " +
-                                                   "and 0 would run one along the lane instead"),
+                                                   "and 0 would run one along the lane instead. Not used while Fit " +
+                                                   "Across The Road is on, which asks for across anyway"),
             onRoadYaw, 0f, 180f);
+        GUI.enabled = true;
 
         EditorGUILayout.Space();
         EditorGUILayout.LabelField("Options", EditorStyles.boldLabel);
@@ -457,6 +504,16 @@ public class RoadsideSignsPainter : EditorWindow
 
         EditorGUILayout.LabelField("  Junctions found: " + junctionCount);
         EditorGUILayout.LabelField("  Objects: " + plan.Count + "   (" + breakdown + ")");
+
+        if (stripSpanHigh > 0f)
+        {
+            string span = Mathf.Approximately(stripSpanLow, stripSpanHigh)
+                ? stripSpanHigh.ToString("F1")
+                : stripSpanLow.ToString("F1") + " - " + stripSpanHigh.ToString("F1");
+
+            EditorGUILayout.LabelField("  On-road strips: each fitted to " + span +
+                                       " m across the road, on the centre line");
+        }
         EditorGUILayout.LabelField("  Spread along the route: about 1 every " +
                                    Mathf.Max(1f, total / Mathf.Max(1, plan.Count)).ToString("F0") +
                                    " m, over the whole length rather than the first half");
@@ -482,6 +539,8 @@ public class RoadsideSignsPainter : EditorWindow
         List<PlanItem> plan = new List<PlanItem>();
         rejectedSpots = 0;
         junctionCount = 0;
+        stripSpanLow = 0f;
+        stripSpanHigh = 0f;
 
         for (int i = 0; i < kinds.Count; i++)
             kinds[i].placed = 0;
@@ -584,6 +643,12 @@ public class RoadsideSignsPainter : EditorWindow
         }
 
         return plan;
+    }
+
+    /// <summary>True when this kind is one the road fits - an on-road strip, with the fit switched on.</summary>
+    private bool Fitting(SignKind kind)
+    {
+        return fitStripsToRoad && kind.placement == Placement.OnRoad;
     }
 
     private bool AnyKind(Placement placement)
@@ -689,7 +754,14 @@ public class RoadsideSignsPainter : EditorWindow
         return false;
     }
 
-    /// <summary>Places one spot on the asphalt itself: only kinds that ask for the road go here.</summary>
+    /// <summary>
+    /// Places one spot on the asphalt itself: only kinds that ask for the road go here.
+    ///
+    /// A strip that is to reach across the road stands on the centre line, and its scale is worked out from
+    /// the road's own width and the strip's own geometry rather than picked from a range - so it meets both
+    /// edges, on a narrow road and a wide one alike. With the fit switched off, the old behaviour is back: the
+    /// kind's Scale range decides the size and the strip wanders across the lane.
+    /// </summary>
     private bool TryOnRoadSpot(List<PlanItem> plan, List<RoadRouteSegment> segments, float distance)
     {
         Vector3 position;
@@ -697,10 +769,13 @@ public class RoadsideSignsPainter : EditorWindow
         RoadRouteSegment segment = RoadRoute.SampleAt(segments, distance, out position, out tangent);
         if (segment == null) return false;
 
-        float half = Mathf.Max(1.5f, segment.road.RoadWidth() * 0.5f);
-        float lateral = Random.Range(-(half - 1f), half - 1f);
+        float width = Mathf.Max(3f, segment.road.RoadWidth());
+        float half = width * 0.5f;
 
-        Vector3 spot = position + RoadRoute.Across(tangent) * lateral;
+        float lateral = fitStripsToRoad ? 0f : Random.Range(-(half - 1f), half - 1f);
+
+        Vector3 across = RoadRoute.Across(tangent);
+        Vector3 spot = position + across * lateral;
 
         Vector3 ground;
         if (!TryFindRoadSurface(spot, out ground)) return false;
@@ -713,19 +788,52 @@ public class RoadsideSignsPainter : EditorWindow
         if (kind == null) return false;
 
         float scale = Random.Range(kind.scaleRange.x, kind.scaleRange.y);
+        float span = 0f;
+        Vector3 centre = ground;
+
+        if (fitStripsToRoad)
+        {
+            // The placement's rotation, exactly as Paint will set it, and the span the model covers along the
+            // road when it is placed that way at scale 1. The scale that reaches the target is the ratio.
+            Quaternion placement = Quaternion.Euler(0f, YawFor(kind, tangent, true), 0f) * kind.prefab.transform.rotation;
+            float bareCentre;
+            float bare = PrefabMeasure.SpanAlong(kind.prefab, placement, 1f, across, out bareCentre);
+
+            if (bare > 0.01f)
+            {
+                span = width * stripSpanOfRoad;
+                scale = span / bare;
+
+                // The strip's geometry is not centred on its pivot, so the pivot is put back by that offset -
+                // scaled with it, since the whole thing scales about the pivot - and it is the *strip* that
+                // ends up centred on the lane rather than the empty point it is built around.
+                centre = ground - across * (bareCentre * scale);
+            }
+        }
+
         if (!HasRoom(plan, ground, kind, scale)) return false;
         if (!IsClear(ground)) return false;
 
         PlanItem item = new PlanItem();
-        item.position = ground + Vector3.up * lift;
+        item.position = centre + Vector3.up * lift;
         item.yaw = YawFor(kind, tangent, true);
         item.scale = scale;
         item.kind = kind;
         item.forest = forest;
         item.town = town;
+        item.acrossSpan = span;
+        item.across = across;
+        item.acrossCentre = ground + Vector3.up * lift;
 
         plan.Add(item);
         kind.placed++;
+
+        if (span > 0f)
+        {
+            if (stripSpanLow <= 0f || span < stripSpanLow) stripSpanLow = span;
+            if (span > stripSpanHigh) stripSpanHigh = span;
+        }
+
         return true;
     }
 
@@ -802,7 +910,9 @@ public class RoadsideSignsPainter : EditorWindow
     {
         float yaw = RoadRoute.YawAlong(tangent);
 
-        if (onRoad) yaw += onRoadYaw;
+        // A strip that is being fitted to the road lies across it, which is the whole point of the fit: the
+        // on-road angle setting is left out of it rather than quietly fighting it.
+        if (onRoad) yaw += fitStripsToRoad ? 90f : onRoadYaw;
 
         if (kind.flipFacing) yaw += 180f;
 
@@ -1057,6 +1167,17 @@ public class RoadsideSignsPainter : EditorWindow
             float yaw = item.yaw * Mathf.Deg2Rad;
             Vector3 forward = new Vector3(Mathf.Sin(yaw), 0f, Mathf.Cos(yaw));
             Handles.DrawAAPolyLine(3f, item.position - forward * along, item.position + forward * along);
+
+            // A fitted strip is drawn as the line it will be across the road, at the width it will really
+            // reach, because that width is the whole of what the fit decides.
+            if (item.acrossSpan > 0.01f)
+            {
+                Vector3 side = item.across.sqrMagnitude > 0.001f ? item.across.normalized : forward;
+                Handles.color = Color.white;
+                Handles.DrawAAPolyLine(5f,
+                    item.acrossCentre - side * (item.acrossSpan * 0.5f),
+                    item.acrossCentre + side * (item.acrossSpan * 0.5f));
+            }
 
             float height = Mathf.Max(0.4f, footprint.Height * item.scale);
             if (item.kind.placement != Placement.OnRoad)

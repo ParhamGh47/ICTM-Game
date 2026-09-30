@@ -14,13 +14,18 @@ using UnityEngine;
 ///    often where the level is built up.
 ///  - The mast (a traffic light base) is a tall structure, so it stands further off the asphalt and the
 ///    surroundings rule keeps it where there is something for it to belong to.
-///  - The rumble strip is the odd one out: it goes ON the asphalt, flat along the lane, and only where the
+///  - The rumble strip is the odd one out: it goes ON the asphalt, lying across the lane, and only where the
 ///    level is built up - a strip of it before the building site, which is how Core-1 uses it by hand.
 ///
-/// The models are imported Z-up turned Y-up, so in Unity a sign's face is its +-Z, its base sits on its own
-/// pivot, and the rumble strip is already flat with its length along Z. That is what the yaw here is built
-/// on: a verge sign is turned to face back down the road, an on-road strip to run along it. Each kind has a
-/// 'Flip' tick for a model that comes out the wrong way round.
+/// The models are imported Z-up turned Y-up, so in Unity a sign's face lies across its own Z - the side a
+/// driver reads is the model's -Z - and its base sits on its own pivot. That is what the yaw here is built on:
+/// a verge sign is turned to face back down the road, so the traffic coming at it reads it head on, and an
+/// on-road strip to lie across it. Each kind has a 'Flip' tick for a model that comes out the wrong way round.
+///
+/// The yaw is turned *onto* the prefab rather than replacing what it is: several of these prefabs carry a
+/// rotation on their own root - the Mast's is what stands it up - so wiping that out lays the model flat. The
+/// placement puts its yaw on top of the pose the prefab was authored in, which is what dragging the prefab in
+/// and spinning it about Y does, and leaves a prefab whose root is already square exactly as it was.
 ///
 /// Usage: open a level scene (Core-1 ... Core-4), check the road list, then
 ///   Tools > Road Tools > Paint Roadside Signs
@@ -97,7 +102,7 @@ public class RoadsideSignsPainter : EditorWindow
     private static readonly string[] SideNames = { "Both sides", "Right of travel", "Left of travel" };
 
     private float minPad = 0.5f;
-    private float maxPad = 12f;
+    private float maxPad = 6f;                                // nothing stands further off the asphalt than this
     private float lift = 0.03f;
 
     // Junctions
@@ -115,7 +120,7 @@ public class RoadsideSignsPainter : EditorWindow
 
     // How they sit
     private float facingOffset = 0f;
-    private float onRoadYaw = 0f;                       // 0 runs a strip along the lane, 90 across it
+    private float onRoadYaw = 90f;                      // 90 lies a strip across the lane, 0 runs it along
     private float groundProbeHeight = 5f;
     private float groundMaxDrop = 15f;
     private float minGroundSlope = 0.75f;
@@ -185,14 +190,17 @@ public class RoadsideSignsPainter : EditorWindow
     {
         kinds.Clear();
 
+        // The pads keep everything on the verge just past the asphalt edge: a sign is read from the road, so
+        // one standing out in the field is a sign nobody sees. The mast is the tallest of them and needs the
+        // most room behind it, which is why its pad is the widest of the three.
         kinds.Add(MakeKind("Stop", SignsFolder + "Stop", Placement.Junction, Where.Any, 1f, 0f,
-                           new Vector2(1.2f, 3.5f), new Vector2(1f, 1f), new Color(0.85f, 0.2f, 0.2f)));
+                           new Vector2(1f, 2.5f), new Vector2(1f, 1f), new Color(0.85f, 0.2f, 0.2f)));
 
         kinds.Add(MakeKind("Share The Road", SignsFolder + "ShareTheRoad", Placement.Verge, Where.Any, 0.9f, 0f,
-                           new Vector2(1.5f, 4.5f), new Vector2(1f, 1f), new Color(0.95f, 0.75f, 0.25f)));
+                           new Vector2(1.5f, 4f), new Vector2(1f, 1f), new Color(0.95f, 0.75f, 0.25f)));
 
         kinds.Add(MakeKind("Mast", ObstaclesFolder + "Mast", Placement.Verge, Where.BuiltUp, 0.5f, 0.25f,
-                           new Vector2(4f, 9f), new Vector2(1f, 1f), new Color(0.6f, 0.6f, 0.7f)));
+                           new Vector2(3f, 6f), new Vector2(1f, 1f), new Color(0.6f, 0.6f, 0.7f)));
 
         kinds.Add(MakeKind("Rumble", ObstaclesFolder + "Rumble", Placement.OnRoad, Where.BuiltUp, 1f, 0.25f,
                            Vector2.zero, new Vector2(0.35f, 0.6f), new Color(0.35f, 0.35f, 0.35f)));
@@ -224,7 +232,7 @@ public class RoadsideSignsPainter : EditorWindow
         EditorGUILayout.HelpBox(
             "Places the signs and roadside obstacles where they belong: Stop signs before junctions (the tool " +
             "finds them by looking for other roads crossing the route), Share The Road signs along the verge, " +
-            "the mast further out where it is built up, and the rumble strip flat on the asphalt before a " +
+            "the mast further out where it is built up, and the rumble strip lying across the asphalt before a " +
             "building site. Nothing is ever placed on the road except a kind that asks for it.",
             MessageType.Info);
 
@@ -342,8 +350,9 @@ public class RoadsideSignsPainter : EditorWindow
         maxPad = EditorGUILayout.Slider(
             new GUIContent("Max Past Road Edge (m)", "And nothing stands further out than this. Each kind's own " +
                                                       "Pad is the one that actually places it, kept inside " +
-                                                      "these two"),
-            maxPad, 0f, 40f);
+                                                      "these two. Signs belong close to the road they are read " +
+                                                      "from, so this wants to stay small"),
+            maxPad, 0f, 20f);
         minGroundSlope = EditorGUILayout.Slider(
             new GUIContent("Min Ground Flatness", "Steepest ground anything may stand on (1 is perfectly flat)"),
             minGroundSlope, 0.3f, 1f);
@@ -377,7 +386,9 @@ public class RoadsideSignsPainter : EditorWindow
                                                   "sit square to the road"),
             facingOffset, -180f, 180f);
         onRoadYaw = EditorGUILayout.Slider(
-            new GUIContent("On-Road Strips (deg)", "0 lays a strip along the lane, 90 across it"),
+            new GUIContent("On-Road Strips (deg)", "90 lies a strip across the lane - from one side of the road " +
+                                                   "to the other, which is how the levels' own strips are laid - " +
+                                                   "and 0 would run one along the lane instead"),
             onRoadYaw, 0f, 180f);
 
         EditorGUILayout.Space();
@@ -446,6 +457,9 @@ public class RoadsideSignsPainter : EditorWindow
 
         EditorGUILayout.LabelField("  Junctions found: " + junctionCount);
         EditorGUILayout.LabelField("  Objects: " + plan.Count + "   (" + breakdown + ")");
+        EditorGUILayout.LabelField("  Spread along the route: about 1 every " +
+                                   Mathf.Max(1f, total / Mathf.Max(1, plan.Count)).ToString("F0") +
+                                   " m, over the whole length rather than the first half");
         EditorGUILayout.LabelField("  Spots rejected (no ground / no room): " + rejectedSpots);
         EditorGUILayout.LabelField("  Root object: '" + parentName + "' (replaced on every paint)");
     }
@@ -487,41 +501,50 @@ public class RoadsideSignsPainter : EditorWindow
         float to = total - routeEndTrim;
         if (to <= from) return plan;
 
-        // 1. The verge signs, walking the route.
-        if (AnyKind(Placement.Verge))
+        float span = to - from;
+
+        // What the spacing alone would put along the route, phase by phase, and what the budget allows of it.
+        // The junctions are worked out first because their signs are the ones that have to be where they are:
+        // they are reserved out of the budget and placed first, so the signs that can go anywhere never take
+        // the spot a Stop sign needed.
+        int vergeSlots = AnyKind(Placement.Verge)
+            ? Mathf.Max(1, Mathf.FloorToInt(span / Mathf.Max(5f, vergeSpacing)))
+            : 0;
+        int onRoadSlots = AnyKind(Placement.OnRoad)
+            ? Mathf.Max(1, Mathf.FloorToInt(span / Mathf.Max(8f, onRoadSpacing)))
+            : 0;
+
+        List<float> junctions = AnyKind(Placement.Junction) ? FindJunctions(segments) : new List<float>();
+        junctionCount = junctions.Count;
+
+        int signsPerJunction = Mathf.Max(1, junctionSigns) * (junctionBothSides ? 2 : 1);
+        int junctionBudget = Mathf.Min(maxItems, junctions.Count * signsPerJunction);
+
+        // How many junctions the budget can sign at all. When there are more junctions than that, they are
+        // taken at an even stride rather than from the top of the list, so a low budget thins the Stop signs
+        // along the level instead of filling its first half with them.
+        int signable = Mathf.Min(junctions.Count, junctionBudget / Mathf.Max(1, signsPerJunction));
+
+        // The rest is shared between the two phases that can go anywhere, in proportion to how many spots each
+        // of them asked for. So lowering Max Objects thins the whole level out rather than emptying its second
+        // half - the count decides how many slots the route is cut into, not where the placing stops.
+        int wanted = vergeSlots + onRoadSlots;
+        int allowed = Mathf.Min(Mathf.Max(0, maxItems - junctionBudget), wanted);
+
+        int vergeCount = wanted > 0 ? Mathf.RoundToInt(allowed * (vergeSlots / (float)wanted)) : 0;
+        int onRoadCount = allowed - vergeCount;
+
+        // 1. The junctions, each with its sign(s) a little before it.
+        if (signable > 0)
         {
             bool preferRight = Random.value < 0.5f;
-            float distance = from;
 
-            while (distance < to && plan.Count < maxItems)
+            for (int k = 0; k < signable && plan.Count < maxItems; k++)
             {
-                distance += Mathf.Max(5f, vergeSpacing * Random.Range(1f - spacingJitter, 1f + spacingJitter));
-                if (!TryVergeSpot(plan, segments, distance, 0, false, ref preferRight)) rejectedSpots++;
-            }
-        }
+                int i = signable == junctions.Count
+                    ? k
+                    : Mathf.FloorToInt(k * junctions.Count / (float)signable);
 
-        // 2. The strips that lie on the asphalt.
-        if (AnyKind(Placement.OnRoad))
-        {
-            float distance = from + onRoadSpacing * 0.5f;
-
-            while (distance < to && plan.Count < maxItems)
-            {
-                distance += Mathf.Max(8f, onRoadSpacing * Random.Range(1f - spacingJitter, 1f + spacingJitter));
-                if (!TryOnRoadSpot(plan, segments, distance)) rejectedSpots++;
-            }
-        }
-
-        // 3. The junctions, each with its sign(s) a little before it.
-        if (AnyKind(Placement.Junction))
-        {
-            List<float> junctions = FindJunctions(segments);
-            junctionCount = junctions.Count;
-
-            bool preferRight = Random.value < 0.5f;
-
-            for (int i = 0; i < junctions.Count && plan.Count < maxItems; i++)
-            {
                 for (int s = 0; s < junctionSigns && plan.Count < maxItems; s++)
                 {
                     float distance = junctions[i] - Random.Range(stopBefore.x, stopBefore.y) - s * junctionSeparation;
@@ -541,6 +564,25 @@ public class RoadsideSignsPainter : EditorWindow
             }
         }
 
+        // 2. The verge signs, spread the length of the route.
+        if (vergeCount > 0)
+        {
+            bool preferRight = Random.value < 0.5f;
+            List<float> spots = Spread(from, to, vergeCount);
+
+            for (int i = 0; i < spots.Count && plan.Count < maxItems; i++)
+                if (!TryVergeSpot(plan, segments, spots[i], 0, false, ref preferRight)) rejectedSpots++;
+        }
+
+        // 3. The strips that lie on the asphalt, spread the same way.
+        if (onRoadCount > 0)
+        {
+            List<float> spots = Spread(from, to, onRoadCount);
+
+            for (int i = 0; i < spots.Count && plan.Count < maxItems; i++)
+                if (!TryOnRoadSpot(plan, segments, spots[i])) rejectedSpots++;
+        }
+
         return plan;
     }
 
@@ -550,6 +592,31 @@ public class RoadsideSignsPainter : EditorWindow
             if (kinds[i].enabled && kinds[i].prefab != null && kinds[i].placement == placement) return true;
 
         return false;
+    }
+
+    /// <summary>
+    /// Spot distances spread over the whole route: the route is cut into one slot per object and each one is
+    /// wandered a little inside its own slot, by the spacing jitter.
+    ///
+    /// Walking from the start instead - adding a jittered spacing until the cap is reached - is what used to
+    /// leave the second half of a level bare as soon as Max Objects came down: the cap stopped the walk rather
+    /// than thinning it out. Here the count decides how many slots the route is cut into, so the same cap
+    /// spreads them the whole length.
+    /// </summary>
+    private List<float> Spread(float from, float to, int count)
+    {
+        List<float> distances = new List<float>(Mathf.Max(0, count));
+        if (count <= 0 || to <= from) return distances;
+
+        float slot = (to - from) / count;
+
+        float low = Mathf.Clamp01(0.5f - Mathf.Clamp01(spacingJitter) * 0.5f);
+        float high = 1f - low;
+
+        for (int i = 0; i < count; i++)
+            distances.Add(from + slot * (i + Random.Range(low, high)));
+
+        return distances;
     }
 
     /// <summary>
@@ -725,15 +792,17 @@ public class RoadsideSignsPainter : EditorWindow
 
     /// <summary>
     /// Which way an object is turned. A sign faces back down the road so the traffic coming at it can read
-    /// it; a strip on the asphalt runs along the lane instead. The model's own face is its +-Z, so a sign
-    /// needs the half turn and a kind whose model is the other way round asks for 'Flip'.
+    /// it; a strip on the asphalt runs along the lane instead.
+    ///
+    /// The models are imported Z-up turned Y-up, so a sign's face lies across its own Z and the side a driver
+    /// reads is the model's -Z: turning it to the road's own heading is therefore the whole job, and a kind
+    /// whose model is the other way round asks for 'Flip'.
     /// </summary>
     private float YawFor(SignKind kind, Vector3 tangent, bool onRoad)
     {
         float yaw = RoadRoute.YawAlong(tangent);
 
         if (onRoad) yaw += onRoadYaw;
-        else yaw += 180f;
 
         if (kind.flipFacing) yaw += 180f;
 
@@ -905,7 +974,12 @@ public class RoadsideSignsPainter : EditorWindow
 
                 instance.name = item.kind.label + " " + (i + 1);
                 if (!Mathf.Approximately(item.scale, 1f)) instance.transform.localScale *= item.scale;
-                instance.transform.rotation = Quaternion.Euler(0f, item.yaw, 0f);
+
+                // The yaw is applied on top of the pose the prefab already has, not in place of it: the Mast's
+                // root carries the rotation that stands it upright, and setting the rotation outright leaves a
+                // mast lying on the ground. For a prefab whose root is already square - every sign - this is
+                // the same as before, because composing with an identity rotation changes nothing.
+                instance.transform.rotation = Quaternion.Euler(0f, item.yaw, 0f) * instance.transform.rotation;
 
                 // None of these prefabs is guaranteed to have its pivot at its feet, so each one is dropped
                 // until the lowest point of its geometry rests on the ground.

@@ -24,7 +24,11 @@ for (const m of xml.matchAll(/<Reference Include="([^"]+)"\s*\/>/g)) {
 
 const sources = [];
 for (const m of xml.matchAll(/<Compile Include="([^"]+)"\s*\/>/g)) {
-  sources.push(decode(m[1]));
+  const source = decode(m[1]);
+  // The csproj is only regenerated when Unity next refreshes, so a file deleted this session is still
+  // listed in it. Unity would not compile a file that is not there either.
+  if (!fs.existsSync(path.join(root, source))) continue;
+  sources.push(source);
 }
 for (const extra of args) {
   if (extra.endsWith('.csproj')) continue;

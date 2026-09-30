@@ -19,9 +19,15 @@ using UnityEngine.SceneManagement;
 /// where the band begins and ends.
 ///
 /// The painting is aimed at the verge, not at the land: it starts outside the asphalt and shoulders, keeps off
-/// anything already built, and stops at the ceiling set here. Filling the rest of the map - the land away from
-/// the road, which is seen only from a distance - is what
-/// <see cref="DistantSceneryPainter"/> is for, and it uses light collider-free copies for it.
+/// anything already built, and stops at the ceiling set here. The band is as wide as the Out To slider asks,
+/// so the same tool covers the land away from the road too - it is only the density and the tree budget that
+/// have to be kept sensible, since every tree here is a real instance on the terrain with a collider.
+///
+/// A terrain can also hold tree types whose prefab no longer exists, left behind by a tool that has since been
+/// removed. Those types are listed as missing here, are never painted, and the trees that were placed with
+/// them are invisible - they still take up room in the terrain's tree list, so they cost load time and are
+/// dropped for nothing. The button under the list takes them out of the terrain, and the trees that used them
+/// with it.
 ///
 /// Usage: open a level scene (Core-1 ... Core-4), then
 ///   Tools &gt; Road Tools &gt; Paint Trees Along Road
@@ -167,7 +173,7 @@ public class TerrainTreePainter : EditorWindow
         if (data.treePrototypes.Length == 0)
         {
             EditorGUILayout.HelpBox("The terrain has no tree prototypes. Add tree prefabs to Terrain Data > " +
-                                    "Trees, or use the Distant Scenery painter to make light copies.",
+                                    "Trees before painting.",
                                     MessageType.Error);
             EditorGUILayout.EndScrollView();
             return;
@@ -192,8 +198,9 @@ public class TerrainTreePainter : EditorWindow
                                                  "be planted on the road"),
             minOffsetFromRoad, 1f, 60f);
         maxOffsetFromRoad = EditorGUILayout.Slider(
-            new GUIContent("Out To (m)", "Where the band stops, measured the same way. Everything past this " +
-                                         "belongs to the Distant Scenery painter"),
+            new GUIContent("Out To (m)", "Where the band stops, measured the same way. Widen it to cover the " +
+                                         "land away from the road as well - but every tree is a real " +
+                                         "instance, so keep the density down out there"),
             maxOffsetFromRoad, minOffsetFromRoad + 1f, 300f);
 
         EditorGUILayout.Space();
@@ -275,10 +282,36 @@ public class TerrainTreePainter : EditorWindow
             for (int i = 0; i < selectedPrototypes.Length; i++) selectedPrototypes[i] = false;
         EditorGUILayout.EndHorizontal();
 
+        int missingTypes = 0;
+
         for (int i = 0; i < data.treePrototypes.Length; i++)
         {
-            string name = data.treePrototypes[i].prefab != null ? data.treePrototypes[i].prefab.name : "null";
+            GameObject prototype = data.treePrototypes[i].prefab;
+            bool missing = prototype == null;
+            if (missing) missingTypes++;
+
+            string name = missing
+                ? "(missing prefab - not painted)"
+                : prototype.name;
+
+            GUI.enabled = !missing;
             selectedPrototypes[i] = EditorGUILayout.ToggleLeft("  [" + i + "] " + name, selectedPrototypes[i]);
+            GUI.enabled = true;
+        }
+
+        if (missingTypes > 0)
+        {
+            EditorGUILayout.HelpBox(
+                missingTypes + " tree type(s) here point at prefabs that no longer exist, so nothing can be " +
+                "painted with them and any tree already placed with them is invisible. Taking them out also " +
+                "takes out those trees.",
+                MessageType.Warning);
+
+            GUI.backgroundColor = new Color(1f, 0.75f, 0.4f);
+            if (GUILayout.Button("Remove " + missingTypes + " Missing Tree Type(s) And Their Trees",
+                                 GUILayout.Height(24f)))
+                RemoveMissingTreeTypes();
+            GUI.backgroundColor = Color.white;
         }
 
         if (EditorGUI.EndChangeCheck()) planDirty = true;
@@ -337,8 +370,8 @@ public class TerrainTreePainter : EditorWindow
         if (GUILayout.Button("Undo My Last Paint", GUILayout.Height(24f))) UndoLastPaint();
         GUI.enabled = true;
 
-        GUILayout.Label("Nothing else is touched by that button: trees the level came with, and trees the " +
-                        "Distant Scenery painter added, are left where they are.",
+        GUILayout.Label("Nothing else is touched by that button: trees the level came with, and anything " +
+                        "placed by hand, are left where they are.",
                         EditorStyles.miniLabel);
 
         EditorGUILayout.Space();
@@ -652,6 +685,10 @@ public class TerrainTreePainter : EditorWindow
 
         for (int i = 0; i < data.treePrototypes.Length; i++)
         {
+            // A type whose prefab is gone can never be painted, however its tick is set: an instance of it is a
+            // tree that draws nothing, so offering it would only spend the budget on invisible trees.
+            if (data.treePrototypes[i].prefab == null) continue;
+
             if (selectedPrototypes != null && i < selectedPrototypes.Length && selectedPrototypes[i]) types.Add(i);
         }
 
@@ -783,5 +820,40 @@ public class TerrainTreePainter : EditorWindow
         lastPaintTo = -1;
 
         Debug.Log("Tree Painter: removed every tree from '" + data.name + "'.");
+    }
+
+    /// <summary>
+    /// Takes the tree types whose prefab is gone out of the terrain the window is aimed at, and with them
+    /// every tree that was placed using one. The work itself is TreeTypeCleanup's, which the menu runs over a
+    /// whole scene or the whole project as well - this is the same thing, aimed by the window.
+    /// </summary>
+    private void RemoveMissingTreeTypes()
+    {
+        if (targetTerrain == null) return;
+
+        TerrainData data = targetTerrain.terrainData;
+
+        TreeTypeCleanup.Report report = TreeTypeCleanup.Clean(data, true);
+
+        if (!report.changed)
+        {
+            Debug.Log("Tree Painter: every tree type in '" + data.name + "' still has its prefab - nothing to " +
+                      "remove.");
+            return;
+        }
+
+        RoadRoute.MarkSceneDirty();
+
+        // The list the window is holding has just changed shape underneath it, and the sizes cached from the
+        // old prototypes no longer mean anything.
+        selectedPrototypes = null;
+        prototypeRadius = null;
+        lastPaintFrom = -1;
+        lastPaintTo = -1;
+        planDirty = true;
+
+        Debug.Log("Tree Painter: removed " + report.missingTypes + " tree type(s) with no prefab from '" +
+                  data.name + "', along with " + report.droppedTrees + " tree(s) that were placed with them. " +
+                  report.keptTypes + " type(s) and " + report.keptTrees + " tree(s) are left.");
     }
 }

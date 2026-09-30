@@ -143,6 +143,11 @@ public class PauseOptionsPanel : MonoBehaviour
     [Header("Layout - the settings tab")]
     public Vector2 presetButtonSize = new Vector2(155f, 38f);
     public float presetGap = 10f;
+    [Tooltip("The preset row's own size and lettering, narrower and smaller because there are five of them " +
+             "where the difficulties are three. They still stop short of the notes column beside them.")]
+    public Vector2 presetChoiceSize = new Vector2(88f, 38f);
+    public float presetChoiceGap = 7f;
+    public float presetChoiceFont = 14f;
     public Vector2 switchSize = new Vector2(300f, 32f);
     public float switchGap = 4f;
     public float noteX = 505f;
@@ -420,9 +425,18 @@ public class PauseOptionsPanel : MonoBehaviour
 
     // ---------------------------------------------------------------- choices
 
+    /// <summary>
+    /// The row's index is a place in the offered order, not a preset value: the enum's numbers are the order
+    /// the presets were added to the game, which is not the order they are shown in.
+    /// </summary>
     private void ChoosePreset(int index)
     {
-        GraphicsQuality.Choose((GraphicsPreset)index);
+        GraphicsQuality.Choose(ShownPreset(index));
+    }
+
+    private static GraphicsPreset ShownPreset(int index)
+    {
+        return GraphicsQuality.Ordered[Mathf.Clamp(index, 0, GraphicsQuality.Ordered.Length - 1)];
     }
 
     private void ToggleShadows()
@@ -480,7 +494,7 @@ public class PauseOptionsPanel : MonoBehaviour
         for (int i = 0; i < presetRows.Count; i++)
         {
             ChoiceRow row = presetRows[i];
-            bool active = (int)GraphicsQuality.Current == row.index;
+            bool active = GraphicsQuality.Current == ShownPreset(row.index);
 
             row.activeBar.enabled = active;
             row.label.color = active ? inkColor : dimInkColor;
@@ -807,10 +821,12 @@ public class PauseOptionsPanel : MonoBehaviour
 
         y += captionHeight + 6f;
 
-        // The presets, as a row of choices with the one in force's lettering darkened.
-        BuildChoiceRow(page, y, presetRows, PresetName, ChoosePreset);
+        // The presets, as a row of choices with the one in force's lettering darkened. Five of them, so they
+        // are narrower than the difficulty row's three and lettered smaller.
+        BuildChoiceRow(page, y, presetRows, PresetName, ChoosePreset, GraphicsQuality.Ordered.Length,
+            presetChoiceSize, presetChoiceGap, presetChoiceFont);
 
-        y += presetButtonSize.y + 16f;
+        y += presetChoiceSize.y + 16f;
 
         // The two switches sit on top of the preset rather than belonging to it: turning shadows off at HIGH,
         // or the blur on at LOW, is allowed.
@@ -842,7 +858,8 @@ public class PauseOptionsPanel : MonoBehaviour
 
         y += captionHeight + 6f;
 
-        BuildChoiceRow(page, y, difficultyRows, DifficultyName, ChooseDifficulty);
+        BuildChoiceRow(page, y, difficultyRows, DifficultyName, ChooseDifficulty, 3,
+            presetButtonSize, presetGap, 18f);
 
         y += presetButtonSize.y + 10f;
 
@@ -859,16 +876,15 @@ public class PauseOptionsPanel : MonoBehaviour
     /// than by two copies of it.
     /// </summary>
     private void BuildChoiceRow(Transform page, float y, List<ChoiceRow> rows, Func<int, string> nameOf,
-        Action<int> choose)
+        Action<int> choose, int count, Vector2 size, float gap, float fontSize)
     {
-        for (int i = 0; i < 3; i++)
+        for (int i = 0; i < count; i++)
         {
             int index = i;                          // captured, not the loop variable, for the callback
             string label = nameOf(index);
 
-            Button button = CreatePlateButton(label, page, label, presetButtonSize, 18f);
-            PlaceTop(page, (RectTransform)button.transform, i * (presetButtonSize.x + presetGap), y,
-                presetButtonSize.x, presetButtonSize.y);
+            Button button = CreatePlateButton(label, page, label, size, fontSize);
+            PlaceTop(page, (RectTransform)button.transform, i * (size.x + gap), y, size.x, size.y);
 
             TextMeshProUGUI text = button.GetComponentInChildren<TextMeshProUGUI>();
             text.characterSpacing = 3f;
@@ -887,11 +903,10 @@ public class PauseOptionsPanel : MonoBehaviour
         }
     }
 
-    /// <summary>The preset's name, as GraphicsQuality defines it: Low, Medium, High.</summary>
+    /// <summary>The preset's name, in the order the row offers them: Potato, Low, Medium, High, Ultra.</summary>
     private static string PresetName(int index)
     {
-        GraphicsPreset preset = (GraphicsPreset)Mathf.Clamp(index, 0, 2);
-        return preset.ToString().ToUpperInvariant();
+        return ShownPreset(index).ToString().ToUpperInvariant();
     }
 
     /// <summary>The difficulty's name, as GameDifficulty defines it: Easy, Medium, Hard.</summary>

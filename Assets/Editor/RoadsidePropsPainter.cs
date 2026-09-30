@@ -616,7 +616,12 @@ public class RoadsidePropsPainter : EditorWindow
 
                 instance.name = item.kind.label + " " + (i + 1);
                 instance.transform.localScale *= item.scale;
-                instance.transform.rotation = Quaternion.Euler(0f, item.yaw, 0f);
+
+                // The yaw goes on top of the pose the prefab already has rather than replacing it, because some
+                // of these prefabs carry a rotation on their own root - the TrashContainer's root is turned a
+                // quarter turn - and setting the rotation outright tips those over. A prop whose root is
+                // already square is unaffected: composing with an identity rotation changes nothing.
+                instance.transform.rotation = Quaternion.Euler(0f, item.yaw, 0f) * instance.transform.rotation;
 
                 // The prefabs do not all have their pivot at their feet, so each one is dropped until
                 // the lowest point of its geometry rests on the ground.

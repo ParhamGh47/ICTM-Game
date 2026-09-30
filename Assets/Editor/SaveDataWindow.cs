@@ -59,7 +59,9 @@ public class SaveDataWindow : EditorWindow
 
     private static readonly string[] LevelNames = { "Muted", "Low", "Medium", "High" };
 
-    private static readonly string[] PresetNames = { "Low", "Medium", "High" };
+    // In the enum's own value order - this popup reads and writes the number the game stores, so it cannot be
+    // in the order the game's own options screens offer them in (that is GraphicsQuality.Ordered).
+    private static readonly string[] PresetNames = { "Low", "Medium", "High", "Ultra", "Potato" };
 
     private static readonly string[] DifficultyNames = { "Easy", "Medium", "Hard" };
 
@@ -286,7 +288,8 @@ public class SaveDataWindow : EditorWindow
         EditorGUI.BeginChangeCheck();
 
         preset = EditorGUILayout.Popup(
-            new GUIContent("Preset", "How much of the picture the game spends. High is the default."),
+            new GUIContent("Preset", "How much of the picture the game spends, as GraphicsQuality stores it. " +
+                                    "High is the default."),
             Mathf.Clamp(preset, 0, PresetNames.Length - 1), PresetNames);
 
         shadows = EditorGUILayout.Toggle("Shadows", shadows);

@@ -66,8 +66,9 @@ public class OptionsScreen : MonoBehaviour
 
     [Header("Settings tab")]
     public string graphicsCaption = "GRAPHICS";
-    [Tooltip("One label per preset, in the order GraphicsQuality defines them: Low, Medium, High.")]
-    public string[] presetLabels = { "LOW", "MEDIUM", "HIGH" };
+    [Tooltip("One label per preset, in GraphicsQuality.Ordered's order - fewest effects first, so the row " +
+             "reads as a scale: Potato, Low, Medium, High, Ultra.")]
+    public string[] presetLabels = { "POTATO", "LOW", "MEDIUM", "HIGH", "ULTRA" };
     public string shadowsText = "SHADOWS";
     public string motionBlurText = "MOTION BLUR";
     [Tooltip("The switch over the slow-motion jump camera. No note beside it, like the other switches.")]
@@ -136,6 +137,10 @@ public class OptionsScreen : MonoBehaviour
     [Header("Layout - the settings tab")]
     public Vector2 presetButtonSize = new Vector2(230f, 58f);
     public float presetGap = 16f;
+    [Tooltip("The preset row's own size, narrower because there are five of them where the difficulties are " +
+             "three. They still stop short of the notes column.")]
+    public Vector2 presetChoiceSize = new Vector2(190f, 58f);
+    public float presetChoiceGap = 12f;
     public Vector2 switchSize = new Vector2(400f, 54f);
     public float switchGap = 12f;
     [Tooltip("Where the note plates sit, and how wide they are. One under the other, beside the left column.")]
@@ -287,9 +292,18 @@ public class OptionsScreen : MonoBehaviour
 
     // ---------------------------------------------------------------- choices
 
+    /// <summary>
+    /// The row's index is a place in the offered order, not a preset value: the enum's numbers are the order
+    /// the presets were added to the game, which is not the order they are shown in.
+    /// </summary>
     private void ChoosePreset(int index)
     {
-        GraphicsQuality.Choose((GraphicsPreset)index);
+        GraphicsQuality.Choose(ShownPreset(index));
+    }
+
+    private static GraphicsPreset ShownPreset(int index)
+    {
+        return GraphicsQuality.Ordered[Mathf.Clamp(index, 0, GraphicsQuality.Ordered.Length - 1)];
     }
 
     private void ToggleShadows()
@@ -338,7 +352,7 @@ public class OptionsScreen : MonoBehaviour
         for (int i = 0; i < presetRows.Count; i++)
         {
             ChoiceRow row = presetRows[i];
-            bool active = (int)GraphicsQuality.Current == row.index;
+            bool active = GraphicsQuality.Current == ShownPreset(row.index);
 
             row.activeBar.enabled = active;
             row.label.color = active ? accentColor : labelColor;
@@ -567,10 +581,19 @@ public class OptionsScreen : MonoBehaviour
 
         y = BuildSectionHeading(page, graphicsCaption, y);
 
-        // The presets, as a row of choices with the one in force lit up.
-        BuildChoiceRow(page, presetLabels, y, presetRows, ChoosePreset);
+        // The presets, as a row of choices with the one in force lit up. Five of them, so they are narrower
+        // than the difficulty row's three.
+        //
+        // The labels have to be one per preset and in the same order, or a button reading HIGH would be
+        // choosing something else - so a label list saved by a version with fewer presets is ignored in favour
+        // of the game's own names rather than offered as a row that lies about what it does.
+        string[] labels = presetLabels != null && presetLabels.Length == GraphicsQuality.Ordered.Length
+            ? presetLabels
+            : PresetLabels();
 
-        y -= presetButtonSize.y + groupGap;
+        BuildChoiceRow(page, labels, y, presetRows, ChoosePreset, presetChoiceSize, presetChoiceGap);
+
+        y -= presetChoiceSize.y + groupGap;
 
         // The two switches, on top of the preset rather than part of it: turning shadows off at High, or the
         // blur on at Low, is allowed.
@@ -599,7 +622,7 @@ public class OptionsScreen : MonoBehaviour
         // a level asks of the player rather than what it looks like.
         y = BuildSectionHeading(page, difficultyCaption, y);
 
-        BuildChoiceRow(page, difficultyLabels, y, difficultyRows, ChooseDifficulty);
+        BuildChoiceRow(page, difficultyLabels, y, difficultyRows, ChooseDifficulty, presetButtonSize, presetGap);
 
         y -= presetButtonSize.y + sectionGap;
 
@@ -613,22 +636,31 @@ public class OptionsScreen : MonoBehaviour
     /// A row of choices with the one in force lit up. The presets and the difficulties are the same row in
     /// every way but what they choose, so both are built by this rather than by two copies.
     ///
-    /// The labels are the enum's own order - GraphicsQuality's presets, GameDifficulty's difficulties - so the
-    /// index handed to the callback is the value to choose.
+    /// The index handed to the callback is a place in the row, which each row's own callback understands: the
+    /// difficulties' is a GameDifficulty value, and the presets' is a place in GraphicsQuality.Ordered.
     /// </summary>
-    private void BuildChoiceRow(RectTransform page, string[] labels, float y, List<ChoiceRow> rows, Action<int> choose)
+    /// <summary>One label per offered preset, from GraphicsQuality's own order and names.</summary>
+    private static string[] PresetLabels()
     {
-        // Three is as many as either setting has; a stray fourth label cannot be clicked into a value the
-        // setting does not have.
-        int count = Mathf.Min(labels != null ? labels.Length : 0, 3);
+        string[] labels = new string[GraphicsQuality.Ordered.Length];
+
+        for (int i = 0; i < labels.Length; i++)
+            labels[i] = GraphicsQuality.Ordered[i].ToString().ToUpperInvariant();
+
+        return labels;
+    }
+
+    private void BuildChoiceRow(RectTransform page, string[] labels, float y, List<ChoiceRow> rows,
+        Action<int> choose, Vector2 size, float gap)
+    {
+        int count = labels != null ? labels.Length : 0;
 
         for (int i = 0; i < count; i++)
         {
             int index = i;                          // captured, not the loop variable, for the callback
 
-            Button button = CreateButton(labels[i], page, labels[i], presetButtonSize);
-            PlaceTopLeft((RectTransform)button.transform, sideMargin + i * (presetButtonSize.x + presetGap), y,
-                presetButtonSize.x, presetButtonSize.y);
+            Button button = CreateButton(labels[i], page, labels[i], size);
+            PlaceTopLeft((RectTransform)button.transform, sideMargin + i * (size.x + gap), y, size.x, size.y);
 
             TextMeshProUGUI label = button.GetComponentInChildren<TextMeshProUGUI>();
             label.fontStyle = FontStyles.Bold;

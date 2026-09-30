@@ -16,11 +16,16 @@ using UnityEngine;
 /// all - a drive down the road shows you a run of different adverts rather than the same one again and
 /// again. The folder called Special is left out on purpose.
 ///
-/// The billboard model is built with its board running along its +-Z and its picture facing its -X, so a
-/// billboard turned a quarter turn off the road direction looks back down the road - which is how the traffic
-/// on the route sees it, head on, with the board standing across the verge. 'Flip Facing' is there for a
-/// prefab whose face turns out to be the other side, and 'Facing Offset' angles them a little if you want
-/// them turned towards the road rather than square to it.
+/// The billboard model is built with its board running along its +-Z, and its picture is looked at along the
+/// object's X: turned a quarter turn off the road direction it looks back down the road, which is how the
+/// traffic on the route sees it, head on, with the board standing across the verge.
+///
+/// The two verges face opposite ways by default, because they are read by opposite streams of traffic: a board
+/// on the right of the route faces the cars coming down it, and one on the left faces the cars coming the other
+/// way, which is how a billboard is actually placed. 'Face The Route's Traffic On Both Verges' turns that off
+/// and points every board back down the route instead. 'Flip Facing' turns the whole set the other way round
+/// for a prefab whose face turns out to be the other side, and 'Facing Offset' angles them a little if you
+/// want them turned towards the road rather than square to it.
 ///
 /// Usage: open a level scene (Core-1 ... Core-4), check the road list, then
 ///   Tools > Road Tools > Paint Billboards
@@ -68,6 +73,11 @@ public class BillboardPainter : EditorWindow
     private static readonly string[] SideNames = { "Both sides", "Right of travel", "Left of travel" };
 
     private Vector2 scaleRange = new Vector2(1f, 1.35f);
+
+    // Which way the two verges face. Off, each one faces the traffic on its own side of the road, which is how
+    // a billboard is actually placed on a two-way road; on, every board faces the traffic driving the route, so
+    // the driver reads all of them head on whichever side they stand on.
+    private bool faceRouteTrafficOnly;
     private bool flipFacing;
     private float facingOffset;
     private float groundProbeHeight = 5f;
@@ -274,6 +284,17 @@ public class BillboardPainter : EditorWindow
         facingOffset = EditorGUILayout.Slider(
             new GUIContent("Facing Offset (deg)", "Nudge the facing if the billboards do not sit square to " +
                                                   "the road"), facingOffset, -180f, 180f);
+        faceRouteTrafficOnly = EditorGUILayout.ToggleLeft(
+            new GUIContent("Face The Route's Traffic On Both Verges",
+                "Off, each verge faces the traffic on its own side of the road - the right verge looks back down " +
+                "the route, the left verge at the cars coming the other way - which is how billboards are " +
+                "actually placed. On, every board looks back down the route, so the driver reads all of them " +
+                "head on whichever side they stand on"),
+            faceRouteTrafficOnly);
+        EditorGUILayout.LabelField(faceRouteTrafficOnly
+            ? "  Both verges look back down the route: every board is read head on by traffic driving it."
+            : "  Each verge faces its own side's traffic, the way a billboard is placed on a two-way road.",
+            EditorStyles.miniLabel);
         flipFacing = EditorGUILayout.Toggle(
             new GUIContent("Flip Facing", "Turn every billboard the other way round, for a prefab whose face " +
                                           "is the other side"), flipFacing);
@@ -360,6 +381,9 @@ public class BillboardPainter : EditorWindow
 
         EditorGUILayout.LabelField("  Billboards: " + plan.Count + "   (" + right + " right, " +
                                    (plan.Count - right) + " left)");
+        EditorGUILayout.LabelField("  Spread along the route: about 1 every " +
+                                   Mathf.Max(1f, total / Mathf.Max(1, plan.Count)).ToString("F0") +
+                                   " m, over the whole length rather than the first half");
         EditorGUILayout.LabelField("  Spots rejected (no ground / no room): " + rejectedSpots);
         EditorGUILayout.LabelField("  Root object: '" + parentName + "' (replaced on every paint)");
     }
@@ -401,18 +425,41 @@ public class BillboardPainter : EditorWindow
         float to = total - routeEndTrim;
         if (to <= from) return plan;
 
+        // One slot per billboard, spread over the whole route, so lowering the cap thins them out along the
+        // whole level instead of leaving its second half empty (see Spread below).
+        int count = Mathf.Min(maxBillboards, Mathf.FloorToInt((to - from) / Mathf.Max(10f, spacing)));
+        if (count <= 0) return plan;
+
         bool preferRight = Random.value < 0.5f;
-        float distance = from;
+        List<float> spots = Spread(from, to, count);
 
-        while (distance < to && plan.Count < maxBillboards)
+        for (int i = 0; i < spots.Count && plan.Count < maxBillboards; i++)
         {
-            distance += Mathf.Max(10f, spacing * Random.Range(1f - spacingJitter, 1f + spacingJitter));
-
-            if (TrySpot(plan, segments, distance, ref preferRight)) continue;
+            if (TrySpot(plan, segments, spots[i], ref preferRight)) continue;
             rejectedSpots++;
         }
 
         return plan;
+    }
+
+    /// <summary>
+    /// Spot distances spread over the whole route: the route is cut into one slot per billboard and each one is
+    /// wandered a little inside its own slot, by the spacing jitter.
+    /// </summary>
+    private List<float> Spread(float from, float to, int count)
+    {
+        List<float> distances = new List<float>(Mathf.Max(0, count));
+        if (count <= 0 || to <= from) return distances;
+
+        float slot = (to - from) / count;
+
+        float low = Mathf.Clamp01(0.5f - Mathf.Clamp01(spacingJitter) * 0.5f);
+        float high = 1f - low;
+
+        for (int i = 0; i < count; i++)
+            distances.Add(from + slot * (i + Random.Range(low, high)));
+
+        return distances;
     }
 
     /// <summary>Picks a side, finds the ground and a poster, checks there is room, and places it.</summary>
@@ -450,7 +497,7 @@ public class BillboardPainter : EditorWindow
 
             PlanItem item = new PlanItem();
             item.position = ground + Vector3.up * lift;
-            item.yaw = FacingFor(tangent);
+            item.yaw = FacingFor(tangent, right);
             item.scale = scale;
             item.right = right;
             item.poster = NextPoster(right);
@@ -464,16 +511,25 @@ public class BillboardPainter : EditorWindow
     }
 
     /// <summary>
-    /// Which way a billboard is turned: back down the road, so the traffic on the route reads it head on.
+    /// Which way a billboard is turned: back down the road it is read from, so the traffic that drives that
+    /// side reads it head on.
     ///
-    /// The board is built along its own +Z with its picture on its -X. Turning the object to face down the
-    /// road is therefore a quarter turn off the road direction, not a half turn, and it lands the board across
-    /// the verge - which is how a billboard actually stands.
+    /// The board runs along the object's own Z, so the picture is looked at along the object's X - which makes
+    /// turning it to face down the road a quarter turn off the road direction rather than a half turn, and
+    /// lands the board across the verge, which is how a billboard actually stands. Which of the two quarter
+    /// turns is the one that points the picture at the traffic is decided by how the prefab was built: it is
+    /// the +90 one.
+    ///
+    /// The half turn for the left verge is the part that matters: the two streams of traffic on a two-way road
+    /// drive opposite ways, so a board square to the road shows its picture to one of them and its back to the
+    /// other. Facing them both the same way means half of every paint is a blank board to the driver passing
+    /// it - and a mirrored one to anyone looking back.
     /// </summary>
-    private float FacingFor(Vector3 tangent)
+    private float FacingFor(Vector3 tangent, bool right)
     {
-        float yaw = RoadRoute.YawAlong(tangent) - 90f;
+        float yaw = RoadRoute.YawAlong(tangent) + 90f;
 
+        if (!right && !faceRouteTrafficOnly) yaw += 180f;
         if (flipFacing) yaw += 180f;
 
         return yaw + facingOffset;
@@ -706,11 +762,11 @@ public class BillboardPainter : EditorWindow
             Handles.color = new Color(0.3f, 0.75f, 1f);
             Handles.DrawWireDisc(item.position + Vector3.up * 0.05f, Vector3.up, 1.6f * item.scale);
 
-            // The board runs along the object's Z and looks along its -X, so both are drawn: one line along
-            // the board, one showing which way the picture faces.
+            // The board runs along the object's Z and its picture looks along its +X, so both are drawn: one
+            // line along the board, one showing which way the picture faces.
             Quaternion turn = Quaternion.Euler(0f, item.yaw, 0f);
             Vector3 along = turn * Vector3.forward * 2.2f * item.scale;
-            Vector3 facing = turn * Vector3.left * 6f;
+            Vector3 facing = turn * Vector3.right * 6f;
 
             Handles.DrawAAPolyLine(4f, item.position - along, item.position + along);
             Handles.DrawAAPolyLine(2f, item.position + Vector3.up * 1.5f,

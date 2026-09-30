@@ -16,6 +16,11 @@ using UnityEngine;
 /// the offset - where a straight wall placed that far out would fold over onto the road itself - and it gives
 /// each segment a body that reaches the ground, so a verge higher than the road cannot be driven over.
 ///
+/// Where one road hands over to the next the two walls are joined by running each on along its own line until
+/// they meet, rather than by one wall straight across the corner: a straight join is a chord across the inside
+/// of the bend, so it comes in towards the asphalt, and that is what put invisible walls in the middle of open
+/// ground at every corner.
+///
 /// Usage: open a level scene (Core-1 ... Core-4), pick the road, then
 ///   Tools > Road Tools > Place Invisible Walls Along Road
 /// </summary>
@@ -157,7 +162,8 @@ public class TerrainInvisibleWallPainter : EditorWindow
         EditorGUILayout.HelpBox(
             "Builds a wall of invisible colliders down each verge. The segments share their ends and are " +
             "cut shorter where the road bends, so the wall follows the curve without gaps and never crosses " +
-            "the asphalt.",
+            "the asphalt. At a junction the two walls are joined by carrying each on along its own line until " +
+            "they meet, so the join stays as far from the road as the wall itself does.",
             MessageType.Info);
 
         EditorGUI.BeginChangeCheck();
@@ -255,8 +261,10 @@ public class TerrainInvisibleWallPainter : EditorWindow
                                                       "road, and are dropped, until they clear it"),
             keepOffRoads, 0.25f, 10f);
         sealEnds = EditorGUILayout.ToggleLeft(
-            new GUIContent("Seal The Ends", "Join the wall across each junction and fold it shut at the ends " +
-                                             "of the route, so the player cannot go round the back of it"),
+            new GUIContent("Seal The Ends", "Join the wall across each junction - each wall carried on along " +
+                                             "its own line until the two meet, so the join never comes in " +
+                                             "towards the road - and fold it shut at the ends of the route, " +
+                                             "so the player cannot go round the back of it"),
             sealEnds);
         GUI.enabled = sealEnds;
         junctionTolerance = EditorGUILayout.Slider(
@@ -362,7 +370,7 @@ public class TerrainInvisibleWallPainter : EditorWindow
 
         if (sealEnds)
         {
-            EditorGUILayout.LabelField("  " + joinedCount + " junction(s) sealed across the corner, " +
+            EditorGUILayout.LabelField("  " + joinedCount + " junction(s) joined along their own lines, " +
                                        cappedCount + " end(s) of the route folded shut");
         }
 
@@ -598,8 +606,26 @@ public class TerrainInvisibleWallPainter : EditorWindow
 
             // The two ends of this verge, for the sealing pass: a wall that stops in open country is a wall
             // the player can walk round.
-            vergeEnds.Add(MakeEnd(road, side, drivableHalf, line[0], false, margin));
-            vergeEnds.Add(MakeEnd(road, side, drivableHalf, line[line.Count - 1], true, margin));
+            //
+            // They are taken from the samples the wall could actually stand at, not from the first and last
+            // sample of the verge. At a junction the road's own end sits inside the next road's corridor, so
+            // those samples are unplaceable and their offset has collapsed to a couple of metres off the
+            // asphalt - sealing from there was dropping a join right beside the road.
+            int firstStand = -1;
+            int lastStand = -1;
+
+            for (int i = 0; i < line.Count; i++)
+            {
+                if (!line[i].placeable) continue;
+
+                if (firstStand < 0) firstStand = i;
+                lastStand = i;
+            }
+
+            if (firstStand < 0) continue;
+
+            vergeEnds.Add(MakeEnd(road, side, drivableHalf, line[firstStand], false, margin));
+            vergeEnds.Add(MakeEnd(road, side, drivableHalf, line[lastStand], true, margin));
         }
     }
 
@@ -905,6 +931,124 @@ public class TerrainInvisibleWallPainter : EditorWindow
     }
 
     /// <summary>
+    /// Joins the two walls of a junction by running each one on along its own line until the two meet, instead
+    /// of laying a single wall straight across the corner between them.
+    ///
+    /// The straight join is what used to come in towards the road at every corner. A wall from one verge end to
+    /// the other is a chord across the inside of the bend, and the sharper the corner the closer that chord
+    /// passes to the asphalt - at a right angle it is only about two thirds of the offset out - so a player who
+    /// cut the corner met an invisible wall in the middle of what looked like open ground.
+    ///
+    /// Every wall is already the right distance from its own road and runs in a known direction - the road's own
+    /// heading at that end - so the two lines only have to be followed until they cross. The meeting point is
+    /// the corner of the offset boundary, and it is further out than the chord ever was, never nearer the road.
+    /// Where the two roads run on together there is no corner at all: their lines are parallel, and the short
+    /// wall between the two ends is then already the wall that belongs in the gap.
+    /// </summary>
+    private bool JoinEnds(VergeEnd a, VergeEnd b, float margin)
+    {
+        Vector3 from = a.point;
+        Vector3 to = b.point;
+
+        Vector3 corner;
+
+        if (!TryOffsetCorner(a, b, out corner))
+            return AddWallRun(from, to, margin);
+
+        // Going round the corner is only worth it if both legs actually get there. Where a junction brings the
+        // two roads close together, the lines meet on the far side of one of them, and cutting across its
+        // asphalt to reach the corner is the very thing this is trying to avoid. There the short wall between
+        // the two ends is both the better wall and the only one that can be laid.
+        float required = margin + RoadField.Slack;
+
+        if (!RunIsClear(from, corner, required) || !RunIsClear(corner, to, required))
+            return AddWallRun(from, to, margin);
+
+        bool laid = AddWallRun(from, corner, margin);
+
+        if (AddWallRun(corner, to, margin)) laid = true;
+
+        return laid;
+    }
+
+    /// <summary>Whether a straight run between two points stays clear of every road in the scene.</summary>
+    private bool RunIsClear(Vector3 from, Vector3 to, float required)
+    {
+        float span = FlatDistance(from, to);
+        int samples = Mathf.Clamp(Mathf.CeilToInt(span / Mathf.Max(2f, wallSegmentLength)), 2, 24);
+
+        return field.ClearanceAlong(from, to, null, samples) >= required;
+    }
+
+    /// <summary>
+    /// Where the two walls of a junction meet when each is followed on along its own line. False when the two
+    /// roads run on together, so there is no corner to go round, and when the lines only meet so far away that
+    /// following them would swing the wall across the level rather than round a corner.
+    /// </summary>
+    private bool TryOffsetCorner(VergeEnd a, VergeEnd b, out Vector3 corner)
+    {
+        corner = Vector3.zero;
+
+        Vector3 da = a.outward;
+        Vector3 db = b.outward;
+        da.y = 0f;
+        db.y = 0f;
+
+        float cross = da.x * db.z - da.z * db.x;
+
+        // Parallel, which includes a road that simply carries on as the next one.
+        if (Mathf.Abs(cross) < 0.05f) return false;
+
+        Vector3 delta = b.point - a.point;
+        delta.y = 0f;
+
+        float along = (delta.x * db.z - delta.z * db.x) / cross;
+
+        Vector3 meeting = a.point + da * along;
+
+        // A gentle bend puts the corner a long way off. There the two ends are close together and the straight
+        // join between them is within a metre or so of both lines, so it is the better wall.
+        float desired = Mathf.Max(WallOffset(a.road), WallOffset(b.road));
+        float reach = Mathf.Max(FlatDistance(a.point, b.point), desired) * 1.5f;
+
+        if (Mathf.Abs(along) > reach) return false;
+        if (FlatDistance(b.point, meeting) > reach) return false;
+
+        meeting.y = (a.point.y + b.point.y) * 0.5f;
+        corner = meeting;
+        return true;
+    }
+
+    /// <summary>
+    /// Lays one straight run of a join as a chain of segments no longer than the tool's own segment length, so
+    /// a join follows the ground it crosses exactly as the verge walls do. Returns whether any of it was laid;
+    /// a run with a piece dropped in it is counted as a hole, because that is a gap in the boundary.
+    /// </summary>
+    private bool AddWallRun(Vector3 from, Vector3 to, float margin)
+    {
+        float span = FlatDistance(from, to);
+        if (span <= 0.01f) return false;
+
+        int pieces = Mathf.Clamp(Mathf.CeilToInt(span / Mathf.Max(2f, wallSegmentLength)), 1, 24);
+
+        bool laid = false;
+        bool dropped = false;
+
+        for (int i = 0; i < pieces; i++)
+        {
+            Vector3 start = Vector3.Lerp(from, to, i / (float)pieces);
+            Vector3 finish = Vector3.Lerp(from, to, (i + 1) / (float)pieces);
+
+            if (AddWall(start, finish, wallThickness, false, false, false, margin)) laid = true;
+            else dropped = true;
+        }
+
+        if (dropped && laid) unsealedCount++;
+
+        return laid;
+    }
+
+    /// <summary>
     /// Closes the wall where the level turns a corner or simply stops.
     ///
     /// A chain of walls down two verges is an open tube: the player who reaches its end can drive round the
@@ -957,15 +1101,15 @@ public class TerrainInvisibleWallPainter : EditorWindow
 
             if (best < 0) continue;
 
-            Vector3 a = vergeEnds[i].point;
-            Vector3 b = vergeEnds[best].point;
-
-            if (AddWall(a, b, wallThickness, false, false, true, margin))
+            if (JoinEnds(vergeEnds[i], vergeEnds[best], margin))
             {
                 joinedCount++;
                 used[i] = true;
                 used[best] = true;
             }
+
+            // An end whose join could not be laid at all is left for the cap pass below rather than booked as
+            // joined: a cap is a worse wall than a corner, but an end with no wall at all is a hole.
         }
 
         for (int i = 0; i < vergeEnds.Count; i++)

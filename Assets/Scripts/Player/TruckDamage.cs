@@ -26,6 +26,12 @@ using UnityEngine;
 /// away from coming back. The roof load also takes a few hits to come away, so it leans for a while rather
 /// than being lost on the first contact.
 ///
+/// A part is never found inside another part: a name that matches something drawn inside a part already
+/// found is left out, and the startup log says which names that happened to. The load on the roof is why -
+/// the cone and the ball are drawn inside the load's own root, and bending all three meant the load turned
+/// and the two inside it turned again on their own pivots, which left the ball hanging in the air above the
+/// cone, still attached to a truck that looked whole.
+///
 /// When a part comes off it stops being part of the truck. It is given its own box collider worked out
 /// from what it was drawn as, its own rigidbody, the speed the truck had at the moment of the crash and
 /// some spin - so it lands, slides and tumbles on the road like the wreckage it is. Collisions between
@@ -57,7 +63,8 @@ public class TruckDamage : MonoBehaviour
     {
         [Tooltip("Matched against the name of a child of the truck - case-insensitive, and a substring is " +
                  "enough, so 'wheels' finds both wheel meshes. The part has to be drawn with a mesh: " +
-                 "effects parented under a matching name are left alone.")]
+                 "effects parented under a matching name are left alone. A name that matches something drawn " +
+                 "inside another part is left to that part, which is reported at startup.")]
         public string name;
 
         [Tooltip("How much punishment the part takes compared with the standard. 1 is the standard; 2 " +
@@ -109,7 +116,10 @@ public class TruckDamage : MonoBehaviour
         new BreakablePart { name = "backDoor",    toughness = 1.0f },   // the rear door
         new BreakablePart { name = "backWindow",  toughness = 0.55f },  // the glass in it
         new BreakablePart { name = "iceCream",    toughness = 1.8f, bendScale = 2.2f },   // the load on the roof
-        new BreakablePart { name = "cone",        toughness = 0.3f, bendScale = 2.2f },   // its cone, which leans with it
+        // Its cone is drawn inside the load's own root, so the load carries it: it leans, bends and comes
+        // away as part of the load rather than as a part of its own, and the startup log says as much. The
+        // entry stays for a model that gives the cone a root of its own.
+        new BreakablePart { name = "cone",        toughness = 0.3f, bendScale = 2.2f },   // its cone
         new BreakablePart { name = "wheelsFront", toughness = 3.5f, bendScale = 0.35f },   // the front wheel meshes
         // The rear wheels - 'wheelsBack' in the model - are left out on purpose: the pair the truck is driven
         // and braked on should not shift on its axle or come away, because a wheel that has shifted, or left,
@@ -121,6 +131,9 @@ public class TruckDamage : MonoBehaviour
         // The roof load, in short: it takes about four times the beating it used to (toughness 0.45 -> 1.8),
         // and it leans twice as far as a panel (Bend Scale 2.2). It is the only part that would take part in
         // the quick shake a hit sets off, and that shake is switched off on it (Wobble Scale 0).
+        // The part it matches is the load's own root, which carries no mesh of its own but holds the cone
+        // and the ball: they are drawn inside it and so move with it, which is what keeps the load one piece
+        // - a piece inside a part is never taken as a part of its own.
 
         // Bending, as a rule: the body panels and the lamps hold their shape (Bend Scale 1), the load on the
         // roof is loose on its base and rocks about more (2.2), and a wheel barely shifts at all (0.35), so
@@ -267,6 +280,11 @@ public class TruckDamage : MonoBehaviour
     // settings stay exactly as authored while a level runs.
     private readonly List<Part> foundParts = new List<Part>();
 
+    // Names that matched something drawn inside a part already found, and were therefore left as part of
+    // it. Kept only to be reported at startup, so a name that looks like it should be a part of its own
+    // says what became of it.
+    private readonly List<string> nestedMatches = new List<string>();
+
     private Rigidbody rb;
     private Collider[] ownColliders;
 
@@ -376,6 +394,10 @@ public class TruckDamage : MonoBehaviour
             if (part.attachedCount > 0)
                 text.Append("  +").Append(part.attachedCount).Append(" attached");
         }
+
+        for (int i = 0; i < nestedMatches.Count; i++)
+            text.Append("\n    (drawn inside its part, so not a part of its own: ").Append(nestedMatches[i])
+                .Append(")");
 
         Debug.Log(text.ToString(), this);
     }
@@ -492,6 +514,18 @@ public class TruckDamage : MonoBehaviour
                 // system is not something the truck can lose.
                 if (!HasMesh(child.GetComponentsInChildren<Renderer>(true))) continue;
 
+                // Drawn inside a part that is already found, so it is a piece of that part rather than a
+                // piece of its own: taken as well, the same geometry would bend twice - once with the part
+                // it belongs to, and once more on its own pivot. The load on the roof is built exactly this
+                // way, and that is what used to leave the ice cream hanging above the roof.
+                Part around = PartAround(child);
+                if (around != null)
+                {
+                    nestedMatches.Add(wanted.name + " matched '" + child.name + "', which is drawn inside '" +
+                                      around.transform.name + "'");
+                    continue;
+                }
+
                 // Whatever is drawn on this part is moved under it, so the two become one piece: the
                 // lettering bends with the plate and comes away with it. Done before the renderers are
                 // read again, so the piece's outline includes what was moved onto it.
@@ -509,6 +543,30 @@ public class TruckDamage : MonoBehaviour
                 if (part.wobbleScale > 0f) anyWobble = true;
             }
         }
+    }
+
+    /// <summary>
+    /// The part a candidate is drawn inside, if a part has already been found around it, rather than the
+    /// candidate being a piece of its own.
+    ///
+    /// The roof load is built this way, and it is the reason this rule exists: its file's root carries no
+    /// mesh of its own but holds the cone and the ice cream, so a name like 'iceCream' matches the root
+    /// and the ball inside it, and 'cone' matches a child of the same root. Taken as three parts, one
+    /// knock near the roof bent the same geometry three times over - the load turned, and the ball and the
+    /// cone turned again on their own pivots inside it - which left the ice cream sitting in the air above
+    /// the roof, neither seated on the cone nor off the truck. As one part, the load leans and leaves as
+    /// the single piece it is, and the parts inside it move with it.
+    /// </summary>
+    private Part PartAround(Transform candidate)
+    {
+        for (int i = 0; i < foundParts.Count; i++)
+        {
+            Transform part = foundParts[i].transform;
+
+            if (part != null && candidate.IsChildOf(part)) return foundParts[i];
+        }
+
+        return null;
     }
 
     private static bool HasMesh(Renderer[] renderers)

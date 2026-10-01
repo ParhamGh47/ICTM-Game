@@ -3,9 +3,10 @@ using UnityEngine;
 /// <summary>
 /// Drives one background car around the closed waypoint loop a painter built for it.
 ///
-/// The car steers towards the next waypoint and is moved with <c>MovePosition</c>/<c>MoveRotation</c>, so
-/// its path is exactly the loop and nothing the physics does can talk it out of it. On top of that it
-/// has four reactions:
+/// The car is moved with <c>MovePosition</c>/<c>MoveRotation</c>, so its path is exactly the loop and nothing
+/// the physics does can talk it out of it. It steers at a point a look-ahead further along that loop rather
+/// than at the next waypoint, so its wheels follow the road continuously instead of turning in steps at
+/// every one of them - see <see cref="lookAhead"/>. On top of that it has four reactions:
 ///
 ///  - <b>Slowing for corners</b>: it measures the bend of the path ahead - the angle it is being asked to
 ///    steer now, and the change of direction between the leg it is driving and the one after it - and
@@ -29,10 +30,12 @@ using UnityEngine;
 ///  - <b>Being knocked about</b>: once it is tipped past <see cref="uprightLimit"/> it stops being driven
 ///    and is left to the physics until it comes to rest. That is what stops the old kangaroo hop - the
 ///    drive used to keep forcing position and rotation onto a body lying on its side, so every collision
-///    resolution threw it into the air again. When it has settled, a car with ground under it is stood back
-///    up and put on the nearest waypoint ahead of it and drives on - being shoved off the road is not meant
-///    to be a life sentence - while one resting on nothing at all (hung in a tree, over the edge of the
-///    level) is left standing where it lies, because there is no road to put it back on.
+///    resolution threw it into the air again. When it has settled it is looked at: a car still on its
+///    wheels is stood back up, put on the nearest waypoint ahead of it and driven on - being shoved off the
+///    road is not meant to be a life sentence - while one that finished on its side or on its roof (past
+///    <see cref="wreckTilt"/>) is left lying exactly where it came to rest, because a car that far over is a
+///    wreck and driving on is not something it can be asked to do any more. So is one resting on nothing at
+///    all (hung in a tree, over the edge of the level), which has no road under it to be put back on.
 /// </summary>    [RequireComponent(typeof(Rigidbody))]
 public class AICarController : MonoBehaviour
 {
@@ -84,6 +87,24 @@ public class AICarController : MonoBehaviour
 
     [Tooltip("Extra steering authority in a corner, so the arc is held rather than run wide.")]
     public float cornerSteerBoost = 2f;
+
+    [Header("Steering")]
+    [Tooltip("How far up the path a car steers at, in metres, on a straight. A car that steers at the " +
+             "waypoint it is driving to only ever turns when that waypoint changes: nothing through the " +
+             "straight, then a twist all at once as the next one is taken up, which at 15 m apart is a twitch " +
+             "every couple of seconds. Steering at a point this far along the path instead makes the turn " +
+             "continuous, and the waypoints are left to say where the path goes. Roughly a waypoint's worth: " +
+             "longer cuts corners, shorter follows the waypoint-to-waypoint chords and twitches again.")]
+    public float lookAhead = 12f;
+
+    [Tooltip("And how far up the path it steers at through the tightest corner, where a long look-ahead " +
+             "would cut the corner off. Short enough to hold a turnaround.")]
+    public float cornerLookAhead = 4f;
+
+    [Tooltip("How fast the look-ahead may shorten and lengthen, in metres per second. The corner reading it " +
+             "is taken from steps when the car takes up its next waypoint, so this is what keeps the steering " +
+             "point sliding rather than jumping when it does.")]
+    public float lookAheadResponse = 20f;
 
     [Header("Wheels (visual only)")]
     public Transform[] wheels;
@@ -169,9 +190,13 @@ public class AICarController : MonoBehaviour
     public float groundCheckDistance = 2.5f;
 
     [Tooltip("Stand a recovered car back up on its wheels - keeping the heading it ended up with, dropping " +
-             "the lean the collision gave it - before driving it on. This is also what lifts a car lying flat " +
-             "on its side back onto its wheels.")]
+             "the lean the collision gave it - before driving it on.")]
     public bool levelOnRecovery = true;
+
+    [Tooltip("How far from upright a settled car may lie and still be stood back up and driven on. Past this " +
+             "it finished on its side or on its roof: it is left lying exactly where it came to rest for the " +
+             "rest of the level - free to be shunted about, but never driven again.")]
+    public float wreckTilt = 70f;
 
     Rigidbody rb;
     float speedMS;
@@ -186,6 +211,10 @@ public class AICarController : MonoBehaviour
     float avoidOffset;
     float avoidSide = -1f;
 
+    // How far up the path the car is steering at right now, eased between <see cref="lookAhead"/> on a
+    // straight and <see cref="cornerLookAhead"/> in a corner.
+    float lookAheadNow;
+
     // The horn, and how much of it this car has already acted on.
     float yieldUntil;
     float hornSeen = float.NegativeInfinity;
@@ -194,9 +223,13 @@ public class AICarController : MonoBehaviour
     // again once it has come to rest somewhere it can still drive from.
     bool knockedOver;
 
-    // Set when it has settled somewhere it can never drive from - on its roof or side, or resting on nothing
-    // at all. It stays there, and nothing is run on it again.
+    // Set when it has settled somewhere it can never drive from - resting on nothing at all: hung in a tree,
+    // over the edge of the level. It is frozen there, and nothing is run on it again.
     bool stranded;
+
+    // Set when it has settled on its side or on its roof. It is left lying exactly where it came to rest and
+    // never driven again, but it stays an ordinary rigidbody, so the player can still shunt the wreck about.
+    bool abandoned;
 
     float settleTimer;
     float knockedTimer;
@@ -267,6 +300,8 @@ public class AICarController : MonoBehaviour
         rb.position += Vector3.up * 0.05f;
 
         speedMS = speedKPH / 3.6f;
+        lookAheadNow = lookAhead;
+
         CacheWaypoints();
         ApplyHeadlights();
     }
@@ -390,7 +425,7 @@ public class AICarController : MonoBehaviour
 
     void FixedUpdate()
     {
-        if (stranded) return;
+        if (stranded || abandoned) return;
 
         if (knockedOver)
         {
@@ -416,16 +451,21 @@ public class AICarController : MonoBehaviour
 
         ListenForHorn();
 
-        Transform target = waypoints[currentWaypoint];
+        // The pose the physics actually holds, not the one being drawn. This runs in FixedUpdate, where the
+        // transform still carries the interpolated pose of the frame before - reading the heading off that
+        // and then rotating the rigidbody on top of it is steering against a heading the body has already
+        // left behind, which the next step answers by steering back, and the cars shimmied. Everything below
+        // reads the body and writes the body; the interpolation is left to smooth it on screen.
+        Vector3 position = rb.position;
+        Vector3 forward = rb.rotation * Vector3.forward;
 
-        Vector3 toTarget = target.position - transform.position;
+        Transform target = NextTarget(position);
+        if (target == null) return;
+
+        Vector3 toTarget = target.position - position;
         toTarget.y = 0f;
 
-        if (toTarget.magnitude < reachThreshold)
-        {
-            currentWaypoint = (currentWaypoint + 1) % waypoints.Length;
-            return;
-        }
+        if (toTarget.sqrMagnitude < 0.0001f) return;
 
         // Right of the direction it is actually travelling, which is what "pull over to the shoulder"
         // means on both lanes: each leg of the loop runs on the side of the road that makes its own
@@ -439,16 +479,18 @@ public class AICarController : MonoBehaviour
         // point is a whole waypoint away, so a metre of pull here is a gentle lean, not a swerve.
         Vector3 aim = target.position + right * avoidOffset;
 
-        Vector3 desiredDir = aim - transform.position;
+        Vector3 desiredDir = aim - position;
         desiredDir.y = 0f;
 
         if (desiredDir.sqrMagnitude < 0.0001f) return;
         desiredDir.Normalize();
 
-        float angle = Vector3.SignedAngle(transform.forward, desiredDir, Vector3.up);
-        float steering = Mathf.Clamp(angle, -maxSteerAngle, maxSteerAngle);
+        // How hard the car is being asked to turn towards the waypoint. This is what the cornering is read
+        // off, and it is deliberately still the angle to the waypoint: it is the reading that steps up when
+        // a car arrives at a bend, which is what makes it slow for one.
+        float angle = Vector3.SignedAngle(forward, desiredDir, Vector3.up);
 
-        float tightness = CornerTightness(angle, target);
+        float tightness = CornerTightness(angle, target, position);
 
         // Slow for the corner going in, and take your time coming out of it. Cars in a lane all share one
         // cruising speed, so what keeps their spacing is that they all brake and accelerate in the same
@@ -461,17 +503,93 @@ public class AICarController : MonoBehaviour
 
         float steerRate = turnSpeed * Mathf.Lerp(1f, cornerSteerBoost, tightness);
 
-        Quaternion steerRot = Quaternion.AngleAxis(steering, Vector3.up);
+        // Steer at a point set distance further ALONG THE PATH, rather than at the next waypoint itself.
+        // The waypoint is a fixed point the car has to reach, so the direction towards it only changes when
+        // it is passed and the car turns in steps - straight, twist, straight - which is what made the traffic
+        // look twitchy. The point below slides along the path with the car, so the direction it is steered at
+        // changes as smoothly as the road under it does. The pull for what the car is going around rides on
+        // that point, exactly as it rode on the waypoint before.
+        float wantedLook = Mathf.Lerp(lookAhead, cornerLookAhead, tightness);
+        lookAheadNow = Mathf.MoveTowards(lookAheadNow, wantedLook, lookAheadResponse * Time.fixedDeltaTime);
+
+        Vector3 steerAt = PointAlongPath(position, lookAheadNow) + right * avoidOffset;
+        Vector3 steerDir = steerAt - position;
+        steerDir.y = 0f;
+
+        if (steerDir.sqrMagnitude < 0.0001f) steerDir = desiredDir;
+        steerDir.Normalize();
+
+        float steerAngle = Mathf.Clamp(Vector3.SignedAngle(forward, steerDir, Vector3.up), -maxSteerAngle, maxSteerAngle);
+
+        Quaternion steerRot = Quaternion.AngleAxis(steerAngle, Vector3.up);
         Quaternion targetRot = rb.rotation * steerRot;
 
         rb.MoveRotation(
             Quaternion.Slerp(rb.rotation, targetRot, steerRate * Time.fixedDeltaTime)
         );
 
-        Vector3 move = transform.forward * (speedMS * speedFactor * Time.fixedDeltaTime);
-        rb.MovePosition(rb.position + move);
+        Vector3 move = forward * (speedMS * speedFactor * Time.fixedDeltaTime);
+        rb.MovePosition(position + move);
 
         DampVerticalKick();
+    }
+
+    /// <summary>
+    /// A point <paramref name="distance"/> metres further along the loop than the car is, taken along the
+    /// waypoint chain so it follows the road rather than cutting across it. The car's own position starts the
+    /// walk, so the point can never be behind it.
+    /// </summary>
+    Vector3 PointAlongPath(Vector3 position, float distance)
+    {
+        Vector3 from = position;
+        int index = currentWaypoint;
+        float left = distance;
+
+        for (int guard = 0; guard < waypoints.Length; guard++)
+        {
+            Transform step = waypoints[index];
+            if (step == null) return from;
+
+            Vector3 to = step.position;
+            float leg = new Vector2(to.x - from.x, to.z - from.z).magnitude;
+
+            // Between the car and the waypoint it is driving at, so the look-ahead lands on the leg it is
+            // actually on. The measurement is flat because the steering is: only x and z are wanted.
+            if (leg >= left) return leg > 0.0001f ? Vector3.Lerp(from, to, left / leg) : to;
+
+            left -= leg;
+            from = to;
+            index = (index + 1) % waypoints.Length;
+        }
+
+        return from;
+    }
+
+    /// <summary>
+    /// The waypoint the car should be driving at, stepping past any it has already reached.
+    ///
+    /// Reaching one used to cost the car the whole step: it advanced the index and returned without moving
+    /// or steering, so every car came to a dead stop for one physics step at every waypoint of the loop -
+    /// which at 15 m apart and 25 km/h is a visible hitch every couple of seconds, and the points where the
+    /// waypoints bunch (the bends and the turnarounds) hitch hardest. The car drives on in the same step
+    /// instead, towards the first waypoint that is genuinely ahead of it.
+    /// </summary>
+    Transform NextTarget(Vector3 position)
+    {
+        for (int i = 0; i < waypoints.Length; i++)
+        {
+            Transform candidate = waypoints[currentWaypoint];
+            if (candidate == null) return null;
+
+            Vector3 to = candidate.position - position;
+            to.y = 0f;
+
+            if (to.magnitude >= reachThreshold) return candidate;
+
+            currentWaypoint = (currentWaypoint + 1) % waypoints.Length;
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -483,7 +601,7 @@ public class AICarController : MonoBehaviour
     /// is already in the turn - by which point it is too late to do anything but overshoot it - whereas the
     /// bend between the two legs warns of it while the car is still on the straight leading in.
     /// </summary>
-    float CornerTightness(float angle, Transform target)
+    float CornerTightness(float angle, Transform target, Vector3 position)
     {
         float needed = Mathf.Abs(angle);
 
@@ -492,7 +610,7 @@ public class AICarController : MonoBehaviour
         Transform after = waypoints[(currentWaypoint + 1) % waypoints.Length];
         if (after == null) return Tightness(needed);
 
-        Vector3 thisLeg = target.position - transform.position;
+        Vector3 thisLeg = target.position - position;
         Vector3 nextLeg = after.position - target.position;
         thisLeg.y = 0f;
         nextLeg.y = 0f;
@@ -672,7 +790,7 @@ public class AICarController : MonoBehaviour
 
     bool IsOnItsWheels()
     {
-        return Vector3.Angle(transform.up, Vector3.up) <= uprightLimit;
+        return Vector3.Angle(rb.rotation * Vector3.up, Vector3.up) <= uprightLimit;
     }
 
     /// <summary>Stops driving the car and hands it to the physics, which is what makes the hit read.</summary>
@@ -685,13 +803,12 @@ public class AICarController : MonoBehaviour
 
     /// <summary>
     /// A car that is no longer being driven is left entirely to the physics until it has come to rest - and
-    /// then it is looked at: a car with ground under it is stood back up on its wheels, put on its path and
-    /// driven on, whether the hit left it leaning or left it flat on its side. Not being left standing is
-    /// deliberate: a wrecked car that never moves again is one a driver meets later and cannot tell apart
-    /// from a car that simply refuses to go, and a platoon is meant to look like traffic.
-    ///
-    /// The one thing that does strand a car is having nothing under it to drive from - hung in a tree, over
-    /// the edge of a level - where there is no ground and so nothing to put it back on.
+    /// then it is looked at. A car still on its wheels is stood back up, put on its path and driven on:
+    /// leaving it standing is deliberate, because a car that never moves again is one a driver meets later
+    /// and cannot tell apart from a car that simply refuses to go, and a platoon is meant to look like
+    /// traffic. A car that finished past <see cref="wreckTilt"/> is not put back on its path, and neither is
+    /// one with nothing under it to drive from - hung in a tree, over the edge of a level - where there is no
+    /// ground and so nothing to put it back on.
     ///
     /// This is the one place the drive is ever re-attached, so it is deliberately slow to judge: the car has
     /// to be calm (or to have been rolling about for <see cref="settleTimeout"/> seconds) before anything is
@@ -716,7 +833,36 @@ public class AICarController : MonoBehaviour
             return;
         }
 
+        if (!CanBeStoodBackUp())
+        {
+            Abandon();
+            return;
+        }
+
         ResumeDriving();
+    }
+
+    /// <summary>
+    /// Whether a settled car is still the right way up enough to be stood back up and driven on. Past
+    /// <see cref="wreckTilt"/> it came to rest on its side or on its roof, which is the one state a car is
+    /// not asked to come back from.
+    /// </summary>
+    bool CanBeStoodBackUp()
+    {
+        return Vector3.Angle(rb.rotation * Vector3.up, Vector3.up) <= wreckTilt;
+    }
+
+    /// <summary>
+    /// Leaves a car that came to rest on its side or on its roof exactly where it lies. The drive is never
+    /// re-attached, so it never drives again - but the body is left an ordinary rigidbody rather than frozen,
+    /// so a wreck is still something on the road the player can hit and shove about.
+    /// </summary>
+    void Abandon()
+    {
+        abandoned = true;
+        knockedOver = false;
+        settleTimer = 0f;
+        knockedTimer = 0f;
     }
 
     /// <summary>

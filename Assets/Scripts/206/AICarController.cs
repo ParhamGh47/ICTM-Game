@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -6,11 +7,14 @@ using UnityEngine;
 /// The car is moved with <c>MovePosition</c>/<c>MoveRotation</c>, so its path is exactly the loop and nothing
 /// the physics does can talk it out of it. It steers at a point a look-ahead further along that loop rather
 /// than at the next waypoint, so its wheels follow the road continuously instead of turning in steps at
-/// every one of them - see <see cref="lookAhead"/>. On top of that it has four reactions:
+/// every one of them - see <see cref="lookAhead"/>. Through the tightest part of a corner that steering
+/// falls back to the waypoint itself, because a look-ahead point doubles back with a turnaround and a car
+/// steered at one behind it drives round in a circle - see <see cref="BendAhead"/>. On top of that it has
+/// four reactions:
 ///
 ///  - <b>Slowing for corners</b>: it measures the bend of the path ahead - the angle it is being asked to
-///    steer now, and the change of direction between the leg it is driving and the one after it - and
-///    takes the corner at a share of its speed, with extra steering authority to hold the arc. A loop's
+///    steer now, and the change of direction over the next few waypoints after that - and takes the corner
+///    at a share of its speed, with extra steering authority to hold the arc. A loop's
 ///    turnaround is 180 degrees of change of direction within a few metres, which is not something to
 ///    arrive at at cruising speed: overshooting it means missing a waypoint, turning back for it, and
 ///    being run into by the cars behind.
@@ -94,7 +98,9 @@ public class AICarController : MonoBehaviour
              "straight, then a twist all at once as the next one is taken up, which at 15 m apart is a twitch " +
              "every couple of seconds. Steering at a point this far along the path instead makes the turn " +
              "continuous, and the waypoints are left to say where the path goes. Roughly a waypoint's worth: " +
-             "longer cuts corners, shorter follows the waypoint-to-waypoint chords and twitches again.")]
+             "longer cuts corners, shorter follows the waypoint-to-waypoint chords and twitches again. It is " +
+             "only used where the path keeps going roughly the same way - through a tight corner the car " +
+             "aims at the waypoint instead, so this never has to be short enough to hold a turnaround.")]
     public float lookAhead = 12f;
 
     [Tooltip("And how far up the path it steers at through the tightest corner, where a long look-ahead " +
@@ -215,6 +221,13 @@ public class AICarController : MonoBehaviour
     // straight and <see cref="cornerLookAhead"/> in a corner.
     float lookAheadNow;
 
+    // The spot lights this car lit at the start, and the lamp materials it tinted, kept so they can be put
+    // out again if the lamps are knocked off the car - see <see cref="KillHeadlights"/>. Their references
+    // are held directly rather than searched for, because a lamp that has been broken off is no longer a
+    // child of the car by the time it needs putting out.
+    readonly List<Light> litLights = new List<Light>();
+    readonly List<Material> litLenses = new List<Material>();
+
     // The horn, and how much of it this car has already acted on.
     float yieldUntil;
     float hornSeen = float.NegativeInfinity;
@@ -326,6 +339,8 @@ public class AICarController : MonoBehaviour
 
         // The spot lights: on or off, and given this car's colour, so the pool of light on the road matches
         // the lamp it comes out of.
+        litLights.Clear();
+
         var lights = GetComponentsInChildren<Light>(true);
         foreach (var light in lights)
         {
@@ -333,7 +348,11 @@ public class AICarController : MonoBehaviour
 
             light.enabled = lightsOn;
             light.color = tint;
+
+            litLights.Add(light);
         }
+
+        litLenses.Clear();
 
         var renderers = GetComponentsInChildren<MeshRenderer>(true);
         foreach (var renderer in renderers)
@@ -358,8 +377,33 @@ public class AICarController : MonoBehaviour
 
                 material.EnableKeyword(EmissionKeyword);
                 material.SetColor(EmissionColorId, lightsOn ? tint * brightness : Color.black);
+
+                // Its own copy, made by the line reading the array above, so putting this one out cannot
+                // reach the lens the next car along the road is wearing.
+                litLenses.Add(material);
             }
         }
+    }
+
+    /// <summary>
+    /// Puts the car's lights out for good: the spot lights it drives with, and the glow in the lamp
+    /// materials it lit at the start.
+    ///
+    /// For a car whose lamps have been knocked off it, which the passing car's damage reports. A car that
+    /// has lost the lenses it was lighting has nothing left to shine through, so the pool of light on the
+    /// road would be the only thing left of its headlights, floating ahead of a car with no lamps on it at
+    /// all. The references are held rather than looked up, because by the time this is called the lens is
+    /// already on its way off the car and no longer a child of it.
+    /// </summary>
+    public void KillHeadlights()
+    {
+        lightsOn = false;
+
+        for (int i = 0; i < litLights.Count; i++)
+            if (litLights[i] != null) litLights[i].enabled = false;
+
+        for (int i = 0; i < litLenses.Count; i++)
+            if (litLenses[i] != null) litLenses[i].SetColor(EmissionColorId, Color.black);
     }
 
     /// <summary>
@@ -490,7 +534,13 @@ public class AICarController : MonoBehaviour
         // a car arrives at a bend, which is what makes it slow for one.
         float angle = Vector3.SignedAngle(forward, desiredDir, Vector3.up);
 
-        float tightness = CornerTightness(angle, target, position);
+        // The whole turn the path takes over the next few waypoints, as opposed to the angle the car is being
+        // asked to steer right now. The two are used for different things: this one is what the steering
+        // blends against below, because it is the one that sees a turnaround from far enough back to do
+        // something about it.
+        float bend = BendAhead(position, target);
+
+        float tightness = Tightness(Mathf.Max(Mathf.Abs(angle), bend));
 
         // Slow for the corner going in, and take your time coming out of it. Cars in a lane all share one
         // cruising speed, so what keeps their spacing is that they all brake and accelerate in the same
@@ -520,6 +570,22 @@ public class AICarController : MonoBehaviour
         steerDir.Normalize();
 
         float steerAngle = Mathf.Clamp(Vector3.SignedAngle(forward, steerDir, Vector3.up), -maxSteerAngle, maxSteerAngle);
+
+        // Through the tightest part of a corner the car aims at the waypoint it is driving to instead of at
+        // the point further along the path. A point on the path is only a good thing to steer at when the
+        // path keeps going roughly the same way: at a turnaround the path doubles back, so the look-ahead
+        // point ends up behind the car, and a car that keeps driving forward at a point behind it circles
+        // the turn instead of taking it - the turn is made two or three times over. The waypoint is a fixed
+        // point, so steering at it converges however far round the car already is - which is what the cars
+        // did before the look-ahead was introduced. On straights and ordinary bends the blend does nothing
+        // and the steering stays the smooth look-ahead one.
+        float bendTightness = Tightness(bend);
+
+        if (bendTightness > 0f)
+        {
+            float towardWaypoint = Mathf.Clamp(angle, -maxSteerAngle, maxSteerAngle);
+            steerAngle = Mathf.Lerp(steerAngle, towardWaypoint, bendTightness);
+        }
 
         Quaternion steerRot = Quaternion.AngleAxis(steerAngle, Vector3.up);
         Quaternion targetRot = rb.rotation * steerRot;
@@ -593,33 +659,29 @@ public class AICarController : MonoBehaviour
     }
 
     /// <summary>
-    /// How much of a corner the car is looking at, from 0 on a straight to 1 at its tightest: the sharper of
-    /// the angle it is being asked to steer right now and the bend between the leg of the path it is driving
-    /// and the one after it.
+    /// How far the path turns over the next few waypoints, in degrees - the change of direction between the
+    /// leg the car is driving and the leg it will be driving three waypoints further on.
     ///
-    /// The second half is what matters at a turnaround. The angle to the next waypoint only grows once the car
-    /// is already in the turn - by which point it is too late to do anything but overshoot it - whereas the
-    /// bend between the two legs warns of it while the car is still on the straight leading in.
+    /// A turnaround is not one junction. It is built from five waypoints, and the change of direction across
+    /// any single one of them is only about ninety degrees, which is easily mistaken for an ordinary bend in
+    /// the road. Read across three legs instead and the whole turn is there - far enough back that the car is
+    /// still on the straight leading in, and can be steered for it rather than driven into.
     /// </summary>
-    float CornerTightness(float angle, Transform target, Vector3 position)
+    float BendAhead(Vector3 position, Transform target)
     {
-        float needed = Mathf.Abs(angle);
+        if (waypoints == null || waypoints.Length < 4) return 0f;
 
-        if (waypoints == null || waypoints.Length < 2) return Tightness(needed);
-
-        Transform after = waypoints[(currentWaypoint + 1) % waypoints.Length];
-        if (after == null) return Tightness(needed);
+        Transform after = waypoints[(currentWaypoint + 3) % waypoints.Length];
+        if (after == null) return 0f;
 
         Vector3 thisLeg = target.position - position;
         Vector3 nextLeg = after.position - target.position;
         thisLeg.y = 0f;
         nextLeg.y = 0f;
 
-        float bend = thisLeg.sqrMagnitude > 0.0001f && nextLeg.sqrMagnitude > 0.0001f
+        return thisLeg.sqrMagnitude > 0.0001f && nextLeg.sqrMagnitude > 0.0001f
             ? Vector3.Angle(thisLeg, nextLeg)
             : 0f;
-
-        return Tightness(Mathf.Max(needed, bend));
     }
 
     /// <summary>A change of direction in degrees, as a share of the way to the tightest corner.</summary>

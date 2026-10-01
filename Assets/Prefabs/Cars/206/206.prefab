@@ -135,6 +135,7 @@ GameObject:
   - component: {fileID: 589969157592520974}
   - component: {fileID: 589969157592520977}
   - component: {fileID: 589969157592520976}
+  - component: {fileID: 1796612345678901234}
   m_Layer: 0
   m_Name: 206
   m_TagString: Untagged
@@ -142,6 +143,52 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
+--- !u!114 &1796612345678901234
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 589969157592520975}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c0dd1386bfa4008a89355353d6ba17e1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  enableDamage: 1
+  parts:
+  - name: Bumper
+    toughness: 0.45
+    bendScale: 1
+  - name: door
+    toughness: 0.5
+    bendScale: 1
+  - name: HeadLights
+    toughness: 0.35
+    bendScale: 1
+  - name: Front Wheels
+    toughness: 0.8
+    bendScale: 0.4
+  - name: Rear Wheels
+    toughness: 0.8
+    bendScale: 0.4
+  minimumImpactSpeed: 2.5
+  damagePerSpeed: 0.07
+  breakImpactSpeed: 10
+  impactCooldown: 0.15
+  undersideAngle: 55
+  maxBendDegrees: 16
+  maxBendOffset: 0.04
+  knockOnChance: 0.4
+  knockOnRadius: 0.6
+  knockOnFraction: 0.5
+  debrisLifetime: 12
+  debrisThrow: 0.5
+  debrisKick: 2
+  debrisMinSpin: 90
+  debrisMaxSpin: 420
+  logDamage: 1
+  logHits: 0
 --- !u!4 &589969157592520974
 Transform:
   m_ObjectHideFlags: 0

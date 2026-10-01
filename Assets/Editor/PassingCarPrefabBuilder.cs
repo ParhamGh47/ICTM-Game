@@ -28,6 +28,12 @@ using UnityEngine;
 /// can be rebuilt from Tools > Road Tools > Create Car Prefab From Model. The result goes in
 /// Assets/Prefabs/Cars, which is where <see cref="PassingCarsSpawner"/> looks, so it joins the fleet on its
 /// own.
+///
+/// One thing a copied component cannot know is what a new model calls its parts. The breakable parts come
+/// over from the template with the template's names, so a model whose panels are called something else
+/// keeps them all: the part list is there to be edited on the built prefab, and the car's damage component
+/// says as much in the console the first time a car of that kind is driven. The names to put there are the
+/// model's own, which the Inspector shows.
 /// </summary>
 public class PassingCarPrefabBuilder : EditorWindow
 {

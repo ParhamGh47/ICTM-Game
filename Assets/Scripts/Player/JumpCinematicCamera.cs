@@ -22,15 +22,13 @@ using UnityEngine;
 /// Cinemachine way of doing this, so the blend in and the blend back come from the brain like any other
 /// camera change.
 ///
-/// It is switched off and on from the options (<see cref="CinematicSettings"/>), and turning it off during
-/// a shot ends the shot there and then.
+/// The shot is always played; a truck prefab that should not play it at all leaves <see cref="enable"/> off.
 /// </summary>
 [RequireComponent(typeof(Rigidbody))]
 public class JumpCinematicCamera : MonoBehaviour
 {
     [Header("When")]
-    [Tooltip("Whether this truck plays the jump cinematic at all. The player's own switch is in the " +
-             "options; this is the per-prefab one.")]
+    [Tooltip("Whether this truck plays the jump cinematic at all.")]
     public bool enable = true;
 
     [Tooltip("How long the truck has to have been over the gap before the shot begins. A moment of air is " +
@@ -53,14 +51,19 @@ public class JumpCinematicCamera : MonoBehaviour
 
     [Header("The shot")]
     [Tooltip("How far to the side of the truck the shot camera sits.")]
-    public float sideDistance = 4.5f;
+    public float sideDistance = 2.5f;
 
-    [Tooltip("How high above the truck the shot camera sits.")]
-    public float shotHeight = 2.3f;
+    [Tooltip("How high above the truck the shot camera sits, before the up-or-down choice below moves it.")]
+    public float shotHeight = 1.15f;
+
+    [Tooltip("How far above or below the truck the shot may sit. Whether the shot is taken from above the " +
+             "truck or from a little below it is chosen afresh for every jump, the same way the side is, and " +
+             "this is how far up or down that choice may go. Kept small so both are still shots of the truck.")]
+    public float verticalSpread = 0.6f;
 
     [Tooltip("How far behind the truck the shot camera sits, so the shot is a little down the road rather " +
              "than straight across.")]
-    public float backDistance = 1.2f;
+    public float backDistance = 0.5f;
 
     [Tooltip("How high on the truck the shot is aimed, above its origin.")]
     public float lookHeight = 0.6f;
@@ -69,9 +72,10 @@ public class JumpCinematicCamera : MonoBehaviour
     public float shotFieldOfView = 45f;
 
     [Tooltip("How much the shot varies from jump to jump, as a fraction. It picks a side for every jump - " +
-             "sometimes left, sometimes right - and nudges how far out, how high, how far back and how tight " +
-             "the framing is, and how slow the slow motion is, by up to this much. That is what keeps a " +
-             "level's jumps from all playing as the same shot.")]
+             "sometimes left, sometimes right - and whether the shot is taken from above the truck or from a " +
+             "little below it, and nudges how far out, how far back and how tight the framing is, and how slow " +
+             "the slow motion is, by up to this much. That is what keeps a level's jumps from all playing as " +
+             "the same shot.")]
     [Range(0f, 0.5f)]
     public float variation = 0.18f;
 
@@ -180,7 +184,8 @@ public class JumpCinematicCamera : MonoBehaviour
 
         if (!CanRun())
         {
-            // Switching it off in the options during a shot ends the shot now rather than at the end of it.
+            // Paused, or the truck is not in a state to be filmed: end any shot now rather than at the end
+            // of it, so the view is handed back before the pause takes the clock.
             if (stage != Stage.Idle) Finish();
             return;
         }
@@ -203,7 +208,7 @@ public class JumpCinematicCamera : MonoBehaviour
 
     private bool CanRun()
     {
-        if (!enable || !CinematicSettings.JumpCamera) return false;
+        if (!enable) return false;
         if (brain == null || shotCamera == null) return false;
         if (rb == null || jump == null) return false;
 
@@ -245,13 +250,16 @@ public class JumpCinematicCamera : MonoBehaviour
 
         playedThisJump = true;
 
-        // A side and a nudge to the framing, chosen afresh every jump. The side is the one that matters most
-        // - the same shot from the same side every time reads as a canned animation - and the rest keeps the
-        // shot from being identical even when the side happens to repeat.
+        // A corner and a nudge to the framing, chosen afresh every jump. The side and the height are the two
+        // that matter most - the same shot from the same quarter every time reads as a canned animation - and
+        // both are picked outright rather than nudged: sometimes left, sometimes right, and sometimes a shot
+        // from above the truck, sometimes one from a little below it. The rest keeps the shot from being
+        // identical even when the quarter happens to repeat.
         float spread = Mathf.Clamp01(variation);
         float side = Random.value < 0.5f ? -1f : 1f;
+        float upDown = Random.value < 0.5f ? -1f : 1f;
         float distance = sideDistance * Random.Range(1f - spread, 1f + spread);
-        float height = shotHeight * Random.Range(1f - spread, 1f + spread);
+        float height = shotHeight + upDown * verticalSpread * Random.Range(0.55f, 1f);
         float back = backDistance * Random.Range(1f - spread, 1f + spread);
         float aim = lookHeight * Random.Range(1f - spread, 1f + spread);
         float lens = shotFieldOfView * Random.Range(1f - spread * 0.5f, 1f + spread * 0.5f);
@@ -260,7 +268,7 @@ public class JumpCinematicCamera : MonoBehaviour
 
         if (transposer != null)
             transposer.m_FollowOffset =
-                right * (side * distance) + Vector3.up * height - forward * back;
+                right * (side * distance) + Vector3.up * Mathf.Max(0.3f, height) - forward * back;
 
         if (shotComposer != null)
             shotComposer.m_TrackedObjectOffset = Vector3.up * aim;

@@ -100,11 +100,9 @@ public static class SoundSettings
         "Sound.Environment",
     };
 
-    private const string CameraMixKey = "Sound.CameraMix";   // 0 / 1, defaults on
-
     // ---------------------------------------------------------------- state
 
-    /// <summary>Raised whenever a channel or the camera mix changes, so every sound can catch up.</summary>
+    /// <summary>Raised whenever a channel changes, so every sound can catch up.</summary>
     public static event Action Changed;
 
     private static readonly SoundLevel[] levels =
@@ -113,12 +111,6 @@ public static class SoundSettings
     };
 
     private static bool loaded;
-
-    /// <summary>
-    /// Whether the engine is re-balanced for the camera the player is driving from. See
-    /// <see cref="EngineAudio"/> - it is the only thing that reads it.
-    /// </summary>
-    public static bool CameraMix { get; private set; } = true;
 
     // ---------------------------------------------------------------- startup
 
@@ -142,8 +134,6 @@ public static class SoundSettings
 
         for (int i = 0; i < levels.Length; i++)
             levels[i] = Clamp(PlayerPrefs.GetInt(Keys[i], (int)SoundLevel.High));
-
-        CameraMix = PlayerPrefs.GetInt(CameraMixKey, 1) != 0;
     }
 
     // ---------------------------------------------------------------- the player's choice
@@ -226,20 +216,6 @@ public static class SoundSettings
         if (Changed != null) Changed();
     }
 
-    /// <summary>Turns the engine's camera balancing on or off.</summary>
-    public static void SetCameraMix(bool on)
-    {
-        EnsureLoaded();
-
-        if (CameraMix == on) return;
-
-        CameraMix = on;
-
-        Save();
-
-        if (Changed != null) Changed();
-    }
-
     // ---------------------------------------------------------------- what a sound asks for
 
     /// <summary>
@@ -269,12 +245,11 @@ public static class SoundSettings
 
     // ---------------------------------------------------------------- loading and saving
 
-    /// <summary>Everything back to full volume and the camera mix on, for a "restore defaults" button.</summary>
+    /// <summary>Everything back to full volume, for a "restore defaults" button.</summary>
     public static void ResetToDefaults()
     {
         EnsureLoaded();
 
-        PlayerPrefs.DeleteKey(CameraMixKey);
         for (int i = 0; i < Keys.Length; i++) PlayerPrefs.DeleteKey(Keys[i]);
         PlayerPrefs.Save();
 
@@ -289,7 +264,6 @@ public static class SoundSettings
         for (int i = 0; i < levels.Length; i++)
             PlayerPrefs.SetInt(Keys[i], (int)levels[i]);
 
-        PlayerPrefs.SetInt(CameraMixKey, CameraMix ? 1 : 0);
         PlayerPrefs.Save();
     }
 

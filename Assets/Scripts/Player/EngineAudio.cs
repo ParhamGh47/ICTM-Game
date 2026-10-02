@@ -253,8 +253,8 @@ public class EngineAudio : MonoBehaviour
     }
 
     /// <summary>
-    /// The share of its authored volume the engine is heard at: the player's own ENGINE setting, and - while
-    /// the camera mix is on - whatever the camera the player is driving from asks for.
+    /// The share of its authored volume the engine is heard at: the player's own ENGINE setting, and whatever
+    /// the camera the player is driving from asks for.
     /// </summary>
     private float Mix()
     {
@@ -274,16 +274,11 @@ public class EngineAudio : MonoBehaviour
     /// </summary>
     private void UpdateViewMix()
     {
-        float target = 1f;
+        if (viewCamera == null) viewCamera = CameraView.Gameplay();
 
-        if (SoundSettings.CameraMix)
-        {
-            if (viewCamera == null) viewCamera = CameraView.Gameplay();
+        float above = CameraView.LookingDown(viewCamera, aboveViewAngle, nearViewAngle);
 
-            float above = CameraView.LookingDown(viewCamera, aboveViewAngle, nearViewAngle);
-
-            target = Mathf.Lerp(nearViewGain, aboveViewGain, above);
-        }
+        float target = Mathf.Lerp(nearViewGain, aboveViewGain, above);
 
         viewGain = CameraView.Follow(viewGain, target, cameraMixSeconds);
     }

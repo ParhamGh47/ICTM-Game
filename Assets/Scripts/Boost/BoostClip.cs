@@ -30,11 +30,16 @@ public static class BoostClip
     private const float BoostSeconds = 1.1f;
     private const float EmptySeconds = 0.8f;
 
-    /// <summary>The peak each finished sound is scaled to, before the player's own settings.</summary>
+    /// <summary>
+    /// The peak each finished sound is scaled to, before the player's own settings. The two the player has to
+    /// hear over a level - the shove of a boost and the refusal of an empty tank - fill the scale; the sip and
+    /// the jingle are left a little under it, because they come often and are meant to sit behind the engine
+    /// rather than in front of it.
+    /// </summary>
     private const float PickupPeak = 0.7f;
     private const float CollectPeak = 0.8f;
-    private const float BoostPeak = 0.85f;
-    private const float EmptyPeak = 0.95f;
+    private const float BoostPeak = 1f;
+    private const float EmptyPeak = 1f;
 
     /// <summary>
     /// The empty tank's two knocks and the puff of air between them, in Hz.

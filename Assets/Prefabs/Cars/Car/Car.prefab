@@ -4943,6 +4943,7 @@ MonoBehaviour:
   lookAheadResponse: 20
   steerResponse: 120
   cornerResponse: 2
+  turnaroundBend: 100
   wheels:
   - {fileID: 2613604872655129500}
   - {fileID: 6443751248277632772}

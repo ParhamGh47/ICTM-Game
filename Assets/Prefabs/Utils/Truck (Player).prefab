@@ -66045,9 +66045,10 @@ MonoBehaviour:
   maxShowSeconds: 2.6
   endHeightAboveGround: 3.5
   slowMotionScale: 0.4
-  sideDistance: 4.5
-  shotHeight: 2.3
-  backDistance: 1.2
+  sideDistance: 2.5
+  shotHeight: 1.15
+  verticalSpread: 0.6
+  backDistance: 0.5
   lookHeight: 0.6
   shotFieldOfView: 45
   variation: 0.18

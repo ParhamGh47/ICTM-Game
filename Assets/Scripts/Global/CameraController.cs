@@ -30,6 +30,41 @@ public class CameraController : MonoBehaviour
     public float reverseSpeedThreshold = 20f;
     public bool isGoingReverse = false;
 
+    // ---------------------------------------------------------------- the view the player chose
+
+    // The camera the player last drove from, kept across levels and restarts. Nothing else in the game reads
+    // it, so it lives here rather than in a settings class of its own.
+    private const string ModePrefKey = "Camera.Mode";
+
+    // ---------------------------------------------------------------- braking
+
+    [Header("Brake Camera")]
+    [Tooltip("How much closer to the truck the camera comes with the brakes fully on at speed, in metres. " +
+             "The rig already steps to its low-speed camera on a hard stop; this is the pull on top of that, " +
+             "so the stop is something the camera shows rather than only something the truck does. Applies to " +
+             "the default third-person view only - the overhead and near views cannot pull in without giving " +
+             "away the framing they exist for.")]
+    public float brakeDollyIn = 1.3f;
+
+    [Tooltip("How close to the truck the camera may be pulled, in metres. The rig's low-speed camera already " +
+             "sits nearer than the one it shows at speed, so this is what stops a hard stop from putting the " +
+             "view inside the truck.")]
+    public float brakeDollyMinDistance = 1.2f;
+
+    [Tooltip("How fast the camera closes on the truck once the brakes go on, in metres per second.")]
+    public float brakeDollyInSpeed = 6f;
+
+    [Tooltip("How fast the camera lets the truck back out once the brakes come off, in metres per second. " +
+             "Slower than closing, which is what makes it read as the truck pulling away from you.")]
+    public float brakeDollyOutSpeed = 2.5f;
+
+    [Tooltip("The speed in km/h below which braking does not move the camera at all. A full stop from a " +
+             "crawl has no drama to show.")]
+    public float brakeDollySpeedFloor = 25f;
+
+    [Tooltip("The speed in km/h at which braking has its full pull on the camera.")]
+    public float brakeDollyFullSpeed = 85f;
+
     [Header("Boost Camera Settings")]
     public float boostCamDuration = 1.5f;
 
@@ -38,6 +73,15 @@ public class CameraController : MonoBehaviour
     private CinemachineVirtualCamera mode2Cam;
     private Cinemachine3rdPersonFollow dynamicCamMode2;
     private CinemachineComposer dynamicCamMode3;
+
+    // The default view's two cameras and the distances they were authored with, so the brake pull is added
+    // to those rather than to whatever a previous pull happened to leave behind.
+    private Cinemachine3rdPersonFollow mainCam;
+    private float dynamicCamBaseDistance;
+    private float mainCamBaseDistance;
+
+    // How much of the brake pull is in force right now, 0 to 1, eased.
+    private float brakePull;
 
     private float nextSwitchCam = 0f;
 
@@ -64,8 +108,36 @@ public class CameraController : MonoBehaviour
         mode2Cam.LookAt = mode2Pointers[0].transform;
         dynamicCamMode3.m_ScreenY = 0.725f;
 
-        ActivateCamera(0);
-        mode = 1;
+        // The default view's second camera, and what the two of them sit at when nothing is pulling them in.
+        var vcam1 = Cameras[1].GetComponent<CinemachineVirtualCamera>();
+        mainCam = vcam1 != null ? vcam1.GetCinemachineComponent<Cinemachine3rdPersonFollow>() : null;
+
+        dynamicCamBaseDistance = dyncamicCam != null ? dyncamicCam.CameraDistance : 0f;
+        mainCamBaseDistance = mainCam != null ? mainCam.CameraDistance : 0f;
+
+        // The view the player last drove from, so a level opens on it rather than always back on the default
+        // one. Mode 1 owns two cameras - the one it shows at speed and the one it shows at rest - and the one
+        // at rest is the closer of the two, so that is where it opens until the speed says otherwise.
+        mode = Mathf.Clamp(PlayerPrefs.GetInt(ModePrefKey, 1), 1, 3);
+
+        ActivateCamera(CameraForMode(mode));
+    }
+
+    /// <summary>The camera a view shows when it is first entered. Mode 1's own choice moves with the speed.</summary>
+    private static int CameraForMode(int m)
+    {
+        switch (m)
+        {
+            case 2: return 3;   // Mode2 - the nearer dynamic shot
+            case 3: return 4;   // Above - the overhead view
+            default: return 0;  // Dynamic - the closer of the default view's two
+        }
+    }
+
+    private void SaveMode()
+    {
+        PlayerPrefs.SetInt(ModePrefKey, mode);
+        PlayerPrefs.Save();
     }
 
     private void Update()
@@ -93,13 +165,78 @@ public class CameraController : MonoBehaviour
             }
 
             UpdateCameraBasedOnCar();
+            SaveMode();
             nextSwitchCam = Time.time + 0.2f;
         }
 
         if (!boostActive && !isTransitioning)
             UpdateCameraBasedOnCar();
 
+        UpdateBrakeCamera();
         UpdateFocusEffect();
+    }
+
+    /// <summary>
+    /// Pulls the default third-person view in towards the truck while the brakes are on.
+    ///
+    /// The rig already changes to its nearer camera for a hard stop, but that is a step at one threshold and
+    /// reads as a cut rather than as the truck closing on you. This is the same idea made continuous: the
+    /// pull in is the brake pressure the driver is actually using, scaled by how fast the truck was going, so
+    /// leaning on the brakes at speed is a deliberate closing in and a gentle stop from a crawl barely moves
+    /// the camera at all. It is added to each camera's authored distance, so the view it was framed at is
+    /// what it returns to.
+    ///
+    /// Only the default view takes it. The overhead and near views are framed at fixed distances for what
+    /// they show, and closing them in would take that away rather than add to it.
+    /// </summary>
+    private void UpdateBrakeCamera()
+    {
+        if (car == null)
+        {
+            return;
+        }
+
+        float forwardSpeed = Vector3.Dot(car.rb.velocity, car.transform.forward) * 3.6f;
+        float braking = Mathf.Clamp01(-car.throttleInput);
+        float speedShare = Mathf.InverseLerp(brakeDollySpeedFloor, brakeDollyFullSpeed, forwardSpeed);
+
+        float target = braking * speedShare;
+
+        float rate = target > brakePull ? brakeDollyInSpeed : brakeDollyOutSpeed;
+        brakePull = Mathf.MoveTowards(brakePull, target, rate * Time.deltaTime);
+
+        // While the truck is going backwards the rig's own cameras are the ones that know what they are
+        // doing - it puts them behind the truck rather than in front of it - so nothing here touches them.
+        if (isGoingReverse)
+        {
+            return;
+        }
+
+        float pull = brakeDollyIn * brakePull;
+
+        // Only the camera being shown is pulled; the other is put back to what it was authored at, so the
+        // view is right the moment the rig steps between them.
+        if (dyncamicCam != null)
+        {
+            dyncamicCam.CameraDistance =
+                DistanceAfterPull(dynamicCamBaseDistance, currentCam == 0, pull);
+        }
+
+        if (mainCam != null)
+        {
+            mainCam.CameraDistance =
+                DistanceAfterPull(mainCamBaseDistance, currentCam == 1, pull);
+        }
+    }
+
+    /// <summary>
+    /// What a camera's distance becomes with the brake pull on it, never nearer than the floor.
+    /// </summary>
+    private float DistanceAfterPull(float baseDistance, bool isTheCameraOnShow, float pull)
+    {
+        return isTheCameraOnShow
+            ? Mathf.Max(brakeDollyMinDistance, baseDistance - pull)
+            : baseDistance;
     }
 
     private void UpdateCameraBasedOnCar()

@@ -129,6 +129,15 @@ public class AICarController : MonoBehaviour
              "waypoints of a bend no longer turns in twitches. 0 follows it raw, as before.")]
     public float cornerResponse = 2f;
 
+    [Tooltip("The turn of the path ahead - over three waypoints, in degrees - at which the car is taking a " +
+             "turnaround and must follow its steering command outright rather than eased. Easing the command is " +
+             "what smooths ordinary road, but a turnaround cannot wait for it: the eased wheel trails the " +
+             "command and a car that trails its command through a turnaround drives round the turn two or three " +
+             "times instead of once. Above this reading the wheel is set to the command each step, so the turn " +
+             "converges. Ordinary road bends read well under it - three waypoints of the sharpest ordinary bend " +
+             "in the levels come to about 60-70 degrees.")]
+    public float turnaroundBend = 100f;
+
     [Header("Wheels (visual only)")]
     public Transform[] wheels;
     public float suspensionDistance = 0.4f;
@@ -624,9 +633,25 @@ public class AICarController : MonoBehaviour
         // thing this changes is how fast the steering may move. The demand steps when the car takes up its next
         // waypoint on a bend, and taking that step gradually is what turns a jolt into a car leaning into the
         // corner, without changing where the corner puts it: it still steers at the same point along the path.
-        steerNow = steerResponse > 0f
-            ? Mathf.MoveTowards(steerNow, steerAngle, steerResponse * Time.fixedDeltaTime)
-            : steerAngle;
+        //
+        // Except at a turnaround, where the ease is exactly the wrong thing and is therefore bypassed: the wheel
+        // is set to the waypoint command outright. Easing smooths ordinary road by letting the wheel trail the
+        // command, and trailing the command through a turnaround is what makes a car drive round it two or three
+        // times - the turn is only ever half taken, because by the time the wheel has followed the command the
+        // car is already pointing past it. The wheel has to lead the car round a turnaround, not follow it, so
+        // where the path doubles back the command is applied as it stands. Since the blend above has already
+        // taken the command most of the way to the waypoint by then, this is a small nudge in the value and the
+        // whole of the difference in how the turn goes.
+        if (bend >= turnaroundBend)
+        {
+            steerNow = Mathf.Clamp(angle, -maxSteerAngle, maxSteerAngle);
+        }
+        else
+        {
+            steerNow = steerResponse > 0f
+                ? Mathf.MoveTowards(steerNow, steerAngle, steerResponse * Time.fixedDeltaTime)
+                : steerAngle;
+        }
 
         steerAngle = steerNow;
 

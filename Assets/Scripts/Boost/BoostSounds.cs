@@ -29,16 +29,22 @@ public static class BoostSounds
     /// <summary>
     /// How loud each sound is before the player's own settings. The milkshake is the quietest of the four: it
     /// happens often, sometimes several times a corner, and it is there to be noticed rather than to be an
-    /// event. The jingle is the loudest, because it is the reward - it is the sound of the count going up, and
-    /// it is worth hearing over the engine. The boost keeps its own level underneath both of them, and the
-    /// empty tank is up with the jingle rather than below it: it is a refusal, and a refusal the driver does
-    /// not hear is a button that reads as broken. It is short and dry, so being this loud never makes it
-    /// tiring, and it is played at most every third of a second - see <see cref="BoostManager"/>.
+    /// event. The jingle is up with the boost, because it is the reward - it is the sound of the count going
+    /// up, and it is worth hearing over the engine. The boost and the empty tank are the two the player has to
+    /// hear over everything else a level is doing, and both are set above the rest for that reason: the boost
+    /// is the effect they asked for and a shove they cannot hear reads as nothing happening, and the empty
+    /// tank is a refusal - a refusal the driver does not hear is a button that reads as broken. Neither is
+    /// tiring at this level: the boost is a swell with a tail and the empty is short and dry, and it is played
+    /// at most every third of a second - see <see cref="BoostManager"/>.
+    ///
+    /// They sit a little over one on purpose, against a clip that is normalised to full scale: the pair are
+    /// transients the engine is playing over, and a couple of decibels of overshoot on a knock or a whoosh is
+    /// heard as punch rather than as clipping.
     /// </summary>
     private const float PickupVolume = 0.5f;
     private const float CollectVolume = 0.7f;
-    private const float BoostVolume = 0.65f;
-    private const float EmptyVolume = 0.85f;
+    private const float BoostVolume = 0.8f;
+    private const float EmptyVolume = 1.1f;
 
     /// <summary>
     /// How far the pitch is allowed to wander from one play to the next. Milkshakes come in runs - a straight

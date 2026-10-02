@@ -74,8 +74,6 @@ public class OptionsScreen : MonoBehaviour
     [Tooltip("The switch over the truck's speed trails. Sits beside the motion blur, the other switch about " +
              "the sense of speed.")]
     public string speedParticlesText = "SPEED PARTICLES";
-    [Tooltip("The switch over the slow-motion jump camera. No note beside it, like the other switches.")]
-    public string cinematicText = "CINEMATIC CAMERA";
     public string onText = "ON";
     public string offText = "OFF";
     public string difficultyCaption = "DIFFICULTY";
@@ -90,11 +88,6 @@ public class OptionsScreen : MonoBehaviour
 
     [Header("Sound")]
     public string soundCaption = "SOUND";
-    public string cameraMixText = "CAMERA MIX";
-    [Tooltip("The line beside the camera mix switch, saying what it does in one line.")]
-    [TextArea(2, 6)]
-    public string cameraMixNoteText =
-        "Keeps the engine at the same level whichever camera you drive from.";
 
     // ---------------------------------------------------------------- look
 
@@ -164,8 +157,6 @@ public class OptionsScreen : MonoBehaviour
     [Tooltip("How much room the channel's own name is given, before its steps start.")]
     public float soundLabelWidth = 400f;
     public float soundFirstButtonX = 440f;
-    [Tooltip("How far the camera mix's one-line note sits to the right of its switch.")]
-    public float cameraMixNoteGap = 30f;
 
     // ---------------------------------------------------------------- transition
 
@@ -223,14 +214,10 @@ public class OptionsScreen : MonoBehaviour
     private Button shadowsButton;
     private Button blurButton;
     private Button speedParticlesButton;
-    private Button cinematicButton;
-    private Button cameraMixButton;
 
     private TextMeshProUGUI shadowsLabel;
     private TextMeshProUGUI blurLabel;
     private TextMeshProUGUI speedParticlesLabel;
-    private TextMeshProUGUI cinematicLabel;
-    private TextMeshProUGUI cameraMixLabel;
 
     private Page page = Page.Controls;
 
@@ -249,7 +236,6 @@ public class OptionsScreen : MonoBehaviour
         GraphicsQuality.Changed += Refresh;
         GameDifficulty.Changed += Refresh;
         SoundSettings.Changed += Refresh;
-        CinematicSettings.Changed += Refresh;
     }
 
     private void Start()
@@ -265,7 +251,6 @@ public class OptionsScreen : MonoBehaviour
         GraphicsQuality.Changed -= Refresh;
         GameDifficulty.Changed -= Refresh;
         SoundSettings.Changed -= Refresh;
-        CinematicSettings.Changed -= Refresh;
     }
 
     // ---------------------------------------------------------------- tabs
@@ -326,11 +311,6 @@ public class OptionsScreen : MonoBehaviour
         GraphicsQuality.SetSpeedParticles(!GraphicsQuality.SpeedParticles);
     }
 
-    private void ToggleCinematic()
-    {
-        CinematicSettings.SetJumpCamera(!CinematicSettings.JumpCamera);
-    }
-
     private void ChooseDifficulty(int index)
     {
         GameDifficulty.Choose((DifficultyLevel)index);
@@ -339,11 +319,6 @@ public class OptionsScreen : MonoBehaviour
     private void ChooseLevel(int channel, int step)
     {
         SoundSettings.SetLevel(channel, (SoundLevel)step);
-    }
-
-    private void ToggleCameraMix()
-    {
-        SoundSettings.SetCameraMix(!SoundSettings.CameraMix);
     }
 
     private void GoBack()
@@ -395,12 +370,6 @@ public class OptionsScreen : MonoBehaviour
             speedParticlesLabel.color = GraphicsQuality.SpeedParticles ? labelColor : dimLabelColor;
         }
 
-        if (cinematicLabel != null)
-        {
-            cinematicLabel.text = cinematicText + "   " + (CinematicSettings.JumpCamera ? onText : offText);
-            cinematicLabel.color = CinematicSettings.JumpCamera ? labelColor : dimLabelColor;
-        }
-
         // The step lit is the one the channel is really playing at, not the one the player chose for it: the
         // master is a ceiling, so its row moving caps the rest and they say so here. Each channel's own choice
         // is still there underneath, and comes back to the bar the moment the master lets it.
@@ -418,12 +387,6 @@ public class OptionsScreen : MonoBehaviour
                 row.steps[s].activeBar.enabled = active;
                 row.steps[s].label.color = active ? accentColor : labelColor;
             }
-        }
-
-        if (cameraMixLabel != null)
-        {
-            cameraMixLabel.text = cameraMixText + "   " + (SoundSettings.CameraMix ? onText : offText);
-            cameraMixLabel.color = SoundSettings.CameraMix ? labelColor : dimLabelColor;
         }
     }
 
@@ -613,8 +576,7 @@ public class OptionsScreen : MonoBehaviour
 
         // The switches, on top of the preset rather than part of it: turning shadows off at High, or the
         // blur on at Low, is allowed. There is room for two on a line, and the two that share one are the two
-        // about how the speed feels - the blur and the truck's own trails - so the group still reads as three
-        // rows rather than as a list that grew.
+        // about how the speed feels - the blur and the truck's own trails.
         shadowsButton = CreateButton("Shadows", page, "SHADOWS", switchSize);
         PlaceTopLeft((RectTransform)shadowsButton.transform, sideMargin, y, switchSize.x, switchSize.y);
         shadowsLabel = shadowsButton.GetComponentInChildren<TextMeshProUGUI>();
@@ -632,13 +594,6 @@ public class OptionsScreen : MonoBehaviour
             switchSize.x, switchSize.y);
         speedParticlesLabel = speedParticlesButton.GetComponentInChildren<TextMeshProUGUI>();
         speedParticlesButton.onClick.AddListener(ToggleSpeedParticles);
-
-        y -= switchSize.y + switchGap;
-
-        cinematicButton = CreateButton("Cinematic Camera", page, cinematicText, switchSize);
-        PlaceTopLeft((RectTransform)cinematicButton.transform, sideMargin, y, switchSize.x, switchSize.y);
-        cinematicLabel = cinematicButton.GetComponentInChildren<TextMeshProUGUI>();
-        cinematicButton.onClick.AddListener(ToggleCinematic);
 
         y -= switchSize.y + sectionGap;
 
@@ -747,19 +702,9 @@ public class OptionsScreen : MonoBehaviour
         return height;
     }
 
-    /// <summary>A paragraph with no plate of its own, for one that sits beside something already plated.</summary>
-    private void BuildSideNote(Transform page, string text, float x, float y, float width, float height)
-    {
-        TextMeshProUGUI body = CreateText("Note", page, noteSize, Fade(labelColor, 0.75f), TextAlignmentOptions.TopLeft);
-        body.text = text;
-        body.lineSpacing = 8f;
-
-        PlaceTopLeft(body.rectTransform, x, y, width, height);
-    }
-
     /// <summary>
-    /// The sound group of the settings page: a caption with the camera mix switch beside it, then one row per
-    /// channel. Returns where the group ends, should anything ever be built under it.
+    /// The sound group of the settings page: a caption, then one row per channel. Returns where the group ends,
+    /// should anything ever be built under it.
     ///
     /// The rows are built from <see cref="SoundSettings"/> rather than written out here, which is what makes
     /// this page and the pause menu's the same rows - the same channels, the same steps, the same where they
@@ -767,36 +712,10 @@ public class OptionsScreen : MonoBehaviour
     /// </summary>
     private float BuildSoundGroup(RectTransform page, float y)
     {
-        // The heading carries the camera mix as well: it is not a volume, it is the one tweak on top of what
-        // the ENGINE row says, so it reads as part of the group's heading rather than as a sixth channel - and
-        // it costs the rows below it no room at all. The heading's rule is short enough to stop well short of
-        // the switch, the way the screen's own title rule does.
-        float headingTop = y;
-        float captionHeight = captionSize * 1.5f;
-
-        // The heading's own lettering stops before the switch beside it; the rule under it is short enough not
-        // to reach it either.
         y = BuildSectionHeading(page, soundCaption, y, soundLabelWidth - 20f);
 
-        // Centred on the heading's own line, so the two read as one row.
-        float switchY = headingTop + Mathf.Max(0f, (switchSize.y - captionHeight) * 0.5f);
-
-        cameraMixButton = CreateButton("Camera Mix", page, cameraMixText, switchSize);
-        PlaceTopLeft((RectTransform)cameraMixButton.transform, sideMargin + soundLabelWidth, switchY,
-            switchSize.x, switchSize.y);
-        cameraMixLabel = cameraMixButton.GetComponentInChildren<TextMeshProUGUI>();
-        cameraMixButton.onClick.AddListener(ToggleCameraMix);
-
-        // The note is on the caption's line, to the switch's right, where nothing else is drawn and the text
-        // fits on one line however narrow the gap is made.
-        float mixNoteX = sideMargin + soundLabelWidth + switchSize.x + cameraMixNoteGap;
-
-        BuildSideNote(page, cameraMixNoteText, mixNoteX, switchY + (switchSize.y - noteSize * 1.6f) * 0.5f,
-            ContentWidth - (mixNoteX - sideMargin), switchSize.y);
-
-        // Whatever this heading row takes - the switch is taller than the lettering and its rule - the channels
-        // start below all of it.
-        y = Mathf.Min(y, switchY - switchSize.y) - 12f;
+        // Whatever the heading takes - its lettering and its rule - the channels start below all of it.
+        y -= 12f;
 
         for (int channel = 0; channel < SoundSettings.ChannelCount; channel++)
             y = BuildSoundRow(page, channel, y);
@@ -901,28 +820,27 @@ public class OptionsScreen : MonoBehaviour
             SetNavigation(shadowsButton, null, null, blurButton, middlePreset);
 
         // The blur and the trails share a line, so they are each other's left and right; both of them step
-        // down onto the cinematic camera below and back up onto the shadows above.
+        // down onto the difficulty table below and back up onto the shadows above.
         if (blurButton != null)
-            SetNavigation(blurButton, null, speedParticlesButton, cinematicButton, shadowsButton);
+            SetNavigation(blurButton, null, speedParticlesButton, middleDifficulty, shadowsButton);
 
         if (speedParticlesButton != null)
-            SetNavigation(speedParticlesButton, blurButton, null, cinematicButton, shadowsButton);
-
-        if (cinematicButton != null)
-            SetNavigation(cinematicButton, null, null, middleDifficulty, blurButton);
+            SetNavigation(speedParticlesButton, blurButton, null, middleDifficulty, shadowsButton);
 
         for (int i = 0; i < difficultyRows.Count; i++)
         {
             Button left = i > 0 ? difficultyRows[i - 1].button : null;
             Button right = i < difficultyRows.Count - 1 ? difficultyRows[i + 1].button : null;
 
-            SetNavigation(difficultyRows[i].button, left, right, cameraMixButton, cinematicButton);
+            SetNavigation(difficultyRows[i].button, left, right,
+                middleFirstSound != null ? middleFirstSound : backButton,
+                blurButton != null ? blurButton : middlePreset);
         }
 
         // The sound rows are a grid of twenty small buttons, which is exactly the shape a
         // nearest-neighbour guess gets wrong once the rows are this narrow - so the columns and the rows are
-        // wired as the table they look like. Up from the top row is the camera mix above it, which is the
-        // group's heading; down from the last row is BACK.
+        // wired as the table they look like. Up from the top row is the difficulty table above the group;
+        // down from the last row is BACK.
         Button middleLastSound = null;
 
         for (int i = 0; i < soundRows.Count; i++)
@@ -933,7 +851,9 @@ public class OptionsScreen : MonoBehaviour
             {
                 Button left = s > 0 ? row.steps[s - 1].button : null;
                 Button right = s < row.steps.Length - 1 ? row.steps[s + 1].button : null;
-                Button above = i > 0 ? soundRows[i - 1].steps[s].button : cameraMixButton;
+                Button above = i > 0
+                    ? soundRows[i - 1].steps[s].button
+                    : (middleDifficulty != null ? middleDifficulty : blurButton);
                 Button below = i < soundRows.Count - 1 ? soundRows[i + 1].steps[s].button : backButton;
 
                 SetNavigation(row.steps[s].button, left, right, below, above);
@@ -941,11 +861,6 @@ public class OptionsScreen : MonoBehaviour
 
             if (i == soundRows.Count - 1) middleLastSound = row.steps[SoundSettings.StepCount / 2].button;
         }
-
-        if (cameraMixButton != null)
-            SetNavigation(cameraMixButton, null, null,
-                middleFirstSound != null ? middleFirstSound : backButton,
-                middleDifficulty != null ? middleDifficulty : blurButton);
 
         if (backButton != null)
             SetNavigation(backButton, null, null, null,

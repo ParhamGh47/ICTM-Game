@@ -41,7 +41,8 @@ public enum GraphicsPreset
 ///    ground do, which is what the restart prompt inside a level is about.
 ///  * the effects - the rain's particle count, the tire smoke, and the speed blur's taps. None of them is
 ///    ever switched off by a preset: the blur still blurs and the rain still rains, just with less work
-///    behind it. <see cref="Shadows"/> and <see cref="MotionBlur"/> are the player's own switches on top.
+///    behind it. <see cref="Shadows"/>, <see cref="MotionBlur"/> and <see cref="SpeedParticles"/> are the
+///    player's own switches on top.
 ///
 /// The five of them run from <b>Potato</b> - every world texture at quarter resolution, shadows only around the
 /// truck, grass nearly gone, the trees fading out 1.2 km away and the ground itself drawn coarse - through
@@ -301,9 +302,10 @@ public static class GraphicsQuality
 
     // ---------------------------------------------------------------- player prefs keys
 
-    private const string PresetKey = "Graphics.Preset";          // 0 / 1 / 2, defaults to High
-    private const string ShadowsKey = "Graphics.Shadows";        // 0 / 1, defaults on
-    private const string MotionBlurKey = "Graphics.MotionBlur";  // 0 / 1, defaults on
+    private const string PresetKey = "Graphics.Preset";              // 0 / 1 / 2, defaults to High
+    private const string ShadowsKey = "Graphics.Shadows";            // 0 / 1, defaults on
+    private const string MotionBlurKey = "Graphics.MotionBlur";      // 0 / 1, defaults on
+    private const string SpeedParticlesKey = "Graphics.SpeedParticles"; // 0 / 1, defaults on
 
     // ---------------------------------------------------------------- state
 
@@ -319,6 +321,15 @@ public static class GraphicsQuality
 
     /// <summary>Whether the speed blur runs. On for every preset; this is the player's switch.</summary>
     public static bool MotionBlur { get; private set; } = true;
+
+    /// <summary>
+    /// Whether the truck's speed trails are emitted. On for every preset; this is the player's switch.
+    ///
+    /// Unlike the blur and the shadows this is not applied to anything with a setting of its own: the trails
+    /// are a component on the truck (<see cref="SpeedEffect"/>) and it reads this for itself every frame, so
+    /// switching it off in the pause menu stops them there and then, with nothing to re-apply.
+    /// </summary>
+    public static bool SpeedParticles { get; private set; } = true;
 
     /// <summary>Rain and tire smoke are emitted at this share of their authored rate.</summary>
     public static float ParticleScale => Presets[(int)Current].particleScale;
@@ -396,6 +407,18 @@ public static class GraphicsQuality
         Changed?.Invoke();
     }
 
+    /// <summary>Turns the truck's speed trails on or off, on top of whatever the preset says.</summary>
+    public static void SetSpeedParticles(bool on)
+    {
+        SpeedParticles = on;
+
+        Save();
+
+        // Nothing to re-apply: the trails are a component on the truck and read this for themselves, so all
+        // this has to do is remember it and tell the screens showing the switch.
+        Changed?.Invoke();
+    }
+
     // ---------------------------------------------------------------- loading and saving
 
     private static void Load()
@@ -404,6 +427,7 @@ public static class GraphicsQuality
 
         Shadows = PlayerPrefs.GetInt(ShadowsKey, 1) != 0;
         MotionBlur = PlayerPrefs.GetInt(MotionBlurKey, 1) != 0;
+        SpeedParticles = PlayerPrefs.GetInt(SpeedParticlesKey, 1) != 0;
     }
 
     private static void Save()
@@ -411,6 +435,7 @@ public static class GraphicsQuality
         PlayerPrefs.SetInt(PresetKey, (int)Current);
         PlayerPrefs.SetInt(ShadowsKey, Shadows ? 1 : 0);
         PlayerPrefs.SetInt(MotionBlurKey, MotionBlur ? 1 : 0);
+        PlayerPrefs.SetInt(SpeedParticlesKey, SpeedParticles ? 1 : 0);
         PlayerPrefs.Save();
     }
 
@@ -431,6 +456,7 @@ public static class GraphicsQuality
         PlayerPrefs.DeleteKey(PresetKey);
         PlayerPrefs.DeleteKey(ShadowsKey);
         PlayerPrefs.DeleteKey(MotionBlurKey);
+        PlayerPrefs.DeleteKey(SpeedParticlesKey);
         PlayerPrefs.Save();
 
         Load();

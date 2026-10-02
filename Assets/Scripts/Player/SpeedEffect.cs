@@ -26,6 +26,12 @@ using UnityEngine;
 /// the speed blur uses, and everything eases in and out across them - the camera switch is a cut, and the
 /// trails should not cut with it. Nothing is built until the camera actually looks down, and the ordinary
 /// chase view is left exactly as it was.
+///
+/// The whole thing answers to <see cref="GraphicsQuality.SpeedParticles"/>, which the settings offer as a
+/// switch of its own. It is read here rather than pushed in, so the trails stop the moment it is turned off
+/// - from the pause menu, mid-drive - and the field is torn down with them; turning it back on builds it
+/// again. The particles already in the air are left to finish, so switching it off fades out rather than
+/// cutting, which is what keeps it from reading as a rendering fault.
 /// </summary>
 public class SpeedEffect : MonoBehaviour
 {
@@ -192,6 +198,19 @@ public class SpeedEffect : MonoBehaviour
         if (car == null)
         {
             DestroyField();
+            return;
+        }
+
+        // Turned off in the settings: nothing new is emitted and the extra top-down field is taken down with
+        // it. The trails already in the air are left to live out their lifetime, so the picture empties rather
+        // than popping. The camera is not even looked at while this is off, so nothing is built behind it.
+        if (!GraphicsQuality.SpeedParticles)
+        {
+            DestroyField();
+
+            SetRate(leftEffect, leftEm, 0f);
+            SetRate(rightEffect, rightEm, 0f);
+
             return;
         }
 

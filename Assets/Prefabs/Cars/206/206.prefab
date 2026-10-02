@@ -254,6 +254,8 @@ MonoBehaviour:
   lookAhead: 12
   cornerLookAhead: 4
   lookAheadResponse: 20
+  steerResponse: 120
+  cornerResponse: 2
   wheels:
   - {fileID: 589969156910674406}
   - {fileID: 589969157293632661}

@@ -9,8 +9,11 @@ using UnityEngine;
 /// than at the next waypoint, so its wheels follow the road continuously instead of turning in steps at
 /// every one of them - see <see cref="lookAhead"/>. Through the tightest part of a corner that steering
 /// falls back to the waypoint itself, because a look-ahead point doubles back with a turnaround and a car
-/// steered at one behind it drives round in a circle - see <see cref="BendAhead"/>. On top of that it has
-/// four reactions:
+/// steered at one behind it drives round in a circle - see <see cref="BendAhead"/>. The command that comes
+/// out of all of that is then eased rather than followed raw, and so is the corner reading it is shaped by:
+/// both step when a car takes up its next waypoint, which on a bend is a whole corner's worth of steering
+/// asked for in one physics step - see <see cref="steerResponse"/> and <see cref="cornerResponse"/>. On top
+/// of that it has four reactions:
 ///
 ///  - <b>Slowing for corners</b>: it measures the bend of the path ahead - the angle it is being asked to
 ///    steer now, and the change of direction over the next few waypoints after that - and takes the corner
@@ -111,6 +114,20 @@ public class AICarController : MonoBehaviour
              "is taken from steps when the car takes up its next waypoint, so this is what keeps the steering " +
              "point sliding rather than jumping when it does.")]
     public float lookAheadResponse = 20f;
+
+    [Tooltip("How fast the steering command itself may move, in degrees per second. The car is steered at a " +
+             "point along the path, and that point moves in a step whenever the car takes up its next waypoint - " +
+             "on a bend, by a corner's worth at once. Followed raw, that is a wheel that snaps; eased, it is a " +
+             "wheel being turned, and the car settles into the bend over a few steps instead of jolting into it. " +
+             "High enough that it never holds the car back out of a corner - it only blunts the single-step " +
+             "jumps. Set to 0 to steer on the raw command, as before.")]
+    public float steerResponse = 120f;
+
+    [Tooltip("How fast the corner reading may change, in its own share per second. It is what decides the " +
+             "steering authority and how much the car aims at the waypoint instead of along the path, and it " +
+             "steps too - outright, when the leg it is measured against changes. Eased, a car passing the " +
+             "waypoints of a bend no longer turns in twitches. 0 follows it raw, as before.")]
+    public float cornerResponse = 2f;
 
     [Header("Wheels (visual only)")]
     public Transform[] wheels;
@@ -220,6 +237,13 @@ public class AICarController : MonoBehaviour
     // How far up the path the car is steering at right now, eased between <see cref="lookAhead"/> on a
     // straight and <see cref="cornerLookAhead"/> in a corner.
     float lookAheadNow;
+
+    // The steering command actually being applied, and the corner reading behind it. Both are eased rather
+    // than followed raw, because the readings they come from step when the car takes up its next waypoint -
+    // the leg the corner is measured against changes outright - and a demand that can change by a corner's
+    // worth in a single physics step is what reads on screen as a twitch.
+    float steerNow;
+    float cornerNow;
 
     // The spot lights this car lit at the start, and the lamp materials it tinted, kept so they can be put
     // out again if the lamps are knocked off the car - see <see cref="KillHeadlights"/>. Their references
@@ -542,6 +566,14 @@ public class AICarController : MonoBehaviour
 
         float tightness = Tightness(Mathf.Max(Mathf.Abs(angle), bend));
 
+        // The reading the steering is shaped by, eased towards what the path asks for right now. It is only
+        // the steering that is shaped by this: the speed keeps the raw reading, so a car brakes into a corner
+        // exactly as it did - the corner is still seen from three waypoints back, so the ease has all the room
+        // it needs to have settled by the time the car is in it.
+        cornerNow = cornerResponse > 0f
+            ? Mathf.MoveTowards(cornerNow, tightness, cornerResponse * Time.fixedDeltaTime)
+            : tightness;
+
         // Slow for the corner going in, and take your time coming out of it. Cars in a lane all share one
         // cruising speed, so what keeps their spacing is that they all brake and accelerate in the same
         // places on the loop - which is also what stops the car behind running into the one in the turn.
@@ -551,7 +583,7 @@ public class AICarController : MonoBehaviour
             ? Mathf.MoveTowards(speedFactor, wanted, cornerBrakeRate * Time.fixedDeltaTime)
             : Mathf.MoveTowards(speedFactor, wanted, cornerRecoveryRate * Time.fixedDeltaTime);
 
-        float steerRate = turnSpeed * Mathf.Lerp(1f, cornerSteerBoost, tightness);
+        float steerRate = turnSpeed * Mathf.Lerp(1f, cornerSteerBoost, cornerNow);
 
         // Steer at a point set distance further ALONG THE PATH, rather than at the next waypoint itself.
         // The waypoint is a fixed point the car has to reach, so the direction towards it only changes when
@@ -579,13 +611,24 @@ public class AICarController : MonoBehaviour
         // point, so steering at it converges however far round the car already is - which is what the cars
         // did before the look-ahead was introduced. On straights and ordinary bends the blend does nothing
         // and the steering stays the smooth look-ahead one.
-        float bendTightness = Tightness(bend);
+        float bendTightness = cornerNow;
 
         if (bendTightness > 0f)
         {
             float towardWaypoint = Mathf.Clamp(angle, -maxSteerAngle, maxSteerAngle);
             steerAngle = Mathf.Lerp(steerAngle, towardWaypoint, bendTightness);
         }
+
+        // And the last thing before the wheel is turned: the command itself, eased. Everything above is left
+        // exactly as it was - the cornering, the going round a target, the pull over for the horn - so the only
+        // thing this changes is how fast the steering may move. The demand steps when the car takes up its next
+        // waypoint on a bend, and taking that step gradually is what turns a jolt into a car leaning into the
+        // corner, without changing where the corner puts it: it still steers at the same point along the path.
+        steerNow = steerResponse > 0f
+            ? Mathf.MoveTowards(steerNow, steerAngle, steerResponse * Time.fixedDeltaTime)
+            : steerAngle;
+
+        steerAngle = steerNow;
 
         Quaternion steerRot = Quaternion.AngleAxis(steerAngle, Vector3.up);
         Quaternion targetRot = rb.rotation * steerRot;
@@ -967,6 +1010,11 @@ public class AICarController : MonoBehaviour
 
         // Whatever it was going around before the hit is no longer its business.
         avoidOffset = 0f;
+
+        // And neither is where the wheel happened to be pointing when it was hit: it starts the drive again
+        // with the steering centred, so it settles onto its line rather than carrying the last command over.
+        steerNow = 0f;
+        cornerNow = 0f;
     }
 
     /// <summary>

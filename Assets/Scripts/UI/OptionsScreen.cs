@@ -23,8 +23,8 @@ using UnityEngine.UI;
 /// one every player can picture; a note under the table says the same buttons work on any pad.
 ///
 /// The settings tab is the second page, and the only place anything is chosen. It holds the three groups in
-/// the order they matter: the graphics settings (<see cref="GraphicsQuality"/> - the three presets and the
-/// two switches that sit on top of them), the difficulties (<see cref="GameDifficulty"/> - what a level's time
+/// the order they matter: the graphics settings (<see cref="GraphicsQuality"/> - the five presets and the
+/// three switches that sit on top of them), the difficulties (<see cref="GameDifficulty"/> - what a level's time
 /// limit and its kill requirement become), and the sound (<see cref="SoundSettings"/> - one row per channel,
 /// plus the switch that keeps the engine in the same place in the mix whichever camera the player drives
 /// from). A choice takes effect and is saved as soon as it is made - only the ground detail of a level waits
@@ -71,6 +71,9 @@ public class OptionsScreen : MonoBehaviour
     public string[] presetLabels = { "POTATO", "LOW", "MEDIUM", "HIGH", "ULTRA" };
     public string shadowsText = "SHADOWS";
     public string motionBlurText = "MOTION BLUR";
+    [Tooltip("The switch over the truck's speed trails. Sits beside the motion blur, the other switch about " +
+             "the sense of speed.")]
+    public string speedParticlesText = "SPEED PARTICLES";
     [Tooltip("The switch over the slow-motion jump camera. No note beside it, like the other switches.")]
     public string cinematicText = "CINEMATIC CAMERA";
     public string onText = "ON";
@@ -219,11 +222,13 @@ public class OptionsScreen : MonoBehaviour
     private Button backButton;
     private Button shadowsButton;
     private Button blurButton;
+    private Button speedParticlesButton;
     private Button cinematicButton;
     private Button cameraMixButton;
 
     private TextMeshProUGUI shadowsLabel;
     private TextMeshProUGUI blurLabel;
+    private TextMeshProUGUI speedParticlesLabel;
     private TextMeshProUGUI cinematicLabel;
     private TextMeshProUGUI cameraMixLabel;
 
@@ -316,6 +321,11 @@ public class OptionsScreen : MonoBehaviour
         GraphicsQuality.SetMotionBlur(!GraphicsQuality.MotionBlur);
     }
 
+    private void ToggleSpeedParticles()
+    {
+        GraphicsQuality.SetSpeedParticles(!GraphicsQuality.SpeedParticles);
+    }
+
     private void ToggleCinematic()
     {
         CinematicSettings.SetJumpCamera(!CinematicSettings.JumpCamera);
@@ -377,6 +387,12 @@ public class OptionsScreen : MonoBehaviour
         {
             blurLabel.text = motionBlurText + "   " + (GraphicsQuality.MotionBlur ? onText : offText);
             blurLabel.color = GraphicsQuality.MotionBlur ? labelColor : dimLabelColor;
+        }
+
+        if (speedParticlesLabel != null)
+        {
+            speedParticlesLabel.text = speedParticlesText + "   " + (GraphicsQuality.SpeedParticles ? onText : offText);
+            speedParticlesLabel.color = GraphicsQuality.SpeedParticles ? labelColor : dimLabelColor;
         }
 
         if (cinematicLabel != null)
@@ -595,8 +611,10 @@ public class OptionsScreen : MonoBehaviour
 
         y -= presetChoiceSize.y + groupGap;
 
-        // The two switches, on top of the preset rather than part of it: turning shadows off at High, or the
-        // blur on at Low, is allowed.
+        // The switches, on top of the preset rather than part of it: turning shadows off at High, or the
+        // blur on at Low, is allowed. There is room for two on a line, and the two that share one are the two
+        // about how the speed feels - the blur and the truck's own trails - so the group still reads as three
+        // rows rather than as a list that grew.
         shadowsButton = CreateButton("Shadows", page, "SHADOWS", switchSize);
         PlaceTopLeft((RectTransform)shadowsButton.transform, sideMargin, y, switchSize.x, switchSize.y);
         shadowsLabel = shadowsButton.GetComponentInChildren<TextMeshProUGUI>();
@@ -608,6 +626,12 @@ public class OptionsScreen : MonoBehaviour
         PlaceTopLeft((RectTransform)blurButton.transform, sideMargin, y, switchSize.x, switchSize.y);
         blurLabel = blurButton.GetComponentInChildren<TextMeshProUGUI>();
         blurButton.onClick.AddListener(ToggleMotionBlur);
+
+        speedParticlesButton = CreateButton("Speed Particles", page, speedParticlesText, switchSize);
+        PlaceTopLeft((RectTransform)speedParticlesButton.transform, sideMargin + switchSize.x + switchGap, y,
+            switchSize.x, switchSize.y);
+        speedParticlesLabel = speedParticlesButton.GetComponentInChildren<TextMeshProUGUI>();
+        speedParticlesButton.onClick.AddListener(ToggleSpeedParticles);
 
         y -= switchSize.y + switchGap;
 
@@ -876,8 +900,13 @@ public class OptionsScreen : MonoBehaviour
         if (shadowsButton != null)
             SetNavigation(shadowsButton, null, null, blurButton, middlePreset);
 
+        // The blur and the trails share a line, so they are each other's left and right; both of them step
+        // down onto the cinematic camera below and back up onto the shadows above.
         if (blurButton != null)
-            SetNavigation(blurButton, null, null, cinematicButton, shadowsButton);
+            SetNavigation(blurButton, null, speedParticlesButton, cinematicButton, shadowsButton);
+
+        if (speedParticlesButton != null)
+            SetNavigation(speedParticlesButton, blurButton, null, cinematicButton, shadowsButton);
 
         if (cinematicButton != null)
             SetNavigation(cinematicButton, null, null, middleDifficulty, blurButton);

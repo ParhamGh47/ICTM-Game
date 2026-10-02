@@ -5413,6 +5413,8 @@ MonoBehaviour:
   lookAhead: 12
   cornerLookAhead: 4
   lookAheadResponse: 20
+  steerResponse: 120
+  cornerResponse: 2
   wheels:
   - {fileID: 6845510444250786380}
   - {fileID: 2661122554167800582}

@@ -53,6 +53,9 @@ public class PauseOptionsPanel : MonoBehaviour
     public string gamepadHeaderText = "GAMEPAD";
     public string shadowsText = "SHADOWS";
     public string motionBlurText = "MOTION BLUR";
+    [Tooltip("The switch over the truck's speed trails, beside the motion blur - the other switch about how " +
+             "the speed feels.")]
+    public string speedParticlesText = "SPEED PARTICLES";
     [Tooltip("The switch over the slow-motion jump camera. No note beside it, like the other switches.")]
     public string cinematicText = "CINEMATIC CAMERA";
     public string onText = "ON";
@@ -148,7 +151,9 @@ public class PauseOptionsPanel : MonoBehaviour
     public Vector2 presetChoiceSize = new Vector2(88f, 38f);
     public float presetChoiceGap = 7f;
     public float presetChoiceFont = 14f;
-    public Vector2 switchSize = new Vector2(300f, 32f);
+    [Tooltip("The four switches are laid out two to a line, so each is half the space the graphics rows have " +
+             "to themselves - the page has no room for four stacked ones.")]
+    public Vector2 switchSize = new Vector2(248f, 32f);
     public float switchGap = 4f;
     public float noteX = 505f;
     public float noteWidth = 285f;
@@ -182,6 +187,7 @@ public class PauseOptionsPanel : MonoBehaviour
     private Button shadowsButton;
     private Button blurButton;
     private Button cinematicButton;
+    private Button speedParticlesButton;
     private Button cameraMixButton;
     private Button reloadButton;
     private Button dismissButton;
@@ -197,6 +203,7 @@ public class PauseOptionsPanel : MonoBehaviour
     private TextMeshProUGUI shadowsLabel;
     private TextMeshProUGUI blurLabel;
     private TextMeshProUGUI cinematicLabel;
+    private TextMeshProUGUI speedParticlesLabel;
     private TextMeshProUGUI cameraMixLabel;
     private TextMeshProUGUI promptLabel;
 
@@ -454,6 +461,11 @@ public class PauseOptionsPanel : MonoBehaviour
         CinematicSettings.SetJumpCamera(!CinematicSettings.JumpCamera);
     }
 
+    private void ToggleSpeedParticles()
+    {
+        GraphicsQuality.SetSpeedParticles(!GraphicsQuality.SpeedParticles);
+    }
+
     private void ChooseDifficulty(int index)
     {
         GameDifficulty.Choose((DifficultyLevel)index);
@@ -527,6 +539,12 @@ public class PauseOptionsPanel : MonoBehaviour
         {
             cinematicLabel.text = cinematicText + "   " + (CinematicSettings.JumpCamera ? onText : offText);
             cinematicLabel.color = CinematicSettings.JumpCamera ? inkColor : dimInkColor;
+        }
+
+        if (speedParticlesLabel != null)
+        {
+            speedParticlesLabel.text = speedParticlesText + "   " + (GraphicsQuality.SpeedParticles ? onText : offText);
+            speedParticlesLabel.color = GraphicsQuality.SpeedParticles ? inkColor : dimInkColor;
         }
 
         // The sound rows are all live: a change is heard the moment it is made, which is what makes them worth
@@ -828,17 +846,20 @@ public class PauseOptionsPanel : MonoBehaviour
 
         y += presetChoiceSize.y + 16f;
 
-        // The two switches sit on top of the preset rather than belonging to it: turning shadows off at HIGH,
-        // or the blur on at LOW, is allowed.
+        // The switches sit on top of the preset rather than belonging to it: turning shadows off at HIGH, or
+        // the blur on at LOW, is allowed. They are laid out two to a line, which is what keeps four of them in
+        // the room three used to take - the page has nothing to spare. The blur shares a line with the
+        // shadows, and the trails with the cinematic camera, so each pair is about the same thing: how the
+        // picture is lit, and how a drive looks and feels.
+        float secondColumn = switchSize.x + switchGap;
+
         shadowsButton = CreatePlateButton("Shadows", page, shadowsText, switchSize, 16f);
         PlaceTop(page, (RectTransform)shadowsButton.transform, 0f, y, switchSize.x, switchSize.y);
         shadowsLabel = shadowsButton.GetComponentInChildren<TextMeshProUGUI>();
         shadowsButton.onClick.AddListener(ToggleShadows);
 
-        y += switchSize.y + switchGap;
-
         blurButton = CreatePlateButton("Motion Blur", page, motionBlurText, switchSize, 16f);
-        PlaceTop(page, (RectTransform)blurButton.transform, 0f, y, switchSize.x, switchSize.y);
+        PlaceTop(page, (RectTransform)blurButton.transform, secondColumn, y, switchSize.x, switchSize.y);
         blurLabel = blurButton.GetComponentInChildren<TextMeshProUGUI>();
         blurButton.onClick.AddListener(ToggleMotionBlur);
 
@@ -848,6 +869,11 @@ public class PauseOptionsPanel : MonoBehaviour
         PlaceTop(page, (RectTransform)cinematicButton.transform, 0f, y, switchSize.x, switchSize.y);
         cinematicLabel = cinematicButton.GetComponentInChildren<TextMeshProUGUI>();
         cinematicButton.onClick.AddListener(ToggleCinematic);
+
+        speedParticlesButton = CreatePlateButton("Speed Particles", page, speedParticlesText, switchSize, 16f);
+        PlaceTop(page, (RectTransform)speedParticlesButton.transform, secondColumn, y, switchSize.x, switchSize.y);
+        speedParticlesLabel = speedParticlesButton.GetComponentInChildren<TextMeshProUGUI>();
+        speedParticlesButton.onClick.AddListener(ToggleSpeedParticles);
 
         y += switchSize.y + 14f;
 
@@ -1083,7 +1109,7 @@ public class PauseOptionsPanel : MonoBehaviour
     {
         // The tab row is the one place Unity's own guess reads badly: the page below a tab is not where the
         // nearest button happens to be, so each tab is pointed at the first thing on the page it opens. Every
-        // other button is wired as the list it looks like - the preset row, the two switches, the difficulty
+        // other button is wired as the list it looks like - the preset row, the switch grid, the difficulty
         // row, the camera mix and the five sound rows - because these plates are small enough that a
         // nearest-neighbour guess lands on the wrong one. The controls page has nothing selectable on it - it
         // is a table, not a list of buttons - so down is left empty there and BACK is the one thing above.
@@ -1103,9 +1129,10 @@ public class PauseOptionsPanel : MonoBehaviour
             SetNavigation(presetRows[i].button, left, right, shadowsButton, settingsTab);
         }
 
-        SetNavigation(shadowsButton, null, null, blurButton, middlePreset);
-        SetNavigation(blurButton, null, null, cinematicButton, shadowsButton);
-        SetNavigation(cinematicButton, null, null, middleDifficulty, blurButton);
+        SetNavigation(shadowsButton, null, blurButton, cinematicButton, middlePreset);
+        SetNavigation(blurButton, shadowsButton, null, speedParticlesButton, middlePreset);
+        SetNavigation(cinematicButton, null, speedParticlesButton, middleDifficulty, shadowsButton);
+        SetNavigation(speedParticlesButton, cinematicButton, null, middleDifficulty, blurButton);
 
         for (int i = 0; i < difficultyRows.Count; i++)
         {

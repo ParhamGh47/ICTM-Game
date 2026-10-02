@@ -4,8 +4,10 @@ using UnityEditor;
 using UnityEngine;
 
 /// <summary>
-/// Editor tool that drops invisible collision walls along both verges of a RoadArchitect road, so the player
-/// cannot leave the level sideways.
+/// Editor tool that drops invisible boundary walls along both verges of a RoadArchitect road: they no longer
+/// stop the truck, they mark where the road ends. Every wall is written as a trigger on the RoadBoundary
+/// layer, and the truck is put back on the tarmac when it drives through one, so a verge is a reset rather
+/// than a crash - which is what lets the wall stand out where there is real room beyond the road to use.
 ///
 /// The old version spaced fixed-length straight boxes along the road by distance, which cannot describe a
 /// bend: on a curve the boxes cut the corner - leaving wedge-shaped gaps on the outside to drive through,
@@ -76,7 +78,7 @@ public class TerrainInvisibleWallPainter : EditorWindow
     // Distance from the asphalt + shoulder edge to the wall, and the longest straight a segment may be
     private float offsetFromRoadEdge = 8f;
     private float wallSegmentLength = 15f;
-    private float wallThickness = 4f;       // thick enough that a fast truck cannot step through it
+    private float wallThickness = 4f;       // thick enough that a fast truck cannot cross it in one physics step
     private float wallHeight = 50f;         // how far above the highest ground nearby the wall reaches
     private float segmentOverlap = 1f;      // each segment is lengthened by this, so the joints are filled
 
@@ -163,7 +165,10 @@ public class TerrainInvisibleWallPainter : EditorWindow
             "Builds a wall of invisible colliders down each verge. The segments share their ends and are " +
             "cut shorter where the road bends, so the wall follows the curve without gaps and never crosses " +
             "the asphalt. At a junction the two walls are joined by carrying each on along its own line until " +
-            "they meet, so the join stays as far from the road as the wall itself does.",
+            "they meet, so the join stays as far from the road as the wall itself does.\n\n" +
+            "The walls do not block the player: they are reset boundaries. Crossing one puts the truck back " +
+            "on the road behind a short fade, so place them as far out as the player should be allowed to " +
+            "wander before being put back.",
             MessageType.Info);
 
         EditorGUI.BeginChangeCheck();
@@ -1208,8 +1213,11 @@ public class TerrainInvisibleWallPainter : EditorWindow
                 wallObj.transform.rotation = wall.rotation;
                 wallObj.transform.localScale = Vector3.one;
 
+                // A boundary to cross, not something to hit: the wall goes on the RoadBoundary layer as a
+                // trigger, and the truck is put back on the road when it drives through one.
+                wallObj.layer = BoundaryLayer();
                 BoxCollider collider = wallObj.AddComponent<BoxCollider>();
-                collider.isTrigger = false;
+                collider.isTrigger = true;
                 collider.center = Vector3.zero;
                 collider.size = wall.size;
 
@@ -1238,6 +1246,25 @@ public class TerrainInvisibleWallPainter : EditorWindow
         GameObject parent = new GameObject("InvisibleWalls");
         Undo.RegisterCreatedObjectUndo(parent, "Create InvisibleWalls Parent");
         return parent;
+    }
+
+    /// <summary>
+    /// The layer the walls are written to: the one the truck looks for before it resets. Falls back to Default,
+    /// loudly, so a project without the layer is obvious rather than silently doing nothing.
+    /// </summary>
+    private static int BoundaryLayer()
+    {
+        int layer = LayerMask.NameToLayer("RoadBoundary");
+
+        if (layer < 0)
+        {
+            Debug.LogWarning(
+                "Invisible Walls: this project has no 'RoadBoundary' layer, so the walls were written to " +
+                "Default and will not reset the truck. Add the layer under Project Settings > Tags and Layers.");
+            return 0;
+        }
+
+        return layer;
     }
 
     void RemoveAllWalls()

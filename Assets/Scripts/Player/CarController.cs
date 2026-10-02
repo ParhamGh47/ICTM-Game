@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 using RoadArchitect;
 
@@ -70,6 +71,42 @@ public class CarController : MonoBehaviour
     [Header("Reset Cooldown")]
     public float resetCooldown = 2f;
     private float lastResetTime = -999f;
+
+    [Header("Automatic Reset (Off The Road)")]
+    [Tooltip("The level's verge walls no longer block the truck: driving through one puts it back on the road. " +
+             "The walls are triggers on the RoadBoundary layer, which is what this looks for.")]
+    public bool autoResetOffRoad = true;
+
+    [Tooltip("The layer the level's verge walls sit on - TagManager > Layers. A truck that drives through a " +
+             "trigger on this layer is put back on the road.")]
+    public string boundaryLayer = "RoadBoundary";
+
+    private int boundaryLayerIndex = -1;
+
+    [Tooltip("How long the reset's own transition takes, in unscaled seconds: the vignette closing in, the " +
+             "flat cover landing over it, the cover lifting, and the vignette opening out again. It is " +
+             "deliberately longer than the menus' fade and does not look like it - the reset is a thing that " +
+             "happened to the player, and it gets a beat of its own.")]
+    public float autoResetVignetteIn = 0.3f;
+    public float autoResetCoverIn = 0.18f;
+    public float autoResetRevealOut = 0.4f;
+    public float autoResetVignetteOut = 0.3f;
+
+    [Tooltip("Nothing can trigger another automatic reset for this long after one, so a truck that crosses " +
+             "two wall segments at once is still put back only once.")]
+    public float autoResetCooldown = 1.5f;
+
+    [Tooltip("Print one line each time a verge bound is crossed, so it is clear why a reset did or did not " +
+             "happen. Turn off once it is behaving.")]
+    public bool logAutomaticResets = true;
+
+    // When the player's control comes back, as an unscaled time. The whole state of "a reset is running" is
+    // this one number: it is a time rather than a flag something has to remember to clear, so the truck always
+    // comes back on its own. A truck that cannot be driven because a transition went wrong is far worse than
+    // one whose transition overstays a little.
+    private float movementLockedUntil;
+
+    private float lastAutoResetTime = -999f;
 
     [Header("Reset Onto Road")]
     [Tooltip("Drop the car back onto the nearest road instead of leaving it wherever it ended up.")]
@@ -237,6 +274,16 @@ public class CarController : MonoBehaviour
         rb.drag = 0.05f;
         rb.angularDrag = 5f;
 
+        boundaryLayerIndex = LayerMask.NameToLayer(boundaryLayer);
+
+        if (boundaryLayerIndex < 0)
+        {
+            Debug.LogWarning(
+                $"Layer '{boundaryLayer}' does not exist, so verge walls are being recognised by name " +
+                $"instead. Add the layer under Project Settings > Tags and Layers, and put the walls on it.",
+                this);
+        }
+
         if (brakeLightRenderer != null)
             brakeMat = brakeLightRenderer.material;
 
@@ -257,6 +304,19 @@ void Update()
         throttleInput = 0f;
         steerInput = 0f;
         currentFocusTarget = null;
+        return;
+    }
+
+    if (Time.unscaledTime < movementLockedUntil)
+    {
+        // An automatic reset is running - the truck is off the road and about to be put back on it - and it owns
+        // the player's input until its transition is over. Only the input is taken: the body is left to the
+        // physics as it always is, and ResetCar puts it back on the road behind the cover. A player who keeps
+        // their foot down through the dark does not drive off the moment the road appears.
+        throttleInput = 0f;
+        steerInput = 0f;
+        currentFocusTarget = null;
+        UpdateBrakeLights();
         return;
     }
 
@@ -482,7 +542,8 @@ void Update()
         // reading it is what keeps that edge up to date.
         bool reset = GameInput.ResetPressed();
 
-        if (reset && Time.time - lastResetTime >= resetCooldown)
+        if (reset && Time.unscaledTime >= movementLockedUntil &&
+            Time.time - lastResetTime >= resetCooldown)
         {
             ResetCar();
 
@@ -494,8 +555,15 @@ void Update()
     /// <summary>
     /// Puts the truck back on the road, keeping whatever damage it has picked up: a reset moves the truck,
     /// it does not mend it.
+    ///
+    /// <paramref name="preferLastRoad"/> is how an automatic reset asks to be put back where the truck last
+    /// had tarmac under it rather than where it has ended up. Those are the same place for the button - the
+    /// driver presses it standing on the road they mean to be sent back to - but an automatic reset fires
+    /// after the truck has driven through a verge bound, by which point it is off the road and the nearest
+    /// tarmac can be beside it or across a hairpin. The last on-road pose is on the road by definition, so
+    /// this is what makes 'it came back on the road' true rather than likely.
     /// </summary>
-    private void ResetCar()
+    private void ResetCar(bool preferLastRoad = false)
     {
         rb.velocity = Vector3.zero;
         rb.angularVelocity = Vector3.zero;
@@ -525,37 +593,73 @@ void Update()
             float backOffMetres =
                 LeftRoadOverGap() ? resetJumpBackOffMetres : resetBackOffMetres;
 
-            Vector3 onRoad, roadForward;
-
-            if (TryGetRoadResetPosition(transform.position, yaw, out onRoad, out roadForward,
-                                        out resetRoad, offRoad, backOffMetres))
+            if (preferLastRoad && resetToLastRoad && hasLastRoadPose)
             {
-                // A reset must never hand the driver ground for free. Over the gap before a jump the
-                // nearest tarmac is the landing road ahead, and dropping the car onto it would skip the
-                // jump it was meant to clear - so when the car is off the road and the search has come up
-                // with a spot further along the level than the last place it had tarmac under it, the
-                // search is run again from that place instead, which finds the ramp it took off from.
-                if (resetToLastRoad && hasLastRoadPose && offRoad &&
-                    IsAheadOfLastRoad(onRoad, yaw))
+                // An automatic reset goes back to the last pose the truck had tarmac under it. That pose is on
+                // the road by definition - it was recorded by the same downward ray that now says the truck is
+                // off the road - so it is what the truck is put down on, whatever the road search makes of it.
+                // The search can only improve on that: stepping back up the road is a nicety, and if a level's
+                // road will not answer the search the pose is still the right place to be.
+                resetPosition = lastRoadPosition;
+
+                if (resetFacesForward)
+                    yaw = lastRoadYaw;
+
+                Vector3 onRoad, roadForward;
+                Road road;
+
+                if (TryGetRoadResetPosition(lastRoadPosition, lastRoadYaw, out onRoad, out roadForward,
+                                            out road, true, backOffMetres))
                 {
-                    Vector3 onRamp, rampForward;
-                    Road rampRoad;
+                    resetPosition = onRoad;
+                    resetRoad = road;
 
-                    // The road comes from the retry rather than the first search: a failed retry leaves the
-                    // first search's road where it was, which is the answer the reset is going on with.
-                    if (TryGetRoadResetPosition(lastRoadPosition, lastRoadYaw, out onRamp,
-                                                out rampForward, out rampRoad, true, backOffMetres))
-                    {
-                        onRoad = onRamp;
-                        roadForward = rampForward;
-                        resetRoad = rampRoad;
-                    }
+                    if (resetFacesForward && roadForward.sqrMagnitude > 0.0001f)
+                        yaw = Quaternion.LookRotation(roadForward, Vector3.up).eulerAngles.y;
                 }
+                else if (logAutomaticResets)
+                {
+                    Debug.LogWarning(
+                        $"'{name}' was reset by a verge bound. No road position was found, so it was put back " +
+                        $"on the last pose it had road under ({lastRoadPosition}); check the road in " +
+                        $"'{gameObject.scene.name}'.", this);
+                }
+            }
+            else
+            {
+                Vector3 onRoad, roadForward;
 
-                resetPosition = onRoad;
+                if (TryGetRoadResetPosition(transform.position, yaw, out onRoad, out roadForward,
+                                            out resetRoad, offRoad, backOffMetres))
+                {
+                    // A reset must never hand the driver ground for free. Over the gap before a jump the
+                    // nearest tarmac is the landing road ahead, and dropping the car onto it would skip the
+                    // jump it was meant to clear - so when the car is off the road and the search has come up
+                    // with a spot further along the level than the last place it had tarmac under it, the
+                    // search is run again from that place instead, which finds the ramp it took off from.
+                    if (resetToLastRoad && hasLastRoadPose && offRoad &&
+                        IsAheadOfLastRoad(onRoad, yaw))
+                    {
+                        Vector3 onRamp, rampForward;
+                        Road rampRoad;
 
-                if (resetFacesForward && roadForward.sqrMagnitude > 0.0001f)
-                    yaw = Quaternion.LookRotation(roadForward, Vector3.up).eulerAngles.y;
+                        // The road comes from the retry rather than the first search: a failed retry leaves
+                        // the first search's road where it was, which is the answer the reset is going on
+                        // with.
+                        if (TryGetRoadResetPosition(lastRoadPosition, lastRoadYaw, out onRamp,
+                                                    out rampForward, out rampRoad, true, backOffMetres))
+                        {
+                            onRoad = onRamp;
+                            roadForward = rampForward;
+                            resetRoad = rampRoad;
+                        }
+                    }
+
+                    resetPosition = onRoad;
+
+                    if (resetFacesForward && roadForward.sqrMagnitude > 0.0001f)
+                        yaw = Quaternion.LookRotation(roadForward, Vector3.up).eulerAngles.y;
+                }
             }
         }
 
@@ -591,6 +695,155 @@ void Update()
         {
             transform.position = standing;
             transform.rotation = stance;
+        }
+
+        // The body is told where it is, not just the transform it happens to own.
+        //
+        // The truck's rigidbody interpolates, and an interpolated body is drawn - and stepped - from its own
+        // pose, with the transform following it. A reset that wrote the transform alone could therefore be lost
+        // on the next render frame, and the truck would stay exactly where it was: a reset that lands the car on
+        // the road for the button, which is read during the physics step, but not for anything read between
+        // steps. Setting the body's pose is what makes the two the same.
+        if (rb != null)
+        {
+            rb.position = transform.position;
+            rb.rotation = transform.rotation;
+        }
+    }
+
+
+    /// <summary>
+    /// The truck has driven into one of the level's verge walls.
+    ///
+    /// The walls are triggers baked into the scenes and sit on the RoadBoundary layer, so nothing stopped the
+    /// truck: it is put back on the road instead, behind a short fade. Two things keep that from firing when
+    /// it should not. Only a wall counts - the layer is checked, so nothing else in a level can ask for a
+    /// reset this way - and the truck has to be genuinely off the road, because a wall segment that has been
+    /// pulled in over the asphalt at a bend would otherwise reset a truck driving normally along it.
+    /// </summary>
+    private void OnTriggerEnter(Collider other)
+    {
+        TryBoundaryReset(other, true);
+    }
+
+
+    /// <summary>
+    /// The truck is still inside a boundary wall, and this is the half that matters.
+    ///
+    /// The wall is 4 m thick and the truck is wider than the downward ray that decides whether it has road
+    /// under it, so the truck can put its body into the wall while its middle is still over the asphalt. An
+    /// entry that was spent on that frame would never come round again - the truck would sail on off the road
+    /// and nothing would bring it back. Watching for as long as the truck is inside makes the reset take the
+    /// moment the truck is genuinely off the road, however it got there.
+    /// </summary>
+    private void OnTriggerStay(Collider other)
+    {
+        TryBoundaryReset(other, false);
+    }
+
+
+    /// <summary>
+    /// Whether a collider is one of the level's verge walls.
+    ///
+    /// The layer is the intended answer and what the scenes are built with, but a wall is also still a wall
+    /// when nothing has put it on that layer - a scene from before the layer existed, a project that has lost
+    /// it, a truck prefab with the wrong name here. Falling back to the name the walls have always carried
+    /// means the worst case is a wall that is recognised by name rather than not recognised at all.
+    /// </summary>
+    private bool IsBoundary(Collider collider)
+    {
+        if (collider == null)
+            return false;
+
+        if (boundaryLayerIndex >= 0 && collider.gameObject.layer == boundaryLayerIndex)
+            return true;
+
+        return collider.gameObject.name.StartsWith("InvisibleWall");
+    }
+
+
+    /// <summary>The one place a boundary crossing decides whether to reset, shared by entering and staying.</summary>
+    private void TryBoundaryReset(Collider other, bool firstTouch)
+    {
+        if (!autoResetOffRoad || rb == null)
+            return;
+
+        if (!IsBoundary(other))
+            return;
+
+        if (IsPaused())
+            return;
+
+        // Already the middle of one: the truck belongs to the reset that is running until its lock runs out.
+        if (Time.unscaledTime < movementLockedUntil)
+            return;
+
+        if (Time.time - lastAutoResetTime < autoResetCooldown)
+            return;
+
+        if (HasRoadBeneath())
+        {
+            if (firstTouch && logAutomaticResets)
+            {
+                Debug.LogWarning(
+                    $"[AutoReset] touched bound '{other.name}' at {transform.position} but still has road " +
+                    "under the truck; waiting for it to leave the road.", this);
+            }
+
+            return;
+        }
+
+        StartCoroutine(AutoResetRoutine());
+    }
+
+
+    /// <summary>
+    /// Runs the automatic reset: closes the view down, puts the truck back on the road behind it, and opens
+    /// the view again.
+    ///
+    /// The player's control is held for the length of the transition, as a time rather than as a switch this
+    /// routine has to remember to turn back on - so the truck is never left undrivable if anything goes wrong
+    /// here. Only the input is taken: the rigidbody is left exactly as it always is, and where the truck ends up
+    /// is <see cref="ResetCar"/>'s decision rather than the physics'.
+    ///
+    /// The screen effect is <see cref="ResetScreenFade"/>, not the plain black the menus use: a vignette that
+    /// closes in first and a longer, warmer cover, so an automatic reset reads as its own moment.
+    /// </summary>
+    private IEnumerator AutoResetRoutine()
+    {
+        lastAutoResetTime = Time.time;
+
+        // Measured from now, on unscaled time, so it still ends if the game is paused halfway through.
+        float lockSeconds =
+            autoResetVignetteIn + autoResetCoverIn + autoResetRevealOut + autoResetVignetteOut;
+
+        movementLockedUntil = Time.unscaledTime + Mathf.Max(0.1f, lockSeconds);
+
+        Vector3 from = transform.position;
+
+        // Stop the truck where it is rather than let it carry on off the road behind the cover. The reset is
+        // about to move it regardless, so this only decides what is happening while the screen goes dark.
+        rb.velocity = Vector3.zero;
+        rb.angularVelocity = Vector3.zero;
+
+        ResetScreenFade fade = ResetScreenFade.Ensure();
+
+        if (fade != null)
+            yield return fade.Cover(autoResetVignetteIn, autoResetCoverIn);
+        else
+            yield return null;
+
+        ResetCar(true);
+
+        if (fade != null)
+            yield return fade.Reveal(autoResetRevealOut, autoResetVignetteOut);
+
+        if (logAutomaticResets)
+        {
+            Debug.Log(
+                $"[AutoReset] '{name}' moved {Vector3.Distance(from, transform.position):F1} m, from {from} " +
+                $"to {transform.position}. Last on-road pose was {lastRoadPosition} " +
+                $"(known: {hasLastRoadPose}).", this);
         }
     }
 

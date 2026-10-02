@@ -55,6 +55,7 @@ GameObject:
   m_Component:
   - component: {fileID: 7323471414049666625}
   - component: {fileID: 940000000000000002}
+  - component: {fileID: 7323471414862750205}
   m_Layer: 0
   m_Name: Blinder
   m_TagString: Untagged
@@ -186,3 +187,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4b7c9e21f8a34d60b5c2e73a91d4f806, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+--- !u!114 &7323471414862750205
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7323471414049666626}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3f7c1d90ab5e4c2f8d61b7a4e05c93d2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  kind: 1

@@ -102,6 +102,7 @@ GameObject:
   - component: {fileID: 2220173067905176710}
   - component: {fileID: 2220173067906307654}
   - component: {fileID: 4997198823715129013}
+  - component: {fileID: 4997198823715129014}
   m_Layer: 0
   m_Name: Mast
   m_TagString: Untagged
@@ -235,3 +236,16 @@ Transform:
   m_Father: {fileID: 2220173067904406694}
   m_RootOrder: -1
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &4997198823715129014
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2220173067904305286}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3f7c1d90ab5e4c2f8d61b7a4e05c93d2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  kind: 2

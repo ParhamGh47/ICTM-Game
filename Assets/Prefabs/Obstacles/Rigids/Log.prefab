@@ -10,6 +10,7 @@ GameObject:
   m_Component:
   - component: {fileID: 7818534283648096897}
   - component: {fileID: 7818534283648096902}
+  - component: {fileID: 7818534284777794824}
   m_Layer: 0
   m_Name: Log
   m_TagString: Untagged
@@ -160,3 +161,16 @@ Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: e27ae2abb5d4b5a418b4591d59cd0fb5, type: 3}
   m_PrefabInstance: {fileID: 7818534284580461388}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &7818534284777794824
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7818534283648096903}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3f7c1d90ab5e4c2f8d61b7a4e05c93d2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  kind: 1

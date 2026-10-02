@@ -11,6 +11,7 @@ GameObject:
   - component: {fileID: 1148471692629029087}
   - component: {fileID: 1148471692629029085}
   - component: {fileID: 1148471692629029084}
+  - component: {fileID: 1148471692641667171}
   m_Layer: 0
   m_Name: Garbage
   m_TagString: Untagged
@@ -135,3 +136,16 @@ Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: 5bf562de664c18e48a4feacdd284ffd0, type: 3}
   m_PrefabInstance: {fileID: 1148471692641667170}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &1148471692641667171
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1148471692629029086}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3f7c1d90ab5e4c2f8d61b7a4e05c93d2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  kind: 1

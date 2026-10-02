@@ -6,10 +6,26 @@ public class CollisionSound : MonoBehaviour
     public CarController car;
     public AudioSource audioSource;
 
-    [Header("Collision Clips")]
+    [Header("Collision Clips - the world")]
+    [Tooltip("Trees, buildings, billboards, barriers, kerbs, the ground: anything without an ImpactMaterial " +
+             "of its own. The three are the same impact at three strengths, so they are normally the same " +
+             "clip played at three volumes.")]
     public AudioClip softHitClip;
     public AudioClip mediumHitClip;
     public AudioClip hardHitClip;
+
+    [Header("Collision Clips - other things")]
+    [Tooltip("A thin light sheet: the blinder, a log, a waste container. Left empty, one is made at runtime - " +
+             "see ImpactClip.")]
+    public AudioClip sheetHitClip;
+
+    [Tooltip("A big flat sign, larger than a blinder: share-the-road, stop. Left empty, one is made at runtime " +
+             "- see ImpactClip.")]
+    public AudioClip panelHitClip;
+
+    [Tooltip("A hollow container: a barrel, a crate, a cone. Left empty, one is made at runtime - see " +
+             "ImpactClip.")]
+    public AudioClip barrelHitClip;
 
     [Header("Impact Settings")]
     public float softImpactThreshold = 2f;
@@ -53,6 +69,12 @@ public class CollisionSound : MonoBehaviour
         if (audioSource == null)
             audioSource = GetComponent<AudioSource>();
 
+        // The three sounds that have no recording in the project are made here, the way the boost sounds are.
+        // An inspector value still wins, so a real recording can be dropped in later without touching this.
+        if (sheetHitClip == null) sheetHitClip = ImpactClip.Sheet;
+        if (panelHitClip == null) panelHitClip = ImpactClip.Panel;
+        if (barrelHitClip == null) barrelHitClip = ImpactClip.Barrel;
+
         lastVelocity = Vector3.zero;
     }
 
@@ -63,7 +85,11 @@ public class CollisionSound : MonoBehaviour
 
     void OnCollisionEnter(Collision collision)
     {
-        if (collision.gameObject.CompareTag("Adamak") || collision.gameObject.CompareTag("Interactive"))
+        // A target being killed is not an impact: the kill has its own sound and effect. Everything else
+        // speaks - including the things tagged Interactive. The barrel and the cone are exactly the loose
+        // objects a hit should be heard on, and that tag is about the truck not taking damage from them
+        // (see TruckDamage), not about whether they make a noise.
+        if (collision.gameObject.CompareTag("Adamak"))
             return;
 
         float now = Time.time;
@@ -102,6 +128,14 @@ public class CollisionSound : MonoBehaviour
         if (chosenClip == null)
             return;
 
+        // And then the sound itself is chosen by what was hit. The strength and the volume above are the
+        // same whatever it was - a barrel struck at 40 is a barrel struck at 40 - so this only ever exchanges
+        // one clip for another of the same kind.
+        AudioClip byMaterial = ClipFor(collision.collider);
+
+        if (byMaterial != null)
+            chosenClip = byMaterial;
+
         // The dust still kicks up for a contact from underneath - that is what makes a landing land - but
         // the thud does not: it is the truck going over something rather than into it. The cooldown is
         // deliberately not spent on a silent one, so the crash that follows a landing still speaks.
@@ -138,6 +172,30 @@ public class CollisionSound : MonoBehaviour
         lastPlayTime = now;
     }
 
+
+    /// <summary>
+    /// The clip for what the truck actually touched, or null to keep the world's own three.
+    ///
+    /// The collider that reports the contact is not necessarily the object itself - a sign keeps its
+    /// colliders on a child, and a car is hit on a door or a bumper - so the answer is looked for up the
+    /// hierarchy, which is what <see cref="ImpactMaterial"/> is put on the root for.
+    /// </summary>
+    private AudioClip ClipFor(Collider collider)
+    {
+        if (collider == null) return null;
+
+        ImpactMaterial material = collider.GetComponentInParent<ImpactMaterial>();
+
+        if (material == null) return null;
+
+        switch (material.kind)
+        {
+            case ImpactKind.Sheet: return sheetHitClip;
+            case ImpactKind.Panel: return panelHitClip;
+            case ImpactKind.Barrel: return barrelHitClip;
+            default: return null;
+        }
+    }
 
     /// <summary>
     /// Whether the collision came up at the truck from underneath - the road, a kerb, a rumble strip, the

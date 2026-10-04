@@ -12,9 +12,14 @@ using UnityEngine.UI;
 /// colour. Generating a small texture per hue change is then cheap enough to do while the player drags,
 /// and a hue bar is the same trick rotated.
 ///
-/// The hue bar is a uGUI <see cref="Slider"/> so that a keyboard or gamepad can move it - a gamepad can
-/// reach every part of the screen. The field itself is dragged with the pointer only, and the palette
-/// beside it is what a gamepad uses for anything but hue.
+/// The hue bar is a uGUI <see cref="Slider"/> so that a keyboard or gamepad can move it. The field is
+/// dragged with the pointer, and it is selectable as well so the same stick or D-pad can move the cursor
+/// inside it (see <see cref="Field"/>): left and right take the saturation, up and down the brightness, and
+/// confirm is what leaves the field. Without that a pad could change a part's hue but never how dark or how
+/// pale it is.
+///
+/// The field is not a button, so the moving cursor is what says it has the highlight - there is nothing else
+/// to lift or light up.
 ///
 /// Whoever builds this owns the callback: <see cref="onChanged"/> fires while the player drags, so the
 /// truck can follow the pointer, and <see cref="onReleased"/> fires once the drag ends, which is the
@@ -48,6 +53,7 @@ public class ColourPicker : MonoBehaviour
 
     private RawImage field;
     private Slider hue;
+    private FieldSelect fieldSelect;
     private RectTransform fieldRect;
     private RectTransform cursor;
 
@@ -70,6 +76,21 @@ public class ColourPicker : MonoBehaviour
 
     /// <summary>The hue bar, for a screen that wants to wire it into its own navigation.</summary>
     public Selectable HueBar { get { return hue; } }
+
+    /// <summary>
+    /// The field itself, as something a keyboard or a gamepad can hold the highlight on.
+    ///
+    /// It is a selectable rather than a button so that a move inside it is the cursor moving rather than the
+    /// highlight leaving: see <see cref="FieldSelect"/>. The screen wires the four directions around it, so
+    /// where it hands the highlight when confirm is pressed is <see cref="FieldExit"/>.
+    /// </summary>
+    public Selectable Field { get { return fieldSelect; } }
+
+    /// <summary>Where confirm from inside the field puts the highlight. Wired by the screen that owns it.</summary>
+    public Selectable FieldExit;
+
+    /// <summary>How far one press moves the cursor inside the field.</summary>
+    public float stepPerPress = 0.04f;
 
     /// <summary>True while the pointer is on the field or the hue bar, so a screen can leave it alone.</summary>
     public bool IsDragging { get; private set; }
@@ -96,9 +117,13 @@ public class ColourPicker : MonoBehaviour
         field.texture = fieldTexture = CreateTexture("Picker Field", 2, 1);
         field.raycastTarget = true;
 
-        // The pointer lands on the field itself, which is also what carries the drag handler.
+        // The pointer lands on the field itself, which is also what carries the drag handler - and the
+        // highlight, so the same control can be worked with a stick.
         FieldInput input = fieldRect.gameObject.AddComponent<FieldInput>();
         input.picker = this;
+
+        fieldSelect = fieldRect.gameObject.AddComponent<FieldSelect>();
+        fieldSelect.picker = this;
 
         // Shade over the ramp: the top of the field keeps the full colour and the bottom is black.
         RectTransform shadeRect = CreateRect("Shade", fieldRect);
@@ -230,6 +255,14 @@ public class ColourPicker : MonoBehaviour
         Notify();
     }
 
+    /// <summary>Moves the cursor across the field, for a player using a keyboard or a pad.</summary>
+    private void Nudge(float saturationStep, float brightnessStep)
+    {
+        if (!built) return;
+
+        SetField(saturation + saturationStep, brightness + brightnessStep);
+    }
+
     private void OnHueChanged(float value)
     {
         if (suspendNotify) return;
@@ -310,6 +343,44 @@ public class ColourPicker : MonoBehaviour
 
         public void OnDrag(PointerEventData eventData) { picker.DragTo(eventData); }
         public void OnPointerUp(PointerEventData eventData) { picker.EndDrag(); }
+    }
+
+    /// <summary>
+    /// The field as a selectable, so a keyboard or a pad can work it.
+    ///
+    /// A move is deliberately not passed on to the base class: every direction is the cursor instead of the
+    /// highlight, which is the only way the saturation and the brightness can both be reached with one stick.
+    /// The way out is confirm, which hands the highlight to where the screen pointed <see cref="FieldExit"/>,
+    /// and the way the colour is written down is the same as the pointer's - a drag ending.
+    /// </summary>
+    private class FieldSelect : Selectable, ISubmitHandler
+    {
+        public ColourPicker picker;
+
+        public override void OnMove(AxisEventData eventData)
+        {
+            float step = picker.stepPerPress;
+
+            switch (eventData.moveDir)
+            {
+                case MoveDirection.Left: picker.Nudge(-step, 0f); break;
+                case MoveDirection.Right: picker.Nudge(step, 0f); break;
+                case MoveDirection.Up: picker.Nudge(0f, step); break;
+                case MoveDirection.Down: picker.Nudge(0f, -step); break;
+            }
+        }
+
+        public void OnSubmit(BaseEventData eventData)
+        {
+            // The colour is already on the part; this is the moment worth writing to disk, the same as the
+            // end of a drag.
+            if (picker.onReleased != null) picker.onReleased();
+
+            if (picker.FieldExit == null) return;
+
+            EventSystem events = EventSystem.current;
+            if (events != null) events.SetSelectedGameObject(picker.FieldExit.gameObject);
+        }
     }
 
     /// <summary>

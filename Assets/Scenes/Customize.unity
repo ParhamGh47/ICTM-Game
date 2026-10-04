@@ -463,11 +463,16 @@ MonoBehaviour:
   truckPrefab: {fileID: 5411794254173547900, guid: d3631120a8772da41ac0a07b6ee0b9e6, type: 3}
   titleText: CUSTOMIZE
   hintText: ESC  TO  GO  BACK
-  noteText: Your paint is saved and used in every level.
+  noteText: Your paint is saved - type a value in a box.
   defaultCaption: DEF
   finishCaption: FINISH
   colourCaption: COLOUR
   customCaption: YOUR COLOUR
+  channelCaptions:
+  - R
+  - G
+  - B
+  hexCaption: HEX
   font: {fileID: 11400000, guid: 5d9ca5d060d66fc43a47e0cec6e394a6, type: 2}
   backgroundColor: {r: 0.012, g: 0.024, b: 0.055, a: 1}
   accentColor: {r: 1, g: 0.64, b: 0.16, a: 1}
@@ -493,10 +498,16 @@ MonoBehaviour:
   styleTextSize: 19
   sectionGap: 24
   captionGap: 8
-  pickerFieldHeight: 140
+  pickerFieldHeight: 120
   pickerHueHeight: 22
   pickerGap: 12
   previewSwatchHeight: 30
+  numberRowGap: 8
+  numberCaptionSize: 15
+  numberFieldHeight: 34
+  numberFieldGap: 8
+  numberFieldSize: 17
+  hexFieldWidth: 140
   spinSpeed: 28
   previewHeight: 0.72
   previewWidth: 0.46

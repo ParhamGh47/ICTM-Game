@@ -7,7 +7,8 @@ using UnityEngine.UI;
 /// <summary>
 /// The truck customization screen. The player picks one of the truck's parts on the left, and a colour
 /// and a finish for it on the right, while the truck in the middle turns so the change can be seen from
-/// every side.
+/// every side. The colour can be chosen three ways - a preset, the picker, or by typing the numbers - and
+/// all three are the same choice: see <see cref="BuildNumbers"/> for the last of them.
 ///
 /// Like <see cref="CreditsScreen"/> and <see cref="TipsScreen"/> the whole UI is built in code, so the
 /// scene file only holds a camera, a light, an EventSystem and this component. The look reuses the
@@ -20,6 +21,11 @@ using UnityEngine.UI;
 ///
 /// The choices themselves live in <see cref="TruckPaint"/>, which saves them and repaints the player's
 /// truck in every level, so this screen only has to draw them and hand changes over.
+///
+/// The column on the right is four different shapes stacked - a finish grid, a palette, a picker and a row
+/// of boxes - which is what a nearest-neighbour guess reads worst, so the whole screen is wired by hand in
+/// <see cref="WireNavigation"/>. The picker's field is the one control that keeps the four directions for
+/// itself, so a pad can move the cursor inside it rather than only the highlight around it.
 ///
 /// Escape and the gamepad's B button come from the scene's <see cref="EscBack"/> component.
 /// </summary>
@@ -41,6 +47,12 @@ public class CustomizeScreen : MonoBehaviour
     public string finishCaption = "FINISH";
     public string colourCaption = "COLOUR";
     public string customCaption = "YOUR COLOUR";
+
+    [Tooltip("The caption over each of the three colour channel boxes, in order: red, green, blue.")]
+    public string[] channelCaptions = { "R", "G", "B" };
+
+    [Tooltip("The caption over the hex box.")]
+    public string hexCaption = "HEX";
 
     [Header("Art (optional)")]
     [Tooltip("Falls back to the project's default TMP font when empty.")]
@@ -90,10 +102,19 @@ public class CustomizeScreen : MonoBehaviour
     [Tooltip("Space between the caption of one section and the section above it.")]
     public float sectionGap = 24f;
     public float captionGap = 8f;
-    public float pickerFieldHeight = 140f;
+    public float pickerFieldHeight = 120f;
     public float pickerHueHeight = 22f;
     public float pickerGap = 12f;
     public float previewSwatchHeight = 30f;
+
+    [Tooltip("The row of colour boxes under the picker: three channels and a hex, which say the colour " +
+             "as numbers and can be typed into.")]
+    public float numberRowGap = 8f;
+    public float numberCaptionSize = 15f;
+    public float numberFieldHeight = 34f;
+    public float numberFieldGap = 8f;
+    public float numberFieldSize = 17f;
+    public float hexFieldWidth = 140f;
 
     // ---------------------------------------------------------------- preview
 
@@ -127,6 +148,7 @@ public class CustomizeScreen : MonoBehaviour
         public TruckPart part;
         public TextMeshProUGUI label;
         public Image activeBar;
+        public Button button;
     }
 
     private sealed class Swatch
@@ -142,11 +164,17 @@ public class CustomizeScreen : MonoBehaviour
         public int style;
         public TextMeshProUGUI label;
         public Image activeBar;
+        public Button button;
     }
 
     private readonly List<PartRow> partRows = new List<PartRow>();
     private readonly List<Swatch> swatches = new List<Swatch>();
     private readonly List<StyleRow> styleRows = new List<StyleRow>();
+
+    // The three channel boxes, then the hex box. Kept so the values can be written back into them
+    // whenever the colour changes somewhere else - the palette, the picker, another part.
+    private readonly List<TMP_InputField> numberFields = new List<TMP_InputField>();
+    private TMP_InputField hexField;
 
     private Camera previewCamera;
     private Transform previewRoot;
@@ -180,11 +208,35 @@ public class CustomizeScreen : MonoBehaviour
 
     private void Update()
     {
+        CloseEditedBoxOnCancel();
+
         if (previewPivot == null || Mathf.Approximately(spinSpeed, 0f)) return;
 
         // Turned about the world's up axis, so the truck spins on the spot whatever rotation this object
         // happens to have - and on unscaled time, so a leftover pause (timeScale 0) cannot freeze it.
         previewPivot.Rotate(0f, spinSpeed * Time.unscaledDeltaTime, 0f, Space.World);
+    }
+
+    /// <summary>
+    /// Lets the pad's B button out of a colour box the way Escape already lets the keyboard out.
+    ///
+    /// A focused text field keeps the arrow keys for its own caret and watches for Escape itself, so it has a
+    /// way out on a keyboard on its own. On a pad there is no Escape: B is the project's Cancel axis, which a
+    /// text field knows nothing about, so without this a controller could open a box and never leave it. Escape
+    /// is left to the field, which also puts the text back the way it found it.
+    /// </summary>
+    private void CloseEditedBoxOnCancel()
+    {
+        if (!Input.GetButtonDown("Cancel")) return;
+
+        TMP_InputField editing = null;
+
+        if (hexField != null && hexField.isFocused) editing = hexField;
+
+        for (int i = 0; editing == null && i < numberFields.Count; i++)
+            if (numberFields[i].isFocused) editing = numberFields[i];
+
+        if (editing != null) editing.DeactivateInputField();
     }
 
     private void OnDisable()
@@ -657,7 +709,7 @@ public class CustomizeScreen : MonoBehaviour
 
         button.onClick.AddListener(() => SelectPart(part));
 
-        return new PartRow { part = part, label = label, activeBar = bar };
+        return new PartRow { part = part, label = label, activeBar = bar, button = button };
     }
 
     /// <summary>
@@ -680,8 +732,13 @@ public class CustomizeScreen : MonoBehaviour
         y = BuildCustomRow(root, y);
         BuildPicker(root, y);
 
-        // The picker is the last thing in the column, so its bottom edge is where the note goes.
-        columnBottom = y - (pickerFieldHeight + pickerGap + pickerHueHeight);
+        // The picker is followed by the boxes that say the same colour as numbers: the field's own height,
+        // the hue bar under it, then the row.
+        float numbersTop = y - (pickerFieldHeight + pickerGap + pickerHueHeight + numberRowGap);
+        BuildNumbers(root, numbersTop);
+
+        // The boxes are the last thing in the column, so their bottom edge is where the note goes.
+        columnBottom = numbersTop - (numberCaptionSize * 1.35f + numberFieldHeight);
     }
 
     /// <summary>Draws a section heading and returns the y the section's own content starts at.</summary>
@@ -747,7 +804,7 @@ public class CustomizeScreen : MonoBehaviour
             int style = i;
             button.onClick.AddListener(() => SelectStyle(style));
 
-            styleRows.Add(new StyleRow { style = i, label = label, activeBar = bar });
+            styleRows.Add(new StyleRow { style = i, label = label, activeBar = bar, button = button });
         }
 
         return y - rows * styleHeight - (rows - 1) * styleGap;
@@ -878,6 +935,136 @@ public class CustomizeScreen : MonoBehaviour
         picker.Build(rect);
     }
 
+    /// <summary>
+    /// The colour as numbers: a box for each channel and one for the hex, which is the row a player uses
+    /// when they already know the colour they want rather than going looking for it.
+    ///
+    /// It is a second view of the same choice rather than a second choice, so it is written back into
+    /// whenever the colour changes anywhere else (see <see cref="SyncNumberFields"/>), and typing into any box
+    /// paints with what is now in all of them. There is nothing to switch between the two: a player who
+    /// types into the red box and looks up sees the picker and the truck already moved.
+    /// </summary>
+    private void BuildNumbers(Transform root, float y)
+    {
+        float captionHeight = numberCaptionSize * 1.35f;
+
+        RectTransform row = CreateRect("Colour Numbers", root);
+        row.anchorMin = new Vector2(1f, 1f);
+        row.anchorMax = new Vector2(1f, 1f);
+        row.pivot = new Vector2(1f, 1f);
+        row.sizeDelta = new Vector2(ColumnWidth, captionHeight + numberFieldHeight);
+        row.anchoredPosition = new Vector2(-sideMargin, y);
+
+        int channels = Mathf.Max(1, channelCaptions.Length);
+        float channelWidth = (ColumnWidth - hexFieldWidth - channels * numberFieldGap) / channels;
+
+        float x = 0f;
+
+        for (int i = 0; i < channels; i++)
+        {
+            numberFields.Add(BuildNumberBox(row, channelCaptions[i], x, channelWidth, false));
+            x += channelWidth + numberFieldGap;
+        }
+
+        hexField = BuildNumberBox(row, hexCaption, x, hexFieldWidth, true);
+    }
+
+    /// <summary>One box of the number row: a caption, and an editable field under it.</summary>
+    private TMP_InputField BuildNumberBox(RectTransform row, string caption, float x, float width, bool isHex)
+    {
+        float captionHeight = numberCaptionSize * 1.35f;
+
+        RectTransform cell = CreateRect(isHex ? hexCaption : caption, row);
+        cell.anchorMin = new Vector2(0f, 1f);
+        cell.anchorMax = new Vector2(0f, 1f);
+        cell.pivot = new Vector2(0f, 1f);
+        cell.sizeDelta = new Vector2(width, captionHeight + numberFieldHeight);
+        cell.anchoredPosition = new Vector2(x, 0f);
+
+        TextMeshProUGUI label = CreateText("Caption", cell, numberCaptionSize, Fade(labelColor, 0.7f),
+            TextAlignmentOptions.TopLeft);
+        label.text = caption;
+        label.fontStyle = FontStyles.Bold;
+        label.characterSpacing = 2f;
+
+        RectTransform labelRect = label.rectTransform;
+        labelRect.anchorMin = new Vector2(0f, 1f);
+        labelRect.anchorMax = new Vector2(0f, 1f);
+        labelRect.pivot = new Vector2(0f, 1f);
+        labelRect.sizeDelta = new Vector2(width, captionHeight);
+        labelRect.anchoredPosition = Vector2.zero;
+
+        RectTransform box = CreateRect("Box", cell);
+        box.anchorMin = new Vector2(0f, 1f);
+        box.anchorMax = new Vector2(0f, 1f);
+        box.pivot = new Vector2(0f, 1f);
+        box.sizeDelta = new Vector2(width, numberFieldHeight);
+        box.anchoredPosition = new Vector2(0f, -captionHeight);
+
+        // Built asleep and woken at the end, which is not tidiness: a TMP_InputField added to a live object
+        // runs its own OnEnable at once, before there is a text component to point at - and that is the moment
+        // it builds the caret it needs for typing. Without this the box is drawn and shows its value but
+        // cannot be typed into at all, which is exactly what a player would call "there is no way to enter
+        // the value". Letting it start life inactive means Awake and OnEnable both run with everything wired.
+        box.gameObject.SetActive(false);
+
+        Image plate = box.gameObject.AddComponent<Image>();
+        plate.color = panelColor;
+        plate.raycastTarget = true;
+
+        // The text lives inside a masked viewport of its own, so a hex string that outgrows the box scrolls
+        // under its edge instead of spilling over the box beside it.
+        RectTransform viewport = CreateRect("Viewport", box);
+        Stretch(viewport);
+        viewport.offsetMin = new Vector2(9f, 3f);
+        viewport.offsetMax = new Vector2(-6f, -3f);
+        viewport.gameObject.AddComponent<RectMask2D>();
+
+        TextMeshProUGUI text = CreateText("Text", viewport, numberFieldSize, labelColor, TextAlignmentOptions.Left);
+        text.fontStyle = FontStyles.Bold;
+        Stretch(text.rectTransform);
+
+        TMP_InputField input = box.gameObject.AddComponent<TMP_InputField>();
+
+        // The text component first: several of the setters below read it as they are applied, so it has to be
+        // in place before any of them.
+        input.textComponent = text;
+        input.textViewport = viewport;
+        input.targetGraphic = plate;
+        input.lineType = TMP_InputField.LineType.SingleLine;
+        input.richText = false;
+        input.characterLimit = isHex ? 7 : 3;
+        input.contentType = isHex
+            ? TMP_InputField.ContentType.Standard
+            : TMP_InputField.ContentType.IntegerNumber;
+        input.caretWidth = 2;
+        input.customCaretColor = true;
+        input.caretColor = accentColor;
+        input.selectionColor = Fade(accentColor, 0.45f);
+
+        // A selectable can only ever tint its own plate darker, never brighter, so the box at rest is the
+        // dimmed one and the highlighted and selected states are the full plate colour. It is a small step,
+        // the same kind the project's own buttons use, but it is what says a box holds the highlight - a box
+        // with no text in it otherwise looks like every other box.
+        ColorBlock colours = input.colors;
+        colours.normalColor = new Color(0.7f, 0.7f, 0.7f, 1f);
+        colours.highlightedColor = Color.white;
+        colours.pressedColor = new Color(0.86f, 0.86f, 0.86f, 1f);
+        colours.selectedColor = Color.white;
+        colours.disabledColor = new Color(0.4f, 0.4f, 0.4f, 1f);
+        colours.fadeDuration = 0.1f;
+        input.colors = colours;
+
+        // One handler for every way an edit can end - confirm, Escape, or the pointer going elsewhere -
+        // because that is the point the value should be taken, and the point reached by all of them.
+        if (isHex) input.onEndEdit.AddListener(OnHexEdited);
+        else input.onEndEdit.AddListener(OnNumberEdited);
+
+        box.gameObject.SetActive(true);
+
+        return input;
+    }
+
     private void BuildActions(Transform root)
     {
         resetButton = CreateButton("Reset", root, "RESET");
@@ -909,20 +1096,168 @@ public class CustomizeScreen : MonoBehaviour
         noteRect.sizeDelta = new Vector2(ColumnWidth + 200f, 30f);
         noteRect.anchoredPosition = new Vector2(-sideMargin, columnBottom - 26f);
 
-        // The hue bar is the one control here that a gamepad can drive, so leaving it must not be left to
-        // automatic navigation: the picker's own pointer field is not selectable, and the nearest button
-        // to its sides is a part or RESET, which is not where a player wants to go.
-        if (picker != null && picker.HueBar != null)
-        {
-            Navigation navigation = picker.HueBar.navigation;
-            navigation.mode = Navigation.Mode.Explicit;
-            navigation.selectOnLeft = null;
-            navigation.selectOnRight = null;
-            navigation.selectOnUp = swatches.Count > 0 ? swatches[swatches.Count - 1].button : null;
-            navigation.selectOnDown = backButton;
+        // Every piece of the screen is wired by hand: the column on the right is a finish grid, a palette, a
+        // picker and a row of boxes stacked on each other, which is exactly the shape Unity's guess reads
+        // worst, and a guess that lands on the wrong section is worse than no movement at all.
+        WireNavigation();
+    }
 
-            picker.HueBar.navigation = navigation;
+    /// <summary>
+    /// Wires the whole screen as the shapes it is drawn as: the parts as a list, the finishes as three to a
+    /// row, the palette as the grid it looks like, and the boxes as a row.
+    ///
+    /// Two places are not a shape at all. The picker's field keeps the four directions for itself so a pad can
+    /// move the cursor inside it (see <see cref="ColourPicker.Field"/>), and the hue bar keeps left and right
+    /// for its own value, which is what a slider is for - so the way out of the hue bar is up into the field
+    /// or down into the boxes.
+    /// </summary>
+    private void WireNavigation()
+    {
+        int columns = Mathf.Clamp(paletteColumns, 1, TruckPaint.PaletteCount + 1);
+        int paletteRows = Mathf.Max(1, Mathf.CeilToInt(swatches.Count / (float)columns));
+        int styleCols = Mathf.Clamp(styleColumns, 1, Mathf.Max(1, styleRows.Count));
+        int styleRowCount = Mathf.Max(1, Mathf.CeilToInt(styleRows.Count / (float)styleCols));
+
+        Selectable field = picker != null ? picker.Field : null;
+        Selectable bottomStyle = MiddleOfLastStyleRow(styleCols, styleRowCount);
+
+        Selectable firstBox = numberFields.Count > 0 ? numberFields[0] : null;
+        Selectable lastBox = hexField != null
+            ? hexField
+            : (numberFields.Count > 0 ? numberFields[numberFields.Count - 1] : null);
+
+        // The parts list: a list, with the column beside it as its way right and BACK at the end of it.
+        for (int i = 0; i < partRows.Count; i++)
+        {
+            Selectable up = i > 0 ? partRows[i - 1].button : null;
+            Selectable down = i < partRows.Count - 1 ? partRows[i + 1].button : backButton;
+
+            SetNavigation(partRows[i].button, null, SwatchBeside(i, paletteRows, columns), down, up);
         }
+
+        // The finishes: three to a row, so left and right stay in the row and down leaves the grid.
+        for (int i = 0; i < styleRows.Count; i++)
+        {
+            int column = i % styleCols;
+            int row = i / styleCols;
+
+            Selectable left = column > 0 ? styleRows[i - 1].button : null;
+            Selectable right = column < styleCols - 1 && i + 1 < styleRows.Count ? styleRows[i + 1].button : null;
+            Selectable below = row < styleRowCount - 1 && i + styleCols < styleRows.Count
+                ? styleRows[i + styleCols].button
+                : SwatchAt(columns / 2, columns);
+
+            SetNavigation(styleRows[i].button, left, right, below, null);
+        }
+
+        // The palette: the grid it looks like, five across. Off the left of a row is the part that sits
+        // beside it, so the two columns are each other's way in and out rather than dead ends.
+        for (int i = 0; i < swatches.Count; i++)
+        {
+            int column = i % columns;
+            int row = i / columns;
+
+            Selectable left = column > 0 ? swatches[i - 1].button : PartBeside(row, paletteRows);
+            Selectable right = column < columns - 1 && i + 1 < swatches.Count ? swatches[i + 1].button : null;
+            Selectable above = row > 0 ? swatches[i - columns].button : bottomStyle;
+            Selectable below = row < paletteRows - 1 && i + columns < swatches.Count
+                ? swatches[i + columns].button
+                : (field != null ? field : firstBox);
+
+            SetNavigation(swatches[i].button, left, right, below, above);
+        }
+
+        // The field takes every direction itself, so it is not given any: confirm is what leaves it, and the
+        // screen is where it is told what it leaves for.
+        if (picker != null) picker.FieldExit = firstBox != null ? firstBox : lastBox;
+
+        // The hue bar: up and down only, so left and right stay the hue. That is what a slider is for, and
+        // with an explicit target on its sides the highlight would move instead of the handle.
+        if (picker != null && picker.HueBar != null)
+            SetNavigation(picker.HueBar, null, null, firstBox != null ? firstBox : lastBox,
+                field != null ? field : bottomStyle);
+
+        // The boxes: a row of their own, with the picker above them and BACK below.
+        for (int i = 0; i < numberFields.Count; i++)
+        {
+            Selectable left = i > 0 ? numberFields[i - 1] : null;
+            Selectable right = i < numberFields.Count - 1 ? numberFields[i + 1] : lastBox;
+
+            SetNavigation(numberFields[i], left, right, backButton, field);
+        }
+
+        if (hexField != null)
+        {
+            Selectable left = numberFields.Count > 0 ? numberFields[numberFields.Count - 1] : null;
+
+            SetNavigation(hexField, left, null, backButton, field);
+        }
+
+        // RESET and BACK, and the end of the parts list points at them rather than at nothing.
+        SetNavigation(resetButton, null, backButton, null, PartAt(partRows.Count - 1));
+        SetNavigation(backButton, resetButton, null, null, lastBox != null ? lastBox : PartAt(partRows.Count - 1));
+    }
+
+    /// <summary>The palette swatch a part row is beside, and the part row a palette row is beside.</summary>
+    private Selectable SwatchBeside(int partIndex, int paletteRows, int columns)
+    {
+        if (swatches.Count == 0) return null;
+
+        int row = Mathf.Clamp(partIndex * paletteRows / Mathf.Max(1, partRows.Count), 0, paletteRows - 1);
+        int index = Mathf.Min(row * columns + columns / 2, swatches.Count - 1);
+
+        return swatches[index].button;
+    }
+
+    private Selectable PartBeside(int paletteRow, int paletteRows)
+    {
+        if (partRows.Count == 0) return null;
+
+        int index = Mathf.Clamp(
+            Mathf.RoundToInt((paletteRow + 0.5f) * partRows.Count / Mathf.Max(1, paletteRows)),
+            0, partRows.Count - 1);
+
+        return partRows[index].button;
+    }
+
+    /// <summary>The middle of the finish row the palette climbs up onto - the row that sits just above it.</summary>
+    private Selectable MiddleOfLastStyleRow(int styleCols, int styleRowCount)
+    {
+        if (styleRows.Count == 0) return null;
+
+        int index = Mathf.Min((styleRowCount - 1) * styleCols + styleCols / 2, styleRows.Count - 1);
+
+        return styleRows[index].button;
+    }
+
+    /// <summary>A swatch by grid position - column across, in row <paramref name="row"/>.</summary>
+    private Selectable SwatchAt(int column, int columns, int row = 0)
+    {
+        if (swatches.Count == 0) return null;
+
+        int index = Mathf.Min(Mathf.Max(0, row) * columns + Mathf.Max(0, column), swatches.Count - 1);
+
+        return swatches[index].button;
+    }
+
+    private Selectable PartAt(int index)
+    {
+        return partRows.Count > 0 ? partRows[Mathf.Clamp(index, 0, partRows.Count - 1)].button : null;
+    }
+
+    private static void SetNavigation(Selectable target, Selectable left, Selectable right, Selectable down,
+                                      Selectable up)
+    {
+        if (target == null) return;
+
+        Navigation navigation = target.navigation;
+        navigation.mode = Navigation.Mode.Explicit;
+        navigation.selectOnLeft = left;
+        navigation.selectOnRight = right;
+        navigation.selectOnDown = down;
+        navigation.selectOnUp = up;
+
+        target.navigation = navigation;
     }
 
     // ---------------------------------------------------------------- interaction
@@ -954,6 +1289,81 @@ public class CustomizeScreen : MonoBehaviour
     {
         TruckPaint.SetColour(selectedPart, colour);
         Refresh();
+    }
+
+    /// <summary>The colour the selected part is wearing, whichever way it got there.</summary>
+    private Color CurrentColour()
+    {
+        return TruckPaint.IsPainted(selectedPart) ? TruckPaint.ColourOf(selectedPart) : ColourOnModel();
+    }
+
+    /// <summary>
+    /// Reads the channel boxes back and paints the selected part with what they say.
+    ///
+    /// Only a box holding a number counts. A box the player emptied keeps the channel's current value, which
+    /// is what makes clearing one to retype it safe - the colour does not collapse to black on the way.
+    /// </summary>
+    private void OnNumberEdited(string value)
+    {
+        Color current = CurrentColour();
+        float[] channels = { current.r * 255f, current.g * 255f, current.b * 255f };
+
+        for (int i = 0; i < numberFields.Count && i < channels.Length; i++)
+        {
+            int typed;
+            if (int.TryParse(numberFields[i].text, out typed))
+                channels[i] = Mathf.Clamp(typed, 0, 255);
+        }
+
+        SetPickedColour(new Color(channels[0] / 255f, channels[1] / 255f, channels[2] / 255f));
+    }
+
+    /// <summary>Reads the hex box back and paints with it, or puts it back if it is not a colour at all.</summary>
+    private void OnHexEdited(string value)
+    {
+        string text = (value ?? string.Empty).Trim();
+        if (text.Length > 0 && text[0] != '#') text = "#" + text;
+
+        Color parsed;
+        if (!ColorUtility.TryParseHtmlString(text, out parsed))
+        {
+            // The box goes back to what the part is really wearing rather than being left showing something
+            // that was refused.
+            Refresh();
+            return;
+        }
+
+        SetPickedColour(parsed);
+    }
+
+    /// <summary>Paints the selected part, the same way a swatch or the picker does.</summary>
+    private void SetPickedColour(Color colour)
+    {
+        TruckPaint.SetColour(selectedPart, colour);
+        TruckPaint.Save();
+        Refresh();
+    }
+
+    /// <summary>
+    /// Writes the colour into the boxes, so they always say what the part is actually wearing.
+    ///
+    /// The channel boxes take a whole number and the hex box the same colour as a string - the form a player
+    /// most likely has to hand if they are copying a colour from somewhere else.
+    /// </summary>
+    private void SyncNumberFields(Color colour)
+    {
+        for (int i = 0; i < numberFields.Count; i++)
+            SetBoxText(numberFields[i], Mathf.RoundToInt(Mathf.Clamp01(colour[i]) * 255f).ToString());
+
+        SetBoxText(hexField, "#" + ColorUtility.ToHtmlStringRGB(colour));
+    }
+
+    private static void SetBoxText(TMP_InputField box, string text)
+    {
+        if (box == null || box.text == text) return;
+
+        // Without notify, so writing the value back is never mistaken for the player having typed it.
+        box.SetTextWithoutNotify(text);
     }
 
     private void ResetPaint()
@@ -1009,6 +1419,10 @@ public class CustomizeScreen : MonoBehaviour
         }
 
         if (previewSwatch != null) previewSwatch.color = colour;
+
+        // The boxes say the same colour as numbers, wherever the choice was made - a swatch, the picker, or
+        // the boxes themselves on the way in.
+        SyncNumberFields(colour);
 
         // The picker follows the selected part, so switching parts shows the colour that part wears.
         if (picker != null && !picker.IsDragging) picker.SetValue(colour, false);

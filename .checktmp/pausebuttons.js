@@ -1,87 +1,104 @@
-// Dump the pause panel's buttons: labels, onClick targets, plate colours, and the window's own Image.
-const fs = require("fs");
+// The pause and game-over panels: which buttons they hold, where each sits, and what each panel's
+// MenuNavigation resolves its default button to. MenuNavigation falls back on the top-most button by y, so
+// the anchored positions are what decide it.
+//
+// Run: node .checktmp/pausebuttons.js
+const fs = require('fs');
+const path = require('path');
 
-const scenePath = process.argv[2] || "Assets/Prefabs/Utils/CanvasUI.prefab";
-const pauseGuid = "c7d2837cbc61ba4449ec51b8788ca18c";
+const root = path.join(__dirname, '..');
+const file = path.join(root, 'Assets', 'Prefabs', 'Utils', 'CanvasUI.prefab');
+const lines = fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n').split('\n');
 
-const text = fs.readFileSync(scenePath, "utf8").replace(/\r/g, "");
-const objs = new Map();
-for (const part of text.split(/^--- /m)) {
-  const m = part.match(/^!u!(\d+) &(\d+)/);
-  if (!m) continue;
-  const name = (part.match(/^  m_Name: (.*)$/m) || [])[1];
-  const go = (part.match(/^  m_GameObject: \{fileID: (\d+)\}/m) || [])[1];
-  objs.set(m[2], { cls: m[1], id: m[2], name, go, part });
-}
+const navGuid = /guid:\s*([0-9a-f]+)/.exec(
+  fs.readFileSync(path.join(root, 'Assets', 'Scripts', 'UI', 'MenuNavigation.cs.meta'), 'utf8'))[1];
+const buttonGuid = '4e29b1a8efbd4b44bb3f3716e73f07ff';
 
-const g = (part, key) => (part.match(new RegExp("^  " + key + ": \\{fileID: (\\d+)\\}", "m")) || [])[1];
-const val = (part, key) => (part.match(new RegExp("^  " + key + ": ?(.*)$", "m")) || [])[1];
+const names = new Map();       // gameObject id -> name
+const rects = new Map();       // gameObject id -> { father, anchored, anchorMin, y0 }
+const buttons = new Set();     // gameObject ids carrying a Button
+const monoOf = new Map();      // component id -> script guid
 
-const guids = {
-  fe87c0e1cc204ed48ad3b37840f39efc: "Image",
-  "4e29b1a8efbd4b44bb3f3716e73f07ff": "Button",
-  cfabb0440166ab443bba8876756fdfa9: "TMP?",
-  "5f7201a12d95ffc409449d95f23cf332": "Text",
-};
-
-function components(goId) {
-  const go = objs.get(goId);
-  if (!go) return [];
-  return (go.part.match(/- component: \{fileID: (\d+)\}/g) || []).map((c) => c.match(/\d+/)[0]);
-}
-
-for (const o of objs.values()) {
-  if (o.cls !== "114" || !o.part.includes(pauseGuid)) continue;
-  console.log("PauseManager script guid " + pauseGuid);
-  const fields = ["pausePanel", "controlsPanel", "pauseMusic"];
-  for (const key of fields) {
-    const id = g(o.part, key);
-    const target = id && objs.get(id);
-    console.log(`  ${key} = ${id} (${target && target.name})`);
+function field(block, name) {
+  for (const l of block) {
+    const m = new RegExp('^  ' + name + ': (.*)$').exec(l);
+    if (m) return m[1];
   }
-  console.log("  --- raw script fields ---");
-  console.log(
-    o.part
-      .split("\n")
-      .filter((l) => /^  [a-zA-Z]/.test(l))
-      .join("\n")
-  );
+  return null;
 }
 
-// Buttons and what they invoke
-const buttons = [];
-for (const o of objs.values()) {
-  if (o.cls !== "114") continue;
-  if (!o.part.includes("4e29b1a8efbd4b44bb3f3716e73f07ff")) continue;
-  if (o.part.includes(pauseGuid)) continue;
-  buttons.push(o);
-}
+const idOf = (v) => (v ? (/\d+/.exec(v) || ['0'])[0] : null);
 
-for (const b of buttons) {
-  const go = objs.get(b.go);
-  const onClick = b.part.match(/m_OnClick:[\s\S]*?m_PersistentCalls:[\s\S]*?m_Calls:([\s\S]*?)\n  m_/);
-  const calls = onClick ? onClick[1] : "";
-  const method = (calls.match(/m_MethodName: (.*)$/m) || [])[1];
-  const targetId = (calls.match(/m_Target: \{fileID: (\d+)\}/) || [])[1];
-  const targetGo = targetId && objs.get(targetId);
-  console.log(
-    `BUTTON ${go.name} -> ${method || "(nothing)"}  target=${targetGo ? targetGo.name : "-"}`
-  );
-}
+for (let i = 0; i < lines.length;) {
+  const m = /^--- !u!(\d+) &(\d+)/.exec(lines[i]);
+  if (!m) { i++; continue; }
 
-// The window plates: images on the pause panel and controls panel
-for (const [label, idOfPanel] of [
-  ["pausePanel", "6890820110232687943"],
-  ["controlsPanel", "6890820110302793911"],
-]) {
-  const comps = components(idOfPanel);
-  console.log(`\n=== ${label} components`);
-  for (const c of comps) {
-    const co = objs.get(c);
-    if (!co) continue;
-    const scriptGuid = (co.part.match(/m_Script: \{fileID: 11500000, guid: ([0-9a-f]+)/) || [])[1];
-    const kind = co.cls === "224" ? "RectTransform" : guids[scriptGuid] || scriptGuid || co.cls;
-    const color = val(co.part, "m_Color");
-    console.log(`  ${kind} ${c} color=${color || ""} sprite=${g(co.part, "m_Sprite") || ""}`);
+  const type = m[1];
+  const id = m[2];
+
+  let end = i + 1;
+  while (end < lines.length && !/^--- !u!\d+ &/.test(lines[end])) end++;
+  const block = lines.slice(i, end);
+
+  if (type === '1') names.set(id, field(block, 'm_Name'));
+
+  if (type === '224' || type === '4') {
+    const go = idOf(field(block, 'm_GameObject'));
+    if (go) rects.set(go, {
+      father: idOf(field(block, 'm_Father')),
+      anchored: field(block, 'm_AnchoredPosition'),
+      anchorMin: field(block, 'm_AnchorMin'),
+    });
   }
+
+  if (type === '114') {
+    const go = idOf(field(block, 'm_GameObject'));
+    const script = field(block, 'm_Script');
+    const guid = script ? (/guid: ([0-9a-f]+)/.exec(script) || [])[1] : null;
+    if (guid === buttonGuid && go) buttons.add(go);
+    if (guid === navGuid && go) monoOf.set(go, true);
+  }
+
+  i = end;
+}
+
+// Children, by father.
+const children = new Map();
+for (const [go, r] of rects) {
+  if (!r.father) continue;
+  if (!children.has(r.father)) children.set(r.father, []);
+  children.get(r.father).push(go);
+}
+
+function chain(go) {
+  const out = [];
+  let cur = go;
+  for (let guard = 0; cur && guard < 30; guard++) {
+    const r = rects.get(cur) || {};
+    out.push((names.get(cur) || '?') + (buttons.has(cur) ? '[B]' : ''));
+    cur = r.father;
+  }
+  return out.join(' < ');
+}
+
+function under(go) {
+  const out = [];
+  const walk = (id) => { for (const c of children.get(id) || []) { out.push(c); walk(c); } };
+  walk(go);
+  return out;
+}
+
+const navOwners = [];
+for (const [go] of monoOf) navOwners.push(go);
+
+console.log('Buttons in CanvasUI.prefab (' + buttons.size + '):');
+for (const go of buttons) console.log('  ' + chain(go) + '   anchored=' + ((rects.get(go) || {}).anchored || '?'));
+
+console.log('\nMenuNavigation owners and what their buttons are:');
+for (const owner of navOwners) {
+  const all = [owner, ...under(owner)];
+  const own = all.filter((g) => buttons.has(g));
+
+  console.log('\n  "' + (names.get(owner) || '?') + '"');
+  for (const g of own) console.log('     ' + (names.get(g) || '?') + '  anchored=' + ((rects.get(g) || {}).anchored || '?'));
 }

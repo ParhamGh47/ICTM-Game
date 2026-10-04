@@ -1,9 +1,10 @@
 using UnityEngine;
 
 /// <summary>
-/// The three impact sounds the game makes for itself, for the things the truck hits that are not the world:
-/// a thin sheet's <b>rattle</b> (the blinder, a log, a bin), a big sign's <b>clang</b> (share-the-road, stop),
-/// and a hollow container's <b>knock</b> (a barrel, a crate, a cone).
+/// The impact sounds the game makes for itself, for the things the truck hits that are not the world: a thin
+/// sheet's <b>rattle</b> (the blinder), a big sign's <b>clang</b> (share-the-road, stop), a hollow container's
+/// <b>knock</b> (a barrel, a crate, a cone), and a <b>thud</b> for loose junk of some weight (a log, a waste
+/// bin, a trash container).
 ///
 /// There is only one impact recording in the project - the one the world uses (see
 /// <see cref="CollisionSound"/>) - and nothing in it sounds like a barrel or a sign, so these are made rather
@@ -21,10 +22,15 @@ using UnityEngine;
 ///  - the <b>clang</b> is the same idea at the size of a whole sign: a thicker strike, partials spaced wider
 ///    and unevenly, and a ring that runs on after the hit, which is what a big flat panel does and a thin one
 ///    does not;
-///  - and the <b>knock</b> is a container: a firm strike to open it, then a drum-like resonance at 235 Hz
+///  - the <b>knock</b> is a container: a firm strike to open it, then a drum-like resonance at 235 Hz
 ///    with partials up to 550 Hz - near the blinder's own body in pitch, but held for a quarter of a second
 ///    where the blinder's is gone in a tenth of that - with an edge over it and two rattles behind as the
-///    thing rocks on its base. A container is told from a sheet by size, not by pitch.
+///    thing rocks on its base. A container is told from a sheet by size, not by pitch;
+///  - and the <b>junk</b> is the loose roadside thing - a log, a waste bin, a trash container. It is a crash,
+///    and deliberately the closest of the four to the world's own recording: the same low, falling shape, no
+///    ring and no note anywhere, so it reads as a blow rather than as a bell. It is the loudest of the four -
+///    it has to carry over an engine - and what lets it do that is a sharp milliseconds-long crack on top of
+///    it, not any added tone: nothing in it is an oscillator, only noise run through filters.
 ///
 /// A car has no voice here: it takes the world's own recording, the same as a tree or a building.
 ///
@@ -43,19 +49,23 @@ public static class ImpactClip
     private const float SheetSeconds = 0.5f;
     private const float PanelSeconds = 0.75f;
     private const float BarrelSeconds = 0.6f;
+    private const float DebrisSeconds = 0.6f;
 
     /// <summary>The peak each finished sound is scaled to. All of them fill the scale: they play over an engine.</summary>
     private const float SheetPeak = 1f;
     private const float PanelPeak = 1f;
     private const float BarrelPeak = 1f;
+    private const float DebrisPeak = 1f;
 
     private const int SheetSeed = 20261003;
     private const int PanelSeed = 20261004;
     private const int BarrelSeed = 20261005;
+    private const int DebrisSeed = 20261006;
 
     private static AudioClip sheet;
     private static AudioClip panel;
     private static AudioClip barrel;
+    private static AudioClip debris;
 
     /// <summary>The blinder, a log, a waste bin.</summary>
     public static AudioClip Sheet
@@ -87,6 +97,17 @@ public static class ImpactClip
             if (barrel == null) barrel = BuildBarrel();
 
             return barrel;
+        }
+    }
+
+    /// <summary>A log, a waste bin, a trash container.</summary>
+    public static AudioClip Debris
+    {
+        get
+        {
+            if (debris == null) debris = BuildDebris();
+
+            return debris;
         }
     }
 
@@ -329,6 +350,84 @@ public static class ImpactClip
         FadeOut(samples, 0.1f);
 
         return Make("Impact barrel (generated)", samples);
+    }
+
+    // ---------------------------------------------------------------- the loose junk
+
+    /// <summary>
+    /// The crash: a log, a waste bin, a trash container.
+    ///
+    /// This voice has been wrong twice, and both mistakes are worth keeping here. Built first to sound like
+    /// the world, it was a dark low thud and could not be heard at all: the truck's engine is a low rumble, and
+    /// a thud played over it does not stand out from it, it joins it. Measured, that shape put 0.176 rms in the
+    /// 40-120 Hz band, more than double the barrel's 0.079, and only 9.6% of its energy above 1 kHz where the
+    /// blinder and the barrel both put about a quarter. It was then rebuilt for brightness out of pure sine
+    /// partials - an 1.8 kHz edge and a 3.15 kHz ring - which was audible and sounded like sheet metal, because
+    /// a pure tone is a bell and no bell is a crash.
+    ///
+    /// So this one is the world's own shape made loud. It is a single noise source through two poles at 170 Hz,
+    /// which gives the low, falling spectrum the default recording has: 0.128 rms in the 40-120 Hz band against
+    /// the recording's 0.120, and 0.017 at 2-6 kHz against its 0.014 - while being the loudest of the four
+    /// overall, at 0.217 against the recording's 0.190. A single pole was not enough here: at 6 dB an octave it
+    /// passed so much 300-800 Hz that the sound was a thick whoosh rather than a blow.
+    ///
+    /// Over the crash sits a crack - the top of the noise, gone in seven milliseconds - and that transient, not
+    /// any pitch, is what carries the hit through the engine. A few small clatters follow as the thing settles.
+    /// There is no oscillator in any of it, which is also why there is no note left to hear as metal.
+    /// </summary>
+    private static AudioClip BuildDebris()
+    {
+        System.Random random = new System.Random(DebrisSeed);
+
+        int length = Mathf.RoundToInt(DebrisSeconds * SampleRate);
+        float[] samples = new float[length];
+
+        float crackState = 0f;
+        float crashState = 0f;
+        float crashState2 = 0f;
+        float[] scatterState = new float[3];
+
+        const float crashCorner = 170f;
+
+        // The few clatters as the junk settles: when each lands, how bright it is, how fast it dies, how much
+        // it carries. Small on purpose - they are a detail on the crash, not the crash.
+        float[] scatterAt = { 0.06f, 0.13f, 0.22f };
+        float[] scatterCorner = { 2200f, 1900f, 1600f };
+        float[] scatterDecay = { 0.009f, 0.011f, 0.013f };
+        float[] scatterWeight = { 0.16f, 0.11f, 0.08f };
+
+        for (int i = 0; i < length; i++)
+        {
+            float t = i / (float)SampleRate;
+
+            crashState = OnePole(ref crashState, Noise(random), Coefficient(crashCorner));
+            crashState2 = OnePole(ref crashState2, crashState, Coefficient(crashCorner));
+
+            // The blow: a fast body carrying the hit and a long low tail under it, both from the same filtered
+            // noise, so there is no pitch anywhere in it.
+            float crash = crashState2 * Attack(t, 0.002f) *
+                          (0.6f * Mathf.Exp(-t / 0.2f) + 0.4f * Mathf.Exp(-t / 0.6f));
+
+            // And the crack over it: the whole top of the noise, gone in a few milliseconds. This is the
+            // transient that cuts through the engine, and the reason this voice can be heard at all.
+            crackState = OnePole(ref crackState, Noise(random), Coefficient(3500f));
+            float crack = crackState * Attack(t, 0.0005f) * Mathf.Exp(-t / 0.007f);
+
+            // The crack is loud per sample but lasts milliseconds, while the crash is quiet per sample and
+            // lasts half a second. The finished sound is scaled to a fixed peak, so a heavy crack would simply
+            // shrink everything else: it is kept small here, and the level of the voice is set by the crash.
+            float mix = 21f * crash + 0.5f * crack;
+
+            for (int k = 0; k < scatterState.Length; k++)
+                mix += Tick(ref scatterState[k], t, scatterAt[k], random, scatterCorner[k], scatterDecay[k]) * scatterWeight[k];
+
+            samples[i] = mix;
+        }
+
+        Normalise(samples, DebrisPeak);
+        FadeOut(samples, 0.1f);
+
+        return Make("Impact debris (generated)", samples);
     }
 
     // ---------------------------------------------------------------- helpers

@@ -15,8 +15,7 @@ public class CollisionSound : MonoBehaviour
     public AudioClip hardHitClip;
 
     [Header("Collision Clips - other things")]
-    [Tooltip("A thin light sheet: the blinder, a log, a waste container. Left empty, one is made at runtime - " +
-             "see ImpactClip.")]
+    [Tooltip("A thin light sheet: the blinder. Left empty, one is made at runtime - see ImpactClip.")]
     public AudioClip sheetHitClip;
 
     [Tooltip("A big flat sign, larger than a blinder: share-the-road, stop. Left empty, one is made at runtime " +
@@ -26,6 +25,10 @@ public class CollisionSound : MonoBehaviour
     [Tooltip("A hollow container: a barrel, a crate, a cone. Left empty, one is made at runtime - see " +
              "ImpactClip.")]
     public AudioClip barrelHitClip;
+
+    [Tooltip("Loose junk of some weight: a log, a waste bin, a trash container. The voice nearest the " +
+             "world's own - left empty, one is made at runtime. See ImpactClip.")]
+    public AudioClip debrisHitClip;
 
     [Header("Impact Settings")]
     public float softImpactThreshold = 2f;
@@ -55,7 +58,8 @@ public class CollisionSound : MonoBehaviour
     [Tooltip("Hitting something with the truck's body is what this sound is for; going over something is " +
              "not. A contact that faces up into the truck - the road, a kerb, a rumble strip, the ground a " +
              "jump lands on - comes from underneath it, and is left silent. In degrees: how far a contact's " +
-             "surface may lean towards the truck's own up and still count as underneath. 0 switches it off.")]
+             "surface may lean towards the truck's own up and still count as underneath. 0 switches it off. " +
+             "Anything carrying an ImpactMaterial is exempt from this - see OnCollisionEnter.")]
     [Range(0f, 89f)]
     public float undersideAngle = 55f;
 
@@ -69,11 +73,12 @@ public class CollisionSound : MonoBehaviour
         if (audioSource == null)
             audioSource = GetComponent<AudioSource>();
 
-        // The three sounds that have no recording in the project are made here, the way the boost sounds are.
+        // The sounds that have no recording in the project are made here, the way the boost sounds are.
         // An inspector value still wins, so a real recording can be dropped in later without touching this.
         if (sheetHitClip == null) sheetHitClip = ImpactClip.Sheet;
         if (panelHitClip == null) panelHitClip = ImpactClip.Panel;
         if (barrelHitClip == null) barrelHitClip = ImpactClip.Barrel;
+        if (debrisHitClip == null) debrisHitClip = ImpactClip.Debris;
 
         lastVelocity = Vector3.zero;
     }
@@ -131,18 +136,40 @@ public class CollisionSound : MonoBehaviour
         // And then the sound itself is chosen by what was hit. The strength and the volume above are the
         // same whatever it was - a barrel struck at 40 is a barrel struck at 40 - so this only ever exchanges
         // one clip for another of the same kind.
-        AudioClip byMaterial = ClipFor(collision.collider);
+        //
+        // What was hit is asked for once, and both the clip and the exemption below are decided from that one
+        // answer. They used to be decided separately - the clip by looking the material up again, the
+        // exemption by asking whether a clip came back - which quietly made the exemption depend on the clip
+        // existing: a marked object whose voice had not been built yet fell back to the world's clip, was not
+        // exempt, and if it was low enough to be struck from underneath it made no sound at all. Now the
+        // marker alone is what exempts it, so a marked object is always heard.
+        ImpactMaterial material = MaterialFor(collision.collider);
+        AudioClip byMaterial = ClipFor(material);
 
         if (byMaterial != null)
             chosenClip = byMaterial;
 
-        // The dust still kicks up for a contact from underneath - that is what makes a landing land - but
-        // the thud does not: it is the truck going over something rather than into it. The cooldown is
-        // deliberately not spent on a silent one, so the crash that follows a landing still speaks.
-        if (!ComesFromUnderneath(collision))
+        // A contact from underneath is the truck going *over* something rather than into it - the road, a
+        // kerb, a rumble strip, the ground a jump lands on - and is left silent. The cooldown is deliberately
+        // not spent on a silent one, so the crash that follows a landing still speaks.
+        //
+        // Anything carrying an ImpactMaterial is exempt, and that exemption is not a nicety: a log and a
+        // waste bin are flat and low enough that the truck's own collider meets them from below, so the angle
+        // rule read every one of those hits as the truck driving over them and they made no sound at all.
+        // Whatever the player is meant to hear struck, they hear however low it was struck - the rule is
+        // about the world the truck drives on, and that world carries no marker.
+        bool underneath = ComesFromUnderneath(collision);
+
+        if (!underneath || material != null)
         {
             audioSource.pitch = Random.Range(minPitch, maxPitch);
             audioSource.PlayOneShot(chosenClip, chosenVolume);
+
+            // Only a sound that was actually played spends the cooldown. Going over a kerb is not a hit, and
+            // it must not swallow the crash that follows it - which is what the note above says, and what
+            // keeping this inside the branch is what makes true. It used to be set outside, on every
+            // contact, silent or not.
+            lastPlayTime = now;
         }
 
         // The dust is for the world - a kerb, a barrier, a landing - and not for things that bring their
@@ -168,24 +195,26 @@ public class CollisionSound : MonoBehaviour
                 Destroy(particles, 3f);
             }
         }
-
-        lastPlayTime = now;
     }
 
 
     /// <summary>
-    /// The clip for what the truck actually touched, or null to keep the world's own three.
+    /// What the truck actually touched, or null if it is the world.
     ///
     /// The collider that reports the contact is not necessarily the object itself - a sign keeps its
     /// colliders on a child, and a car is hit on a door or a bumper - so the answer is looked for up the
     /// hierarchy, which is what <see cref="ImpactMaterial"/> is put on the root for.
     /// </summary>
-    private AudioClip ClipFor(Collider collider)
+    private static ImpactMaterial MaterialFor(Collider collider)
     {
-        if (collider == null) return null;
+        return collider == null ? null : collider.GetComponentInParent<ImpactMaterial>();
+    }
 
-        ImpactMaterial material = collider.GetComponentInParent<ImpactMaterial>();
-
+    /// <summary>
+    /// The clip for what was touched, or null to keep the world's own three.
+    /// </summary>
+    private AudioClip ClipFor(ImpactMaterial material)
+    {
         if (material == null) return null;
 
         switch (material.kind)
@@ -193,6 +222,7 @@ public class CollisionSound : MonoBehaviour
             case ImpactKind.Sheet: return sheetHitClip;
             case ImpactKind.Panel: return panelHitClip;
             case ImpactKind.Barrel: return barrelHitClip;
+            case ImpactKind.Debris: return debrisHitClip;
             default: return null;
         }
     }
@@ -206,6 +236,11 @@ public class CollisionSound : MonoBehaviour
     /// the world's, so a truck that is leant over, on its side or in mid-air still reads correctly. Every
     /// contact has to be underneath for the hit to count as one, so a single square-on contact at the bumper
     /// is still a real hit.
+    ///
+    /// This is only ever asked about something with no <see cref="ImpactMaterial"/>: a log or a waste bin is
+    /// low enough that the truck's collider meets it from below, and OnCollisionEnter exempts those. What is
+    /// left for it to judge is the world - the road, a kerb, a rumble strip, the ground - which is the one
+    /// thing the truck is meant to travel over rather than into.
     /// </summary>
     private bool ComesFromUnderneath(Collision collision)
     {

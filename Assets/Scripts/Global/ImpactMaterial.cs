@@ -16,7 +16,7 @@ public enum ImpactKind
     Solid = 0,
 
     /// <summary>
-    /// A thin, light sheet: the blinder, a log, a waste bin. Sharp, empty, and it rattles after the hit.
+    /// A thin, light sheet: the blinder. Sharp, empty, and it rattles after the hit.
     /// </summary>
     Sheet = 1,
 
@@ -31,6 +31,13 @@ public enum ImpactKind
     /// note of its own - a firm knock with a drum-like ring and a short rattle behind it.
     /// </summary>
     Barrel = 3,
+
+    /// <summary>
+    /// Loose roadside junk of some weight: a log, a waste bin, a trash container. These are the ones that
+    /// should sound most like the world - a low, dark thud rather than a ring or a rattle - so this is the
+    /// voice nearest <see cref="Solid"/>, told apart only by being hollow and over sooner.
+    /// </summary>
+    Debris = 4,
 }
 
 /// <summary>
@@ -39,9 +46,9 @@ public enum ImpactKind
 ///
 /// The strength of a hit and how loud it is played are not decided here - those are the same whatever was hit,
 /// from the same speed and the same thresholds. All this changes is which sound that hit is: a tree is the
-/// world and gets the world's voice, a blinder is a thin sheet and rattles, a big sign clangs, and a barrel
-/// or a cone knocks hollow. A car is not on the list at all - another car takes the world's own recording,
-/// the same as a tree or a building does.
+/// world and gets the world's voice, a blinder is a thin sheet and rattles, a big sign clangs, a barrel or a
+/// cone knocks hollow, and a log or a bin thuds. A car is not on the list at all - another car takes the
+/// world's own recording, the same as a tree or a building does.
 ///
 /// It is a component rather than a tag, a layer or a name, for the reasons <see cref="NoImpactParticles"/>
 /// gives: a tag has to sit on a prefab's root and targets clear their own the moment they die, a layer is a

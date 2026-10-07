@@ -4964,10 +4964,10 @@ MonoBehaviour:
   hornYieldStrength: 2.1
   lightsOn: 1
   headlightColors:
-  - {r: 1, g: 0.9725, b: 0.8078, a: 1}
-  - {r: 1, g: 1, b: 0.9608, a: 1}
-  - {r: 0.78, g: 0.87, b: 1, a: 1}
-  - {r: 1, g: 0.76, b: 0.42, a: 1}
+  - {r: 1, g: 1, b: 0.96, a: 1}
+  - {r: 0.76, g: 0.87, b: 1, a: 1}
+  - {r: 1, g: 0.95, b: 0.62, a: 1}
+  - {r: 1, g: 0.68, b: 0.3, a: 1}
   uprightLimit: 55
   maxVerticalDrift: 1.5
   settleSpeed: 0.6

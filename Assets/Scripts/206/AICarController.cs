@@ -33,7 +33,9 @@ using UnityEngine;
 ///    the level starts, with a lamp colour of its own drawn from <see cref="headlightColors"/> - see
 ///    <see cref="ApplyHeadlights"/>. It is a per-car choice made while the level runs rather than something
 ///    the painter has to bake in, so every car painted into every level gets it, including the ones that
-///    were there before any of it existed.
+///    were there before any of it existed. A car whose imported model names no lamp material is lit
+///    through the meshes its prefab calls 'Headlights' instead, which is what gives the 911, the car and
+///    the truck lamps at all - see <see cref="IsLampPart"/>.
 ///  - <b>Being knocked about</b>: once it is tipped past <see cref="uprightLimit"/> it stops being driven
 ///    and is left to the physics until it comes to rest. That is what stops the old kangaroo hop - the
 ///    drive used to keep forcing position and rotation onto a body lying on its side, so every collision
@@ -185,15 +187,16 @@ public class AICarController : MonoBehaviour
     public bool lightsOn = true;
 
     [Tooltip("The lamp colours a passing car may be given, one drawn per car when the level starts. " +
-             "Deliberately the colours a bulb actually comes in - the warm white the car prefabs were " +
-             "authored with, a plain white, a cool blue-white and an amber - rather than anything that " +
-             "would read as an effect. Four is enough for a lane of traffic to look varied.")]
+             "Deliberately the colours a bulb actually comes in - a plain white, a cool blue-white, a warm " +
+             "yellow and an amber - rather than anything that would read as an effect, and deliberately far " +
+             "enough apart in hue to be told apart: two whites a shade apart are two cars that look like " +
+             "they were given the same bulb. Four is enough for a lane of traffic to look varied.")]
     public Color[] headlightColors =
     {
-        new Color(1f, 0.9725f, 0.8078f),   // warm white, the colour the car prefabs are authored with
-        new Color(1f, 1f, 0.9608f),        // plain white
-        new Color(0.78f, 0.87f, 1f),       // cool blue-white
-        new Color(1f, 0.76f, 0.42f),       // amber
+        new Color(1f, 1f, 0.96f),          // plain white
+        new Color(0.76f, 0.87f, 1f),       // cool blue-white
+        new Color(1f, 0.95f, 0.62f),       // warm yellow
+        new Color(1f, 0.68f, 0.3f),        // amber
     };
 
     [Header("Knocked Off Its Wheels")]
@@ -204,6 +207,22 @@ public class AICarController : MonoBehaviour
     [Tooltip("The most a car is allowed to be moving upwards while it is still being driven, so a " +
              "collision cannot leave it hopping down the road.")]
     public float maxVerticalDrift = 1.5f;
+
+    [Tooltip("How quickly the sideways slide a collision leaves in a car is bled off while it is still " +
+             "being driven, in metres per second per second. The drive sets the car's position every step, so " +
+             "any speed across its own line is carried on top of the path and the two fight each other every " +
+             "step - which is what reads as a car being dragged down the road rather than driving along it. " +
+             "Only the sideways part is taken out: what the car is doing along its own heading is left exactly " +
+             "as it is, so a shunt that pushes a car up the road still pushes it, and nothing here can add " +
+             "speed the car was not driven at. 0 leaves it in the body, as before.")]
+    public float shoveResponse = 14f;
+
+    [Tooltip("The same for spin, in degrees per second per second: the drive sets the car's heading every " +
+             "step as well, so a spin a collision leaves in the body is a wobble the drive is fighting rather " +
+             "than anything being steered. Deliberately gentle - enough to take the wobble out of a light " +
+             "nudge, not enough to stop a real hit rolling a car over the way it always did, which is what " +
+             "takes it out of the drive in the first place. 0 leaves it in, as before.")]
+    public float spinShoveResponse = 60f;
 
     [Tooltip("Below this speed, and this spin, a knocked-over car counts as having come to rest.")]
     public float settleSpeed = 0.6f;
@@ -307,6 +326,32 @@ public class AICarController : MonoBehaviour
         "siren",
     };
 
+    // The same list for a lamp that was found by the name of the mesh it is drawn on rather than by its own
+    // material - see <see cref="IsLampPart"/>. It leaves out 'material.005', which is in the list above only
+    // because it is the 911's own shell and would light up as a lamp if it were ever taken for one: a mesh
+    // the prefab has named 'Headlights' is a lamp whatever it wears, and the shell is a different object, so
+    // a lamp that happens to be drawn with a material called Material.005 - the car and the truck both ship
+    // one - still gets lit instead of being silently skipped.
+    private static readonly string[] NeverLampNamesByPart =
+    {
+        "carcolor",
+        "body",
+        "glass",
+        "window",
+        "windscreen",
+        "windshield",
+        "siren",
+    };
+
+    // What a lamp's trim is called, and never a lamp: the chrome ring and bezel around a lens, which the
+    // player's own truck names <c>lightRings</c> and which must not be lit as if it were the lens itself.
+    private static readonly string[] TrimWords =
+    {
+        "ring",
+        "bezel",
+        "trim",
+    };
+
     // ---------------------------------------------------------------- the horn
 
     /// <summary>
@@ -363,6 +408,12 @@ public class AICarController : MonoBehaviour
     /// The lens is a shared asset (the 206's is <c>Light206</c>, worn by every 206 in the level), so it is
     /// tinted on the car's own copy of it - the same thing the player's brake light does - which leaves the
     /// asset alone and gives each car a lamp of its own colour.
+    ///
+    /// Two routes reach those lenses, because the four cars do not all offer the same thing. A material that
+    /// names itself a lamp, or that glows, is one - which is how the 206's lens is found. Failing that, the
+    /// meshes the prefab has called 'Headlights' are the car's lamps whatever their materials are called -
+    /// see <see cref="IsLampPart"/> - which is the only handle the imported models give, and the reason the
+    /// 911, the car and the truck used to drive with dark lamps.
     /// </summary>
     void ApplyHeadlights()
     {
@@ -387,16 +438,19 @@ public class AICarController : MonoBehaviour
 
         litLenses.Clear();
 
-        var renderers = GetComponentsInChildren<MeshRenderer>(true);
-        foreach (var renderer in renderers)
+        // The instances, not the shared assets: tinting the shared ones would recolour every car in the
+        // level that wears them. Reading this property is what makes the copies, so the materials only
+        // have to be written to - handing the array back would change nothing.
+        MeshRenderer[] renderers = GetComponentsInChildren<MeshRenderer>(true);
+
+        for (int r = 0; r < renderers.Length; r++)
         {
+            MeshRenderer renderer = renderers[r];
+
             // Only what is drawn counts: a car model ships switched-off leftovers, and lighting one of those
             // would have no effect on screen while hiding the lamp that was never lit.
-            if (!renderer.gameObject.activeInHierarchy || !renderer.enabled) continue;
+            if (!IsDrawn(renderer)) continue;
 
-            // The instances, not the shared assets: tinting the shared ones would recolour every car in the
-            // level that wears them. Reading this property is what makes the copies, so the materials only
-            // have to be written to - handing the array back would change nothing.
             Material[] materials = renderer.materials;
 
             for (int i = 0; i < materials.Length; i++)
@@ -404,18 +458,66 @@ public class AICarController : MonoBehaviour
                 Material material = materials[i];
                 if (!IsLamp(material)) continue;
 
-                // The lamp's own brightness is kept, so a lens authored hot stays as hot as it was and only
-                // its colour changes. A lamp that never glowed is given a plain colour to glow with.
-                float brightness = Mathf.Max(1f, EmissionBrightness(material));
-
-                material.EnableKeyword(EmissionKeyword);
-                material.SetColor(EmissionColorId, lightsOn ? tint * brightness : Color.black);
-
-                // Its own copy, made by the line reading the array above, so putting this one out cannot
-                // reach the lens the next car along the road is wearing.
-                litLenses.Add(material);
+                LightLens(material, tint);
             }
         }
+
+        // A car whose own materials name no lamp is lit through the part its prefab has already named for it.
+        //
+        // The imported models offer nothing else: every material they ship is a <c>Material.0NN</c> and not
+        // one of them glows, which is why three of the four cars used to drive about with their lamps dark
+        // however the painter had set them. The meshes themselves are named though - 'HeadLights' on the
+        // 206, 'Headlights' on the others, the same handle the car's damage uses to find them - so that name
+        // is what the lamps are found by here. Only reached when nothing above matched, so the 206, whose
+        // lens really is a lamp material, keeps exactly that lens lit and nothing else.
+        if (litLenses.Count == 0)
+        {
+            for (int r = 0; r < renderers.Length; r++)
+            {
+                MeshRenderer renderer = renderers[r];
+                if (!IsDrawn(renderer)) continue;
+                if (!IsLampPart(renderer.transform)) continue;
+
+                Material[] materials = renderer.materials;
+
+                for (int i = 0; i < materials.Length; i++)
+                {
+                    Material material = materials[i];
+
+                    // Whatever a model calls its lamp meshes, the paint and the glass on them are still not
+                    // lamps, and lighting the shell of a car would be worse than leaving it dark.
+                    if (IsNeverLampByPart(material)) continue;
+
+                    LightLens(material, tint);
+                }
+            }
+        }
+    }
+
+    /// <summary>Whether a renderer is actually drawn. A car model ships switched-off leftovers, and
+    /// lighting one of those would have no effect on screen while hiding the lamp that was never lit.</summary>
+    static bool IsDrawn(Renderer renderer)
+    {
+        return renderer != null && renderer.gameObject.activeInHierarchy && renderer.enabled;
+    }
+
+    /// <summary>
+    /// Lights one lamp material to this car's colour, or puts it out when the car is driving with its
+    /// lights off.
+    ///
+    /// The lamp's own brightness is kept, so a lens authored hot stays as hot as it was and only its colour
+    /// changes. A lamp that never glowed is given a plain colour to glow with. The material handed in is the
+    /// car's own copy of the asset - made by reading the renderer's material array - so putting this one out
+    /// cannot reach the lens the next car along the road is wearing.
+    /// </summary>
+    void LightLens(Material material, Color tint)
+    {
+        float brightness = Mathf.Max(1f, EmissionBrightness(material));
+
+        material.EnableKeyword(EmissionKeyword);
+        material.SetColor(EmissionColorId, lightsOn ? tint * brightness : Color.black);
+
+        litLenses.Add(material);
     }
 
     /// <summary>
@@ -441,23 +543,116 @@ public class AICarController : MonoBehaviour
 
     /// <summary>
     /// Whether a material is one of a car's lamps: named like one, or glowing on its own - but never the
-    /// body paint or the glass, which are named here for the same reason the painter refuses to paint them.
+    /// body paint or the glass, which are ruled out here for the same reason the painter refuses to paint
+    /// them.
+    ///
+    /// Public because the painter lights the cars it places with the same rule - it puts a lit lens on
+    /// whatever this says is a lamp - so a car painted into a level and a car that was already there cannot
+    /// end up disagreeing about where the lamps are.
     /// </summary>
-    static bool IsLamp(Material material)
+    public static bool IsLamp(Material material)
     {
-        if (material == null) return false;
+        if (IsNeverLamp(material)) return false;
 
         string name = material.name;
-
-        for (int i = 0; i < NeverLampNames.Length; i++)
-        {
-            if (name.IndexOf(NeverLampNames[i], System.StringComparison.OrdinalIgnoreCase) >= 0) return false;
-        }
 
         if (name.IndexOf("light", System.StringComparison.OrdinalIgnoreCase) >= 0) return true;
         if (name.IndexOf("lamp", System.StringComparison.OrdinalIgnoreCase) >= 0) return true;
 
         return EmissionBrightness(material) > 0f;
+    }
+
+    /// <summary>
+    /// Whether a material is one a lamp may never be: the body paint, whose glow belongs to the car rather
+    /// than to a lamp, and the glass. The 911's own shell material is one of these, so without the rule its
+    /// whole body would light up as if it were a headlamp.
+    /// </summary>
+    static bool IsNeverLamp(Material material)
+    {
+        return MatchesAny(material, NeverLampNames);
+    }
+
+    /// <summary>The same question for a lamp found by the name of its mesh - see
+    /// <see cref="NeverLampNamesByPart"/> for why the list is not quite the same one.</summary>
+    public static bool IsNeverLampByPart(Material material)
+    {
+        return MatchesAny(material, NeverLampNamesByPart);
+    }
+
+    static bool MatchesAny(Material material, string[] words)
+    {
+        if (material == null) return true;
+
+        string name = material.name;
+
+        for (int i = 0; i < words.Length; i++)
+        {
+            if (name.IndexOf(words[i], System.StringComparison.OrdinalIgnoreCase) >= 0) return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Whether a mesh is one of the car's lamps by the name of the object it hangs under.
+    ///
+    /// An imported model gives its lamps no material worth recognising: every material it ships is a
+    /// <c>Material.0NN</c>, and none of them glows, so a car whose lens is not one of them has nothing at
+    /// all for the rule above to find. What it does have is the name the prefab gave the meshes -
+    /// 'HeadLights' on the 206, 'Headlights' on the 911, the car and the truck - which is put there for the
+    /// damage system's benefit and is the same handle that system finds them by. It is read up the parents
+    /// as well, so a lamp modelled as a group of parts is lit whole.
+    ///
+    /// Public for the painter's sake, the same way <see cref="IsLamp"/> is.
+    /// </summary>
+    public static bool IsLampPart(Transform part)
+    {
+        Transform current = part;
+
+        while (current != null)
+        {
+            if (IsLampName(current.name)) return true;
+            current = current.parent;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Whether an object's name is a lamp's: 'HeadLights', 'Head Lights' and 'head-light' alike, or a name
+    /// that begins 'light' or 'lamp' - and never the trim around a lens, which the player's own truck calls
+    /// <c>lightRings</c> and which would otherwise put a glowing bezel on every car.
+    /// </summary>
+    static bool IsLampName(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return false;
+
+        string squashed = Squash(name);
+
+        for (int i = 0; i < TrimWords.Length; i++)
+        {
+            if (squashed.Contains(TrimWords[i])) return false;
+        }
+
+        return squashed.Contains("headlight")
+            || squashed.StartsWith("light", System.StringComparison.Ordinal)
+            || squashed.StartsWith("lamp", System.StringComparison.Ordinal);
+    }
+
+    /// <summary>A name with the spaces, underscores and hyphens taken out and the case dropped, so that
+    /// <c>Head Lights</c>, <c>head-lights</c> and <c>HeadLights</c> are all the same word.</summary>
+    static string Squash(string name)
+    {
+        var squashed = new System.Text.StringBuilder(name.Length);
+
+        for (int i = 0; i < name.Length; i++)
+        {
+            char c = name[i];
+            if (c == ' ' || c == '_' || c == '-') continue;
+            squashed.Append(char.ToLowerInvariant(c));
+        }
+
+        return squashed.ToString();
     }
 
     /// <summary>How brightly a material glows, as the largest channel of its emission colour. Zero for one
@@ -666,6 +861,7 @@ public class AICarController : MonoBehaviour
         rb.MovePosition(position + move);
 
         DampVerticalKick();
+        DampShove(forward);
     }
 
     /// <summary>
@@ -914,6 +1110,69 @@ public class AICarController : MonoBehaviour
 
         velocity.y = maxVerticalDrift;
         rb.velocity = velocity;
+    }
+
+    /// <summary>
+    /// Takes the sideways slide and the spin a collision left in the car back out of it while it is still
+    /// being driven, leaving the car doing what the drive is asking of it.
+    ///
+    /// The drive does not steer this car with forces - it sets the body's position and heading every step,
+    /// the way a kinematic body would be moved - but the body is not kinematic, so it also carries a
+    /// velocity and a spin of its own, and whatever a collision put there stays there. A rigidbody only
+    /// gives speed up through its own drag, half a metre per second per second here, so a solid hit's worth
+    /// of sideways speed is carried for a dozen seconds and more: every step then moves the car along its
+    /// path AND that far across it, so a shoved car is dragged off its line and wobbles against a heading
+    /// that is being set for it. The shake is the two of them fighting, one physics step at a time - which
+    /// is why it looks worst just after a hit and then goes on and on, long after the hit is over.
+    ///
+    /// What is taken out is deliberately only what cannot be the drive: the speed across the car's own line
+    /// and the spin. Its speed along its own heading is left exactly as it is, because the drive is not
+    /// forces and whether its pace shows up in the body's velocity depends on the engine - taking that part
+    /// out would either be a no-op or would take the car's own driven speed with it, and this must never be
+    /// able to change how fast a car is driven. The vertical is left to <see cref="DampVerticalKick"/> and
+    /// to gravity, where it belongs.
+    ///
+    /// A shoved car therefore takes the hit, is thrown by it, and then drives on along its path as though
+    /// nothing had happened - which is what a passing car is for. This only ever runs on a car that is being
+    /// driven, so a car that has been knocked off its wheels is still entirely the physics' own, shove, spin
+    /// and all, until it has settled and been picked up again by <see cref="Recover"/>.
+    /// </summary>
+    void DampShove(Vector3 forward)
+    {
+        float step = Time.fixedDeltaTime;
+
+        if (shoveResponse > 0f)
+        {
+            // What the car is doing across its own line, and only that. Speed along its heading is left
+            // exactly as it is: the drive does not steer with forces, so whether its own pace shows up in
+            // the body's velocity depends on the engine, and taking that part out would either do nothing
+            // or take the car's driven speed with it. Across the line is safe either way - it is never the
+            // drive, and it is the part the path is fighting. The vertical is left out of it too: that
+            // belongs to gravity and the ground, and <see cref="DampVerticalKick"/> is what deals with it.
+            Vector3 velocity = rb.velocity;
+
+            Vector3 heading = Vector3.ProjectOnPlane(forward, Vector3.up);
+            if (heading.sqrMagnitude < 0.0001f) heading = forward;
+            heading.Normalize();
+
+            Vector3 sideways = velocity - Vector3.Project(velocity, heading);
+            sideways.y = 0f;
+
+            if (sideways.sqrMagnitude > 0f)
+            {
+                rb.velocity = velocity - Vector3.MoveTowards(sideways, Vector3.zero, shoveResponse * step);
+            }
+        }
+
+        if (spinShoveResponse > 0f)
+        {
+            // The heading is set outright every step, so a spin is a wobble the drive is fighting - but a
+            // hit's spin is also how a car is tipped past <see cref="uprightLimit"/> and taken out of the
+            // drive altogether, so this is slow enough to leave that alone: what it takes out is the wobble
+            // left by a nudge, not the roll of a real crash.
+            rb.angularVelocity = Vector3.MoveTowards(
+                rb.angularVelocity, Vector3.zero, spinShoveResponse * Mathf.Deg2Rad * step);
+        }
     }
 
     // --------------------------------------------------------- knocked about

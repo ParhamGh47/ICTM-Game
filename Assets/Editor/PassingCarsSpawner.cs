@@ -41,13 +41,16 @@ using System.Collections.Generic;
 ///    per car, applied to the same slots the prefab already paints. Every car prefab dropped in
 ///    Assets/Prefabs/Cars joins the fleet on its own; one built from a fresh model carries its body material
 ///    as "BODY", which is recognised here without any change to this list of prefabs.
-///  - "Lights On" decides whether spawned cars drive with their headlights on.
-///    Nothing is baked into the scene for it: a car prefab ships its headlights
-///    switched off and its lamp colour is per car, so the painter only records
-///    the answer and AICarController lights each car when the level starts - the
-///    spotlights and the lens, in a lamp colour of its own. See
-///    <see cref="AICarController"/>'s ApplyHeadlights for why it cannot be
-///    painted in.
+///  - "Lights On" decides whether spawned cars drive with their headlights on. The
+///    colour of the lamps is the one thing that cannot be painted in - it is drawn
+///    per car while the level runs - but the lens it is shone through is the same for
+///    every car, so each car placed is given the lens this setting calls for and has its
+///    spot lights switched to match (see <see cref="Lights"/>). That is what makes a level
+///    painted this way look the way it will run, in the scene view and in the editor,
+///    instead of looking like a run where only some of the cars were given lights - or,
+///    with the lights off, like one car still had them on. AICarController then tints each
+///    car's own copy of the lens, and switches the lights and the lens off again for a car
+///    whose lamps have been knocked off it.
 ///
 /// Usage: open a scene with a RoadArchitect road, then:
 ///   Tools > Road Tools > Paint Passing Cars
@@ -81,8 +84,21 @@ public class PassingCarsSpawner : EditorWindow
     private float maxSpeedKPH = 35f;
     private bool lightsOn = true;
 
+    // The lens the painter puts on the cars it places when they are painted with their lights on. It is an
+    // ordinary material asset - a copy of the 206's own lit lens, Light206 - so that a level painted this way
+    // LOOKS the way it will run: in the scene view, in the editor, cars have their lamps on. Without it only
+    // the cars whose model already shipped a lit lens ever looked lit, and a run with Lights On looked like a
+    // run where only some of the cars had been given lights at all.
+    private const string LampMaterialPath = "Assets/Prefabs/Cars/CarLamp.mat";
+
+    // And the one it puts on them with the lights off, so that a level painted that way looks like it will
+    // run too. A copy of the 206's own unlit lens, LightOff206: the same shape, the same albedo, no glow.
+    private const string LampOffMaterialPath = "Assets/Prefabs/Cars/CarLampOff.mat";
+
     private GameObject[] carPrefabs = new GameObject[0];
     private Material[] carColors = new Material[0];
+    private Material lampMaterial;
+    private Material lampOffMaterial;
 
     // The colour palette as a shuffled deck, so a paint run spreads over it instead of repeating.
     private List<Material> colorDeck;
@@ -93,6 +109,13 @@ public class PassingCarsSpawner : EditorWindow
     private string shapedSample;
     private int unpainted;
     private string unpaintedSample;
+
+    // And how the lighting went. A car whose lamps cannot be found looks exactly like a car that was
+    // skipped, so the number is said out loud rather than left to be discovered at the end of the road.
+    private int lit;
+    private int doused;
+    private int noLamp;
+    private string noLampSample;
 
     [MenuItem("Tools/Road Tools/Paint Passing Cars")]
     static void OpenWindow()
@@ -117,6 +140,16 @@ public class PassingCarsSpawner : EditorWindow
         FindCarPrefabs();
         FindCarColors();
         if (targetRoad != null) laneOffset = ComputeLaneOffset(targetRoad);
+    }
+
+    /// <summary>
+    /// The two lenses the painter puts on the cars it places - lit and unlit - loaded fresh so that a material
+    /// assigned in the project while the window was open is picked up on the next paint.
+    /// </summary>
+    void FindLampMaterial()
+    {
+        lampMaterial = AssetDatabase.LoadAssetAtPath<Material>(LampMaterialPath);
+        lampOffMaterial = AssetDatabase.LoadAssetAtPath<Material>(LampOffMaterialPath);
     }
 
     void FindCarPrefabs()
@@ -277,9 +310,10 @@ public class PassingCarsSpawner : EditorWindow
         lightsOn = EditorGUILayout.Toggle(new GUIContent("Lights On",
             "Spawned cars drive with their headlights on."), lightsOn);
         EditorGUILayout.LabelField(
-            "Recorded per car here; AICarController switches the LightL/LightR " +
-            "spotlights on and gives each car a lamp colour of its own when the " +
-            "level starts.",
+            "Every car placed is given the lens this setting calls for and has its spotlights " +
+            "switched to match, so the level in front of you looks like it will run. The colour " +
+            "of the lamps is still drawn per car when the level starts (AICarController), which " +
+            "is why it is not here.",
             EditorStyles.miniLabel);
 
         EditorGUILayout.Space();
@@ -315,6 +349,7 @@ public class PassingCarsSpawner : EditorWindow
         // Re-scanned here as well as when the window opens, so a car prefab dropped into the folder while the
         // window was sitting open still joins the fleet on the next paint.
         FindCarPrefabs();
+        FindLampMaterial();
 
         if (targetRoad == null || targetRoad.spline == null || carPrefabs.Length == 0)
         {
@@ -371,6 +406,21 @@ public class PassingCarsSpawner : EditorWindow
         shapedSample = null;
         unpainted = 0;
         unpaintedSample = null;
+        lit = 0;
+        doused = 0;
+        noLamp = 0;
+        noLampSample = null;
+
+        string missingLamp = lightsOn
+            ? (lampMaterial == null ? LampMaterialPath : null)
+            : (lampOffMaterial == null ? LampOffMaterialPath : null);
+
+        if (missingLamp != null)
+        {
+            Debug.LogWarning($"Painting with the lights {(lightsOn ? "on" : "off")}, but there is no lamp " +
+                             $"material at '{missingLamp}' to put on the cars. Their lamps will be right when " +
+                             $"the level runs, but the scene will not show it - see the note under 'Lights On'.");
+        }
 
         // One speed for the whole run, both directions. The two paths share both lanes - each drives out on
         // one side of the road and back on the other - so a faster direction slowly overtakes the slower one
@@ -402,6 +452,27 @@ public class PassingCarsSpawner : EditorWindow
         {
             Debug.LogWarning($"{unpainted} car(s) had nothing to paint at all - no visible renderer to take a " +
                              $"colour - and kept their own, e.g. {unpaintedSample}.");
+        }
+
+        if (lightsOn)
+        {
+            Debug.Log($"Lights on: {lit} of {created} car(s) had their lamps lit with '{LampMaterialPath}'.");
+
+            if (noLamp > 0)
+            {
+                Debug.LogWarning($"{noLamp} painted car(s) had no lamp this tool could find - no material " +
+                                 $"named like one and no mesh its prefab calls a lamp - so their lamps stay dark, " +
+                                 $"e.g. {noLampSample}. They are lit when the level runs, through the same " +
+                                 $"rules, only without the scene showing it.");
+            }
+        }
+        else if (doused > 0)
+        {
+            // Only worth saying when there was something to put out: the 206 ships a lit lens, the other
+            // three models ship a lens that is already dark. The rest of the fleet is left as it is, which
+            // is why this is not reported against all of them the way the lit count is.
+            Debug.Log($"Lights off: {doused} of {created} car(s) had a lit lens put out with " +
+                      $"'{LampOffMaterialPath}'. Cars that shipped an unlit lens were left alone.");
         }
     }
 
@@ -549,6 +620,7 @@ public class PassingCarsSpawner : EditorWindow
             }
 
             ApplyRandomColor(carObj, rng);
+            Lights(carObj);
             created++;
         }
 
@@ -576,6 +648,128 @@ public class PassingCarsSpawner : EditorWindow
         }
 
         return 0;
+    }
+
+    /// <summary>
+    /// Puts one car's lamps, in the scene, into the state the level was painted in: the lit lens on the meshes
+    /// that are its lamps with its spot lights switched on, or the unlit lens with them left off.
+    ///
+    /// Nothing about a lamp is baked into a car PREFAB, because the colour is drawn per car while the level
+    /// runs and a prefab cannot hold a colour per copy of itself - see <see cref="AICarController"/>. But the
+    /// lens the colour is shone through is the same one for every car, so that much can be, and is: without
+    /// it a level painted with the lights on looked like a level where only the handful of cars whose model
+    /// happened to ship a lit lens had been given lights. The colour itself is still chosen per car when the
+    /// level runs, which is when the car's own copy of this lens is tinted.
+    ///
+    /// The same is true the other way round, which is why this runs for both settings rather than only for
+    /// the lights being on: the 206 ships a lit lens in its prefab, so in a level painted with the lights off
+    /// it was the one car that still looked switched on. Both lenses are the same shape and albedo and differ
+    /// only in whether they glow, so a lamp given the wrong one is only ever wrong in its glow.
+    ///
+    /// Where the lamps are is decided by exactly the rules the running game uses - <see cref="AICarController"/>
+    /// exposes them for this - so a car painted here and a car left over from an older run agree: a material
+    /// that says it is a lamp first, and failing that the meshes the prefab has called its lamps.
+    /// </summary>
+    void Lights(GameObject car)
+    {
+        if (car == null) return;
+
+        // Which lens this car's lamps wear depends on the level being painted, not on the car.
+        Material lens = lightsOn ? lampMaterial : lampOffMaterial;
+
+        bool anyLamp = false;
+
+        if (lens != null)
+        {
+            MeshRenderer[] renderers = car.GetComponentsInChildren<MeshRenderer>(true);
+
+            for (int r = 0; r < renderers.Length; r++)
+            {
+                MeshRenderer renderer = renderers[r];
+                if (renderer == null || !renderer.gameObject.activeInHierarchy || !renderer.enabled) continue;
+
+                Material[] materials = renderer.sharedMaterials;
+                bool changed = false;
+
+                for (int i = 0; i < materials.Length; i++)
+                {
+                    if (materials[i] == null) continue;
+                    if (!AICarController.IsLamp(materials[i])) continue;
+                    if (materials[i] == lens) { anyLamp = true; continue; }
+
+                    materials[i] = lens;
+                    changed = true;
+                    anyLamp = true;
+                }
+
+                if (changed)
+                {
+                    Undo.RecordObject(renderer, "Light Passing Car");
+                    renderer.sharedMaterials = materials;
+                }
+            }
+
+            // Nothing named itself a lamp, which is the case for every model whose materials are all called
+            // Material.0NN. The meshes the prefab has named for it are the lamps instead - but only to light
+            // them: these models ship an unlit lens already, so a level painted with the lights off has
+            // nothing to put out on them and is left alone rather than given a pointless override.
+            if (lightsOn && !anyLamp)
+            {
+                for (int r = 0; r < renderers.Length; r++)
+                {
+                    MeshRenderer renderer = renderers[r];
+                    if (renderer == null || !renderer.gameObject.activeInHierarchy || !renderer.enabled) continue;
+                    if (!AICarController.IsLampPart(renderer.transform)) continue;
+
+                    Material[] materials = renderer.sharedMaterials;
+                    bool changed = false;
+
+                    for (int i = 0; i < materials.Length; i++)
+                    {
+                        if (materials[i] == null) continue;
+                        if (AICarController.IsNeverLampByPart(materials[i])) continue;
+                        if (materials[i] == lens) { anyLamp = true; continue; }
+
+                        materials[i] = lens;
+                        changed = true;
+                        anyLamp = true;
+                    }
+
+                    if (changed)
+                    {
+                        Undo.RecordObject(renderer, "Light Passing Car");
+                        renderer.sharedMaterials = materials;
+                    }
+                }
+            }
+        }
+
+        // The spot lights, to match, so the pools of light on the road are in the scene too rather than only
+        // ever appearing when the level is played. Their colour is the level's own business and is set per car
+        // when it runs, the same way the lens is.
+        Light[] lights = car.GetComponentsInChildren<Light>(true);
+
+        for (int i = 0; i < lights.Length; i++)
+        {
+            if (lights[i] == null || lights[i].enabled == lightsOn) continue;
+
+            Undo.RecordObject(lights[i], "Light Passing Car");
+            lights[i].enabled = lightsOn;
+        }
+
+        if (anyLamp)
+        {
+            if (lightsOn) lit++;
+            else doused++;
+
+            return;
+        }
+
+        // Only a car that was meant to be lit can fail to be: with the lights off there is nothing to find.
+        if (!lightsOn) return;
+
+        noLamp++;
+        if (noLampSample == null) noLampSample = car.name;
     }
 
     /// <summary>
@@ -764,12 +958,12 @@ public class PassingCarsSpawner : EditorWindow
         return false;
     }
 
-    // Lights are the one thing this tool deliberately does NOT paint into the scene. A car prefab ships its
-    // headlights switched off and its lamp colour is picked per car, so a colour baked into the scene is a
-    // colour that is either wrong (every car the same) or invisible (a material instance the scene cannot
-    // hold). AICarController lights each car when the level starts instead - see its ApplyHeadlights - and
-    // what is painted here is only the answer to "with the lights on or off", which is per car and does
-    // persist.
+    // The lamp COLOUR is the one thing this tool does not paint into the scene, and cannot. A car prefab
+    // ships its headlights switched off and its lamp colour is picked per car, so a colour baked into the
+    // scene is a colour that is either wrong (every car the same) or invisible (a material instance the scene
+    // cannot hold). What is painted in is everything around it - the lit lens the colour will be shone
+    // through (Lights), and the spot lights switched on - and AICarController then tints each car's own copy
+    // of that lens when the level starts, which is the same thing the player's brake light does.
 
     /// <summary>
     /// Removes whatever the last paint run left under the parent, cars and paths alike.

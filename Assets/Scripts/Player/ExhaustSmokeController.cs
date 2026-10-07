@@ -47,7 +47,11 @@ public class ExhaustSmokeController : MonoBehaviour
 
             main.startSize = 2.5f;
 
-            if (speed < 20f && throttle > 0.6f)
+            // Working hard: either held at full throttle from a standstill, or - in a truck the player is
+            // changing gear themselves - left in a gear too tall for the speed it is at. Both are the engine
+            // straining below its torque, and both smoke the same way. The automatic box has already picked a
+            // sensible gear, so Lugging never fires there and its exhaust is exactly as it was.
+            if (car.Lugging || (speed < 20f && throttle > 0.6f))
             {
                 targetMaxParticles = heavyLoadMaxParticles;
                 targetSpeed = heavyLoadSpeed;

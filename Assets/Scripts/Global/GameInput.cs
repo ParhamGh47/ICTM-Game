@@ -13,15 +13,28 @@ using UnityEngine;
 /// Gamepad layout (Xbox naming, and the same physical buttons on any pad Unity recognises):
 ///
 ///   RT / 10th axis    gas, forward
-///   LT / 9th axis     brake, and reverse once the car has stopped
+///   LT / 9th axis     brake, and reverse once the car has stopped (in manual, brake only - see below)
 ///   Left stick        steering
 ///   LB / L1           focus (hold)        Space             focus (hold)
 ///   A / cross         boost               Left Shift        boost
 ///   B / circle        headlights          L                 headlights
 ///   X / square        horn                H                 horn
 ///   Y / triangle      change camera       C                 change camera
-///   D-pad down        reset the vehicle   R                 reset the vehicle
+///   D-pad up          reset the vehicle   R                 reset the vehicle
 ///   Start / Options   pause               Escape            pause
+///
+/// With the gearbox set to manual the truck changes gear by hand, so two controls have to give way to
+/// make room on the pad - and they move rather than being given up:
+///
+///   B / circle        shift up            Page Up or E       shift up
+///   X / square        shift down          Page Down or Q     shift down
+///   D-pad left        horn                H                 horn
+///   D-pad right       headlights          L                 headlights
+///
+/// That is the only difference between the two layouts: the horn and the lights keep their own button
+/// names on the keyboard, and on the pad they simply step one place inwards - the horn was X, the left
+/// face button, and it becomes D-pad left; the lights were B, the right one, and they become D-pad right.
+/// Nothing else moves, and switching back to automatic puts the pad exactly as it was.
 ///
 /// The face buttons are read by position - bottom, right, left, top - through the generic
 /// <c>KeyCode.JoystickButton</c> values, which is how a controller reports them on every platform: an
@@ -31,7 +44,8 @@ using UnityEngine;
 /// each device, so a pad that reports its triggers or D-pad somewhere else can be fixed there without
 /// touching code. <c>KeyboardSteer</c> and <c>KeyboardThrottle</c> exist because the car must no
 /// longer read the built-in <c>Horizontal</c>/<c>Vertical</c> axes: those now also carry the D-pad,
-/// which the menus need, and a D-pad nudge must never steer the truck.
+/// which the menus need, and a D-pad nudge must never steer the truck. The D-pad is read on its own
+/// two axes (<c>ControllerDPadVertical</c>, <c>ControllerDPadHorizontal</c>) for the same reason.
 /// </summary>
 public static class GameInput
 {
@@ -43,6 +57,7 @@ public static class GameInput
     private const string ControllerGasAxis = "ControllerGas";
     private const string ControllerBrakeAxis = "ControllerBrake";
     private const string ControllerDPadVerticalAxis = "ControllerDPadVertical";
+    private const string ControllerDPadHorizontalAxis = "ControllerDPadHorizontal";
 
     // ---------------------------------------------------------------- buttons
 
@@ -56,10 +71,15 @@ public static class GameInput
     /// <summary>Bottom face button: A on an Xbox pad, cross on a PlayStation pad.</summary>
     public const KeyCode BoostButton = KeyCode.JoystickButton0;
 
-    /// <summary>Right face button: B / circle.</summary>
+    /// <summary>
+    /// Right face button: B / circle. The headlights in automatic, and shift up in manual - the gearbox
+    /// setting is what decides which (see <see cref="LightsPressed"/> and <see cref="GearUpPressed"/>).
+    /// </summary>
     public const KeyCode LightsButton = KeyCode.JoystickButton1;
 
-    /// <summary>Left face button: X / square.</summary>
+    /// <summary>
+    /// Left face button: X / square. The horn in automatic, and shift down in manual.
+    /// </summary>
     public const KeyCode HornButton = KeyCode.JoystickButton2;
 
     /// <summary>Top face button: Y / triangle.</summary>
@@ -86,6 +106,28 @@ public static class GameInput
     /// <summary>Trigger travel below this counts as released.</summary>
     public const float TriggerDeadZone = 0.06f;
 
+    /// <summary>
+    /// Dead zone of the D-pad, whose axes report a direction as a full-scale value. The same number the
+    /// Input Manager uses for the two D-pad axes, so a press is read exactly the way the menus read it.
+    /// </summary>
+    public const float DPadDeadZone = 0.5f;
+
+    // ---------------------------------------------------------------- directions
+
+    /// <summary>
+    /// Which way each D-pad direction reports on its own axis.
+    ///
+    /// Up is <em>positive</em> on <c>ControllerDPadVertical</c>, exactly as it is on the built-in
+    /// <c>Vertical</c> axis the menus navigate with - the two entries are the same axis with the same
+    /// Invert flag - so a direction means the same thing to the menus and to the truck. Reset therefore
+    /// reads the positive end of the vertical axis, and the left/right pair reads the horizontal one,
+    /// where right is positive.
+    /// </summary>
+    private const float DPadUp = 1f;
+    private const float DPadDown = -1f;
+    private const float DPadLeft = -1f;
+    private const float DPadRight = 1f;
+
     // ---------------------------------------------------------------- driving
 
     /// <summary>
@@ -93,6 +135,10 @@ public static class GameInput
     ///
     /// The two pedals are read separately rather than as one signed axis, so holding both simply
     /// cancels out instead of whichever the driver happened to press first winning.
+    ///
+    /// What the brake does depends on the gearbox, and it is the truck that decides: in automatic this is
+    /// brake-then-reverse, and in manual it is a brake and nothing else, because the way to go backwards
+    /// there is to select the reverse gear and use the gas (see <see cref="WheelPhysics"/>).
     /// </summary>
     public static float Throttle()
     {
@@ -137,16 +183,69 @@ public static class GameInput
             || Input.GetKeyDown(BoostButton);
     }
 
-    /// <summary>Headlights: L, or B / circle.</summary>
+    /// <summary>
+    /// Headlights: L, or B / circle in automatic and right on the D-pad in manual - where that button is
+    /// the gear lever instead.
+    /// </summary>
     public static bool LightsPressed()
     {
-        return Input.GetKeyDown(KeyCode.L) || Input.GetKeyDown(LightsButton);
+        if (Input.GetKeyDown(KeyCode.L))
+            return true;
+
+        if (DriveSettings.Manual)
+            return DPadPressed(DPadRight, ref dpadRightWasHeld);
+
+        return Input.GetKeyDown(LightsButton);
     }
 
-    /// <summary>Horn: H, or X / square.</summary>
+    /// <summary>
+    /// Horn: H, or X / square in automatic and left on the D-pad in manual. The horn and the lights are
+    /// the two controls the pad's face buttons give up when the player drives manually, and they take the
+    /// two directions the D-pad has left over.
+    /// </summary>
     public static bool HornPressed()
     {
-        return Input.GetKeyDown(KeyCode.H) || Input.GetKeyDown(HornButton);
+        if (Input.GetKeyDown(KeyCode.H))
+            return true;
+
+        if (DriveSettings.Manual)
+            return DPadPressed(DPadLeft, ref dpadLeftWasHeld);
+
+        return Input.GetKeyDown(HornButton);
+    }
+
+    /// <summary>
+    /// Shift up a gear: B / circle, which is free in manual because the lights have moved to the D-pad.
+    /// Page Up is the keyboard's gear lever, and E is the second one a player coming from another racing
+    /// game is likely to reach for - both work, and neither is used for anything else.
+    ///
+    /// Nothing at all in automatic: there the box shifts itself and this button is still the headlights.
+    /// </summary>
+    public static bool GearUpPressed()
+    {
+        if (!DriveSettings.Manual)
+            return false;
+
+        return Input.GetKeyDown(KeyCode.PageUp)
+            || Input.GetKeyDown(KeyCode.E)
+            || Input.GetKeyDown(LightsButton);
+    }
+
+    /// <summary>
+    /// Shift down a gear: X / square, Page Down, or Q - the mirror of <see cref="GearUpPressed"/>, and
+    /// nothing in automatic, where the button is still the horn.
+    ///
+    /// Pressed again in first, this selects reverse, which is the one gear with no ratio of its own (see
+    /// <see cref="EngineAudio"/>).
+    /// </summary>
+    public static bool GearDownPressed()
+    {
+        if (!DriveSettings.Manual)
+            return false;
+
+        return Input.GetKeyDown(KeyCode.PageDown)
+            || Input.GetKeyDown(KeyCode.Q)
+            || Input.GetKeyDown(HornButton);
     }
 
     /// <summary>Change camera: C, or Y / triangle.</summary>
@@ -162,18 +261,20 @@ public static class GameInput
     }
 
     /// <summary>
-    /// Reset the vehicle: R, or down on the D-pad. It puts the truck back on the road, facing the way the
+    /// Reset the vehicle: R, or up on the D-pad. It puts the truck back on the road, facing the way the
     /// level goes - it does not mend the damage the truck is carrying.
     ///
     /// The D-pad is an axis rather than a button, so it is turned into a press here - holding it down
-    /// must not reset the car again every time the cooldown runs out.
+    /// must not reset the car again every time the cooldown runs out. Up rather than down, which is where
+    /// the controls tables have always listed it, and which leaves the two directions a driving game
+    /// expects to find free - left and right, for the horn and the lights - free.
     /// </summary>
     public static bool ResetPressed()
     {
         if (Input.GetKeyDown(KeyCode.R))
             return true;
 
-        return DPadPressed(-1f, ref dpadDownWasHeld);
+        return DPadPressed(DPadUp, ref dpadUpWasHeld);
     }
 
     /// <summary>
@@ -182,9 +283,7 @@ public static class GameInput
     /// </summary>
     private static bool DPadPressed(float direction, ref bool wasHeld)
     {
-        float vertical = Input.GetAxis(ControllerDPadVerticalAxis);
-        bool held = direction > 0f ? vertical > 0.5f : vertical < -0.5f;
-
+        bool held = DPadHeld(direction);
         bool pressed = held && !wasHeld;
 
         wasHeld = held;
@@ -192,7 +291,23 @@ public static class GameInput
         return pressed;
     }
 
-    private static bool dpadDownWasHeld;
+    /// <summary>Whether one direction of the D-pad is down right now.</summary>
+    private static bool DPadHeld(float direction)
+    {
+        string axis = direction == DPadLeft || direction == DPadRight
+            ? ControllerDPadHorizontalAxis
+            : ControllerDPadVerticalAxis;
+
+        float raw = Input.GetAxis(axis);
+
+        return direction > 0f ? raw > DPadDeadZone : raw < -DPadDeadZone;
+    }
+
+    // One flag per direction, because each is asked for on its own: the reset, the horn and the lights
+    // are all separate controls and one being held must not count as the others having been pressed.
+    private static bool dpadUpWasHeld;
+    private static bool dpadLeftWasHeld;
+    private static bool dpadRightWasHeld;
 
     // ---------------------------------------------------------------- shaping
 

@@ -16,9 +16,12 @@ using UnityEngine.UI;
 /// in the window, so the options keep looking like the pause menu even if that artwork is ever changed.
 ///
 /// The two tabs are the same two as the options screen: CONTROLS, which is the table from
-/// <see cref="ControlBindings"/>; and SETTINGS, which holds everything that is chosen - <see cref="GraphicsQuality"/>,
-/// <see cref="GameDifficulty"/>, and <see cref="SoundSettings"/> with its five channels and the switch that
-/// keeps the engine in the same place in the mix whichever camera the player drives from. The sound rows are
+/// <see cref="ControlBindings"/> - two of them, the automatic gearbox's and the manual one's, with the one in
+/// force shown, since that setting moves the horn, the lights and the gears between the pad's face buttons and
+/// its D-pad; and SETTINGS, which holds everything that is chosen - <see cref="GraphicsQuality"/>, the gearbox
+/// (<see cref="DriveSettings"/>), <see cref="GameDifficulty"/>, and <see cref="SoundSettings"/> with its five
+/// channels and the switch that keeps the engine in the same place in the mix whichever camera the player
+/// drives from. The sound rows are
 /// built from that class rather than written out here, so this page and the main menu's are the same five rows
 /// and a channel added there turns up in both. Sound is a group of the settings rather than a tab of its own,
 /// here as there: what the game looks like and what it sounds like are both some setting or other.
@@ -56,6 +59,10 @@ public class PauseOptionsPanel : MonoBehaviour
     [Tooltip("The switch over the truck's speed trails, under the motion blur - the other switch about how " +
              "the speed feels.")]
     public string speedParticlesText = "SPEED PARTICLES";
+
+    [Tooltip("The switch over the gearbox: the engine changing gear for the player, or the player changing it " +
+             "by hand. It shares the last switch line, and the CONTROLS tab shows what it does to the buttons.")]
+    public string gearboxText = "GEARBOX";
     public string onText = "ON";
     public string offText = "OFF";
     public string difficultyCaption = "DIFFICULTY";
@@ -141,8 +148,9 @@ public class PauseOptionsPanel : MonoBehaviour
     public Vector2 presetChoiceSize = new Vector2(88f, 38f);
     public float presetChoiceGap = 7f;
     public float presetChoiceFont = 14f;
-    [Tooltip("The four switches are laid out two to a line, so each is half the space the graphics rows have " +
-             "to themselves - the page has no room for four stacked ones.")]
+    [Tooltip("The picture switches are laid out two to a line, so each is half the space the graphics rows have " +
+             "to themselves - the page has no room for them stacked. The gearbox, the third of them, shares the " +
+             "difficulty caption's line instead.")]
     public Vector2 switchSize = new Vector2(248f, 32f);
     public float switchGap = 4f;
     public float noteX = 505f;
@@ -177,6 +185,7 @@ public class PauseOptionsPanel : MonoBehaviour
     private Button shadowsButton;
     private Button blurButton;
     private Button speedParticlesButton;
+    private Button gearboxButton;
     private Button reloadButton;
     private Button dismissButton;
     private GameObject promptScrim;
@@ -191,7 +200,14 @@ public class PauseOptionsPanel : MonoBehaviour
     private TextMeshProUGUI shadowsLabel;
     private TextMeshProUGUI blurLabel;
     private TextMeshProUGUI speedParticlesLabel;
+    private TextMeshProUGUI gearboxLabel;
     private TextMeshProUGUI promptLabel;
+
+    // The two controls tables, one per gearbox setting. Both are built and laid out in the same place, and
+    // the one the setting calls for is the one that is on: the table swaps under the player rather than the
+    // page being rebuilt, which is what keeps this panel's layout out of the business of changing gear.
+    private RectTransform automaticTable;
+    private RectTransform manualTable;
 
     private RectTransform reloadPrompt;
 
@@ -349,6 +365,10 @@ public class PauseOptionsPanel : MonoBehaviour
         GameDifficulty.Changed += Refresh;
         SoundSettings.Changed += Refresh;
 
+        // The gearbox is the one setting here that changes the controls themselves, so it has two things to
+        // bring back in line: its own switch, and which of the two tables the CONTROLS tab is showing.
+        DriveSettings.Changed += OnGearboxChanged;
+
         // A reopened panel shows what is out of date again, whatever was answered last time.
         if (promptLabel != null) promptDismissed = false;
 
@@ -362,6 +382,14 @@ public class PauseOptionsPanel : MonoBehaviour
         GraphicsQuality.Changed -= Refresh;
         GameDifficulty.Changed -= Refresh;
         SoundSettings.Changed -= Refresh;
+        DriveSettings.Changed -= OnGearboxChanged;
+    }
+
+    /// <summary>The gearbox changed: its switch catches up, and the controls tab follows it.</summary>
+    private void OnGearboxChanged()
+    {
+        Refresh();
+        ShowControlsTable();
     }
 
     private void BeginFromTabs()
@@ -445,6 +473,15 @@ public class PauseOptionsPanel : MonoBehaviour
         GraphicsQuality.SetSpeedParticles(!GraphicsQuality.SpeedParticles);
     }
 
+    /// <summary>
+    /// The gearbox. Unlike the graphics preset and the difficulty, this one lands on the spot: the truck reads
+    /// the setting every frame, so nothing has to be restarted for it - which is why it arms no prompt.
+    /// </summary>
+    private void ToggleGearbox()
+    {
+        DriveSettings.Toggle();
+    }
+
     private void ChooseDifficulty(int index)
     {
         GameDifficulty.Choose((DifficultyLevel)index);
@@ -513,6 +550,14 @@ public class PauseOptionsPanel : MonoBehaviour
         {
             speedParticlesLabel.text = speedParticlesText + "   " + (GraphicsQuality.SpeedParticles ? onText : offText);
             speedParticlesLabel.color = GraphicsQuality.SpeedParticles ? inkColor : dimInkColor;
+        }
+
+        if (gearboxLabel != null)
+        {
+            // A mode rather than an on/off, so what it says is which gearbox is in force - and its lettering
+            // darkens the way an ON switch's does when the truck is being driven by hand.
+            gearboxLabel.text = gearboxText + "   " + DriveSettings.ModeName;
+            gearboxLabel.color = DriveSettings.Manual ? inkColor : dimInkColor;
         }
 
         // The sound rows are all live: a change is heard the moment it is made, which is what makes them worth
@@ -727,20 +772,39 @@ public class PauseOptionsPanel : MonoBehaviour
         // starts. The whole table fits the safe box with room to spare - see the check in .checktmp.
         float y = contentTopY;
 
-        // The two device columns are named once, at the top, rather than over every group.
+        // The two device columns are named once, at the top, rather than over every group, and they belong
+        // to the page rather than to either table: both tables have the same columns in the same places.
         CreateLabel(page, "Keyboard Header", keyboardHeaderText, 16f, faintInkColor, keyboardColumnX, y,
             keyboardColumnWidth, TextAlignmentOptions.TopLeft);
         CreateLabel(page, "Gamepad Header", gamepadHeaderText, 16f, faintInkColor, gamepadColumnX, y,
             gamepadColumnWidth, TextAlignmentOptions.TopLeft);
 
-        y += columnHeaderHeight;
+        automaticTable = BuildControlsTable(page, GearboxMode.Automatic);
+        manualTable = BuildControlsTable(page, GearboxMode.Manual);
 
-        ControlGroup[] groups = ControlBindings.All;
+        ShowControlsTable();
+    }
+
+    /// <summary>
+    /// One of the controls tables, built into a rect of its own.
+    ///
+    /// Both of them are built and only one is shown, which is what lets the gearbox setting change the table
+    /// without the panel being rebuilt: the two are laid out in the same place, and they hold the same number
+    /// of rows, so the swap is invisible except for the lines that differ.
+    /// </summary>
+    private RectTransform BuildControlsTable(RectTransform page, GearboxMode gearbox)
+    {
+        RectTransform table = CreateRect("Table - " + gearbox, page);
+        Stretch(table);
+
+        float y = contentTopY + columnHeaderHeight;
+
+        ControlGroup[] groups = ControlBindings.For(gearbox);
 
         for (int g = 0; g < groups.Length; g++)
         {
             ControlGroup group = groups[g];
-            CreateLabel(page, "Caption - " + group.title, group.title, 20f, inkColor, 0f, y, safeSize.x,
+            CreateLabel(table, "Caption - " + group.title, group.title, 20f, inkColor, 0f, y, safeSize.x,
                 TextAlignmentOptions.TopLeft, true);
 
             y += captionHeight;
@@ -748,11 +812,20 @@ public class PauseOptionsPanel : MonoBehaviour
             if (group.bindings != null)
             {
                 for (int i = 0; i < group.bindings.Length; i++)
-                    y = BuildBindingRow(page, group.bindings[i], y);
+                    y = BuildBindingRow(table, group.bindings[i], y);
             }
 
             y += groupGap;
         }
+
+        return table;
+    }
+
+    /// <summary>Shows the table the gearbox setting calls for and hides the other.</summary>
+    private void ShowControlsTable()
+    {
+        if (automaticTable != null) automaticTable.gameObject.SetActive(!DriveSettings.Manual);
+        if (manualTable != null) manualTable.gameObject.SetActive(DriveSettings.Manual);
     }
 
     /// <summary>One line of the table: the action on the left, then what to press on each device.</summary>
@@ -835,8 +908,20 @@ public class PauseOptionsPanel : MonoBehaviour
 
         // The difficulty, under everything the picture is made of: it is the one choice here that changes what
         // a level asks of the player rather than what it looks like.
+        //
+        // The gearbox shares the caption's own line rather than taking one of its own: it is the other setting
+        // about how the level is played, and the panel has no spare line - the sound rows finish inside its
+        // lower edge already. The caption's lettering is short, so the right half of that line is free.
+        float captionY = y;
+
         CreateLabel(page, "Caption - difficulty", difficultyCaption, 18f, inkColor, 0f, y, noteX - 20f,
             TextAlignmentOptions.TopLeft, true);
+
+        gearboxButton = CreatePlateButton("Gearbox", page, gearboxText, switchSize, 16f);
+        PlaceTop(page, (RectTransform)gearboxButton.transform, noteX - 20f - switchSize.x, captionY,
+            switchSize.x, switchSize.y);
+        gearboxLabel = gearboxButton.GetComponentInChildren<TextMeshProUGUI>();
+        gearboxButton.onClick.AddListener(ToggleGearbox);
 
         y += captionHeight + 6f;
 
@@ -1068,16 +1153,27 @@ public class PauseOptionsPanel : MonoBehaviour
         }
 
         SetNavigation(shadowsButton, null, blurButton, speedParticlesButton, middlePreset);
-        SetNavigation(blurButton, shadowsButton, null, speedParticlesButton, middlePreset);
-        SetNavigation(speedParticlesButton, null, null, middleDifficulty, shadowsButton);
+        SetNavigation(blurButton, shadowsButton, null, middleDifficulty, middlePreset);
+
+        // The trails are alone on the second line now the gearbox has moved down to the difficulty; the
+        // first difficulty is straight beneath them, so that is what they step down onto.
+        SetNavigation(speedParticlesButton, null, null,
+            difficultyRows.Count > 0 ? difficultyRows[0].button : gearboxButton, shadowsButton);
+
+        // The gearbox is on the difficulty caption's line, above the difficulty table and below the trails,
+        // so it steps down onto the table and back up onto them.
+        SetNavigation(gearboxButton, null, null, middleDifficulty, speedParticlesButton);
 
         for (int i = 0; i < difficultyRows.Count; i++)
         {
             Button left = i > 0 ? difficultyRows[i - 1].button : null;
             Button right = i < difficultyRows.Count - 1 ? difficultyRows[i + 1].button : null;
 
+            // Up is whatever is really over this choice: the first has the trails straight above it, the rest
+            // of the row has the gearbox.
             SetNavigation(difficultyRows[i].button, left, right,
-                middleFirstSound != null ? middleFirstSound : backButton, speedParticlesButton);
+                middleFirstSound != null ? middleFirstSound : backButton,
+                i == 0 ? speedParticlesButton : gearboxButton);
         }
 
         // The sound rows are a grid of twenty small plates, which is the shape a nearest-neighbour guess gets

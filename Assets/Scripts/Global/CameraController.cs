@@ -27,7 +27,21 @@ public class CameraController : MonoBehaviour
     private bool boostActive = false;
 
     [Header("Reverse")]
-    public float reverseSpeedThreshold = 20f;
+    [Tooltip("How fast the truck must be rolling backwards, in km/h, before the view comes round on its own - " +
+             "whatever put it there: the brake pedal, a shove from another car, or a slope. Below it a truck " +
+             "drifting back a little is left alone rather than swinging the camera.")]
+    public float reverseRollingSpeed = 2.5f;
+
+    [Tooltip("The fastest the truck may still be rolling forward, in km/h, when reverse is asked for, before " +
+             "the view comes round. This is what stops a hard stop at speed from ducking behind the truck while " +
+             "it is still running forward - the view waits for the truck to stop making headway.")]
+    public float reverseEnterSpeed = 4f;
+
+    [Tooltip("Once the view is behind the truck it stays there until the truck is running forward faster " +
+             "than this, in km/h, or reverse is let go. Higher than the entry speed on purpose: the gap " +
+             "between the two is what keeps a truck sitting on the line from flapping the view back and forth.")]
+    public float reverseExitSpeed = 10f;
+
     public bool isGoingReverse = false;
 
     // ---------------------------------------------------------------- the view the player chose
@@ -252,24 +266,6 @@ public class CameraController : MonoBehaviour
         ActivateCamera(targetCam);
     }
 
-    private void FixSoudReverseInMode3(float forwardSpeed, float throttle)
-    {
-        bool wantsReverse = throttle < -0.8f;
-        bool shouldShowReverseCam = wantsReverse && Mathf.Abs(forwardSpeed) < reverseSpeedThreshold;
-
-        if (!isGoingReverse && shouldShowReverseCam)
-        {
-            reverseSound.SoundReverse();
-            isGoingReverse = true;
-        }
-        else
-        {
-            reverseSound.StopReverse();
-            isGoingReverse = false;
-        }
-
-    }
-
     private void UpdateFocusEffect()
     {
         if (focusCar == null)
@@ -326,86 +322,91 @@ public class CameraController : MonoBehaviour
         }
     }
 
-    private int DetermineCamera(float forwardSpeed, float throttle)
+    /// <summary>
+    /// Whether the view should be behind the truck, which is what the player sees when the truck is going
+    /// backwards.
+    ///
+    /// It used to be the brake pedal and nothing else - the throttle held past a stop - which is only half
+    /// the story. That is the automatic gearbox's way backwards, and it misses two things: a truck that is
+    /// rolling back because something pushed it or because it is on a slope, and a manual truck, whose way
+    /// backwards is the reverse gear and the gas - a positive throttle, which the old test read as driving
+    /// forwards and so never brought the camera round at all.
+    ///
+    /// So this reads the truck rather than the pedals: the view goes behind it when it is actually rolling
+    /// backwards, whatever caused that, and when reverse is being asked for and the truck has stopped making
+    /// headway. The second half is what covers the reverse gear standing still - the camera comes round when
+    /// the lever does, before the truck has begun to move, which is what a gearbox does.
+    /// </summary>
+    private bool WantsReverse(float forwardSpeed, float throttle)
     {
-        bool wantsReverse = throttle < -0.8f;
-        bool shouldShowReverseCam = wantsReverse && Mathf.Abs(forwardSpeed) < reverseSpeedThreshold;
+        if (forwardSpeed < -reverseRollingSpeed) return true;
 
-        if (!isGoingReverse && shouldShowReverseCam)
+        bool asked = car != null && car.ReverseGearEngaged
+            ? true                        // manual - the reverse gear is engaged
+            : throttle < -0.8f;           // automatic - the brake is held past a stop
+
+        float limit = isGoingReverse ? reverseExitSpeed : reverseEnterSpeed;
+
+        return asked && forwardSpeed < limit;
+    }
+
+    /// <summary>Puts the rig behind the truck: the cameras swap to the markers that face the other way, and
+    /// the reverse beep starts. Safe to call every frame it is needed - it only does the one-shot work once.</summary>
+    private void EnterReverse()
+    {
+        if (!isGoingReverse)
         {
             reverseSound.SoundReverse();
-
-            dyncamicCam.CameraDistance = -2f;
-
-            mode2Cam.Follow = mode2Pointers[1].transform;
-            mode2Cam.LookAt = mode2Pointers[1].transform;
-            dynamicCamMode2.CameraDistance = -0.7f;
-
-            dynamicCamMode3.m_ScreenY = 0.525f;
-
             isGoingReverse = true;
-
-            switch(mode)
-            {
-                case 1:
-                    return 0;
-                case 2:
-                    return 3;
-                case 3:
-                    return 4;
-                default:
-                    return 0;
-            }
         }
 
-        if (isGoingReverse && !shouldShowReverseCam && !wantsReverse)
+        dyncamicCam.CameraDistance = -2f;
+
+        mode2Cam.Follow = mode2Pointers[1].transform;
+        mode2Cam.LookAt = mode2Pointers[1].transform;
+        dynamicCamMode2.CameraDistance = -0.7f;
+
+        dynamicCamMode3.m_ScreenY = 0.525f;
+    }
+
+    /// <summary>Puts the rig back the way it was: facing the truck from behind it going forwards, the beep
+    /// off. One-shot work guarded too.</summary>
+    private void LeaveReverse()
+    {
+        reverseSound.StopReverse();
+
+        dyncamicCam.CameraDistance = 2f;
+
+        mode2Cam.Follow = mode2Pointers[0].transform;
+        mode2Cam.LookAt = mode2Pointers[0].transform;
+        dynamicCamMode2.CameraDistance = 0.7f;
+
+        dynamicCamMode3.m_ScreenY = 0.725f;
+
+        isGoingReverse = false;
+    }
+
+    private int DetermineCamera(float forwardSpeed, float throttle)
+    {
+        bool wantsReverse = WantsReverse(forwardSpeed, throttle);
+
+        if (wantsReverse && !isGoingReverse)
         {
-            reverseSound.StopReverse();
+            EnterReverse();
+            return CameraForMode(mode);
+        }
 
-            dyncamicCam.CameraDistance = 2f;
-
-            mode2Cam.Follow = mode2Pointers[0].transform;
-            mode2Cam.LookAt = mode2Pointers[0].transform;
-            dynamicCamMode2.CameraDistance = 0.7f;
-
-            dynamicCamMode3.m_ScreenY = 0.725f;
-
-            isGoingReverse = false;
-
-            switch(mode)
-            {
-                case 1:
-                    return 0;
-                case 2:
-                    return 3;
-                case 3:
-                    return 4;
-                default:
-                    return 0;
-            }
+        if (!wantsReverse && isGoingReverse)
+        {
+            LeaveReverse();
+            return CameraForMode(mode);
         }
 
         if (isGoingReverse)
         {
-            dyncamicCam.CameraDistance = -2f;
-
-            mode2Cam.Follow = mode2Pointers[1].transform;
-            mode2Cam.LookAt = mode2Pointers[1].transform;
-            dynamicCamMode2.CameraDistance = -0.7f;
-
-            dynamicCamMode3.m_ScreenY = 0.525f;
-
-            switch(mode)
-            {
-                case 1:
-                    return 0;
-                case 2:
-                    return 3;
-                case 3:
-                    return 4;
-                default:
-                    return 0;
-            }
+            // Still reversing: keep the rig behind the truck, in case a level opened with it already set.
+            EnterReverse();
+            return CameraForMode(mode);
         }
 
         bool hardBrake = throttle < -0.1f && forwardSpeed > 30f;

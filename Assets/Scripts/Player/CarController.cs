@@ -249,6 +249,44 @@ public class CarController : MonoBehaviour
     public bool isShiftingUp = false;
     public bool isShiftingDown = false;
 
+    // ---------------------------------------------------------------- the gearbox
+
+    /// <summary>
+    /// The truck's own gearbox, which is its <see cref="EngineAudio"/>: that component has always owned the
+    /// gears, the revs and the shift cues, and the HUD's readout already points at it. It is looked up rather
+    /// than wired because it sits on the truck's Engine child, so no level, prefab or scene reference has to
+    /// know that driving by hand exists.
+    /// </summary>
+    private EngineAudio gearbox;
+
+    /// <summary>The gearbox the truck is driving through. Null on a truck with no engine audio.</summary>
+    public EngineAudio Gearbox { get { return gearbox; } }
+
+    /// <summary>Whether the player is changing gear for themselves. False - the automatic box - on a truck
+    /// with no gearbox to read.</summary>
+    public bool ManualGearbox { get { return gearbox != null && gearbox.Manual; } }
+
+    /// <summary>Whether the reverse gear is engaged, which is the only way backwards in manual.</summary>
+    public bool ReverseGearEngaged { get { return gearbox != null && gearbox.ReverseEngaged; } }
+
+    /// <summary>What the engine's pull is worth in the gear in use. Exactly 1 while driving automatically.
+    /// </summary>
+    public float GearPowerScale { get { return gearbox != null ? gearbox.PowerScale : 1f; } }
+
+    /// <summary>Whether the clutch is out for a change the player just made, so there is no drive at all.
+    /// </summary>
+    public bool ClutchCut { get { return gearbox != null && gearbox.ClutchCut; } }
+
+    /// <summary>Whether the engine is being asked to pull below its torque - in too tall a gear for the speed.
+    /// The exhaust reads it (see <see cref="ExhaustSmokeController"/>).
+    /// </summary>
+    public bool Lugging { get { return gearbox != null && gearbox.Lugging; } }
+
+    /// <summary>How fast the reverse gear is good for, in metres per second. Reverse is a gear like the rest
+    /// in manual, so it has a top speed of its own rather than being limited only by drag.
+    /// </summary>
+    public float ReverseTopSpeedMS { get { return gearbox != null ? gearbox.ReverseTopSpeedMS : 5.6f; } }
+
     /// <summary>
     /// Whether one of the boost the truck is carrying is being spent right now.
     ///
@@ -266,6 +304,13 @@ public class CarController : MonoBehaviour
         IsBoosting = boosting;
     }
 
+
+    void Awake()
+    {
+        // Before anything else looks at the truck: the wheels ask the gearbox what the engine's pull is worth
+        // on their very first physics step, which can come before Start.
+        gearbox = GetComponentInChildren<EngineAudio>(true);
+    }
 
     void Start()
     {
@@ -322,6 +367,15 @@ void Update()
 
     throttleInput = GameInput.Throttle();
     steerInput = GameInput.Steer();
+
+    // The player's own gear changes reach the box through here. Every control is read in GameInput, and the
+    // gearbox is told what the player asked for rather than reading the pad itself - so which button is the
+    // lever stays a question about controls, in one place, and the box only has to know how to change gear.
+    if (gearbox != null)
+    {
+        if (GameInput.GearUpPressed()) gearbox.ShiftUp();
+        if (GameInput.GearDownPressed()) gearbox.ShiftDown();
+    }
 
 
     if (GameInput.FocusHeld())

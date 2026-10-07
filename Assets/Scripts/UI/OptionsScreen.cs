@@ -16,20 +16,25 @@ using UnityEngine.UI;
 /// a title with an accent rule under it, and rows on a faint plate. Nothing is drawn from a sprite, so there
 /// is no art to keep in step with the controls it describes.
 ///
-/// The controls table is data (<see cref="controls"/>), not layout: it was assembled from what the game
+/// The controls table is data (<see cref="ControlBindings"/>), not layout: it was assembled from what the game
 /// actually reads - <see cref="GameInput"/> - so the screen cannot describe a control the truck does not
-/// have, and rewording or adding a row is an Inspector edit rather than a code change. The two binding
-/// columns are the keyboard and the pad, and the pad is named the way an Xbox pad is because that is the
-/// one every player can picture; a note under the table says the same buttons work on any pad.
+/// have. There are two of them, the automatic gearbox's and the manual one's, because that setting moves the
+/// horn, the lights and the gears between the pad's face buttons and its D-pad; both are built and the one in
+/// force is the one shown, so choosing the setting changes the table where it stands. The two binding columns
+/// are the keyboard and the pad, and the pad is named the way an Xbox pad is because that is the one every
+/// player can picture; a note under the table says the same buttons work on any pad.
 ///
-/// The settings tab is the second page, and the only place anything is chosen. It holds the three groups in
+/// The settings tab is the second page, and the only place anything is chosen. It holds the groups in
 /// the order they matter: the graphics settings (<see cref="GraphicsQuality"/> - the five presets and the
-/// three switches that sit on top of them), the difficulties (<see cref="GameDifficulty"/> - what a level's time
-/// limit and its kill requirement become), and the sound (<see cref="SoundSettings"/> - one row per channel,
-/// plus the switch that keeps the engine in the same place in the mix whichever camera the player drives
-/// from). A choice takes effect and is saved as soon as it is made - only the ground detail of a level waits
-/// for that level to load, and a difficulty lands on the next level - so a level that is open when either
-/// changes asks to be restarted rather than saying so in advance (see <see cref="PauseOptionsPanel"/>).
+/// switches that sit on top of them), the difficulty (<see cref="GameDifficulty"/> - what a level's time limit
+/// and its kill requirement become, and <see cref="DriveSettings"/>'s gearbox, the other setting about how the
+/// level is played rather than how it looks), and the sound (<see cref="SoundSettings"/> - one
+/// row per channel, plus the switch that keeps the engine in the same place in the mix whichever camera the
+/// player drives from). A choice takes effect and is saved as soon as it is made - the ground detail of a
+/// level waits for that level to load, and a difficulty lands on the next level, so a level that is open when
+/// either changes asks to be restarted rather than saying so in advance (see <see cref="PauseOptionsPanel"/>);
+/// the gearbox (<see cref="DriveSettings"/>) needs nothing restarted at all, because the truck reads it every
+/// frame.
 /// Nothing here describes what the presets do: the picture is the description, and a list of numbers beside
 /// it would be the implementation rather than the choice.
 ///
@@ -56,11 +61,9 @@ public class OptionsScreen : MonoBehaviour
     public string settingsTabText = "SETTINGS";
     public string backText = "BACK";
 
-    [Tooltip("The controls table. Leave empty to use the built-in one.")]
-    public ControlGroup[] controls = ControlBindings.All;
-
-    [Tooltip("Small lines under the table, one row each. Leave empty to use the built-in ones.")]
-    public string[] notes = ControlBindings.Notes;
+    // There are no fields for the table itself: it is read from ControlBindings, which is also what decides
+    // which of its two tables applies - the automatic gearbox's or the manual one - so the controls shown are
+    // the controls the truck is really driven with, gearbox setting and all.
 
     // ---------------------------------------------------------------- the settings tab
 
@@ -74,6 +77,11 @@ public class OptionsScreen : MonoBehaviour
     [Tooltip("The switch over the truck's speed trails. Sits beside the motion blur, the other switch about " +
              "the sense of speed.")]
     public string speedParticlesText = "SPEED PARTICLES";
+
+    [Tooltip("The switch over the gearbox: the engine changing gear for the player, or the player changing it " +
+             "by hand. It shares the DIFFICULTY heading's line, since it is the other setting about how a level " +
+             "is played rather than how it looks, and the CONTROLS tab shows what it does to the buttons.")]
+    public string gearboxText = "GEARBOX";
     public string onText = "ON";
     public string offText = "OFF";
     public string difficultyCaption = "DIFFICULTY";
@@ -82,7 +90,9 @@ public class OptionsScreen : MonoBehaviour
     [Tooltip("The plate beside the settings. Says how a choice is taken, not what the presets do.")]
     [TextArea(2, 6)]
     public string settingsNoteText =
-        "Your choice is saved and applied straight away.";
+        "Your choice is saved and applied straight away.\n\n" +
+        "GEARBOX MANUAL moves the horn and the lights to the D-pad and puts the gears on B and X - the " +
+        "CONTROLS tab has the whole table.";
 
     // ---------------------------------------------------------------- the sound rows
 
@@ -214,10 +224,18 @@ public class OptionsScreen : MonoBehaviour
     private Button shadowsButton;
     private Button blurButton;
     private Button speedParticlesButton;
+    private Button gearboxButton;
 
     private TextMeshProUGUI shadowsLabel;
     private TextMeshProUGUI blurLabel;
     private TextMeshProUGUI speedParticlesLabel;
+    private TextMeshProUGUI gearboxLabel;
+
+    // The two controls tables, one per gearbox setting. Both are built, laid out in the same place, and the
+    // one the setting calls for is the one that is on: nothing is rebuilt while the screen is up, so the table
+    // swaps where it stands rather than the page flickering through a rebuild.
+    private RectTransform automaticTable;
+    private RectTransform manualTable;
 
     private Page page = Page.Controls;
 
@@ -236,6 +254,10 @@ public class OptionsScreen : MonoBehaviour
         GraphicsQuality.Changed += Refresh;
         GameDifficulty.Changed += Refresh;
         SoundSettings.Changed += Refresh;
+
+        // The gearbox is the one setting here that changes the controls themselves, so it has two things to
+        // bring back in line: its own switch, and which of the two tables the CONTROLS tab is showing.
+        DriveSettings.Changed += OnGearboxChanged;
     }
 
     private void Start()
@@ -251,6 +273,14 @@ public class OptionsScreen : MonoBehaviour
         GraphicsQuality.Changed -= Refresh;
         GameDifficulty.Changed -= Refresh;
         SoundSettings.Changed -= Refresh;
+        DriveSettings.Changed -= OnGearboxChanged;
+    }
+
+    /// <summary>The gearbox changed: its switch catches up, and the controls tab follows it.</summary>
+    private void OnGearboxChanged()
+    {
+        Refresh();
+        ShowControlsTable();
     }
 
     // ---------------------------------------------------------------- tabs
@@ -311,6 +341,11 @@ public class OptionsScreen : MonoBehaviour
         GraphicsQuality.SetSpeedParticles(!GraphicsQuality.SpeedParticles);
     }
 
+    private void ToggleGearbox()
+    {
+        DriveSettings.Toggle();
+    }
+
     private void ChooseDifficulty(int index)
     {
         GameDifficulty.Choose((DifficultyLevel)index);
@@ -356,6 +391,14 @@ public class OptionsScreen : MonoBehaviour
         {
             shadowsLabel.text = shadowsText + "   " + (GraphicsQuality.Shadows ? onText : offText);
             shadowsLabel.color = GraphicsQuality.Shadows ? labelColor : dimLabelColor;
+        }
+
+        if (gearboxLabel != null)
+        {
+            // A mode rather than an on/off, so what it says is which gearbox is in force - and it is lit the
+            // way an ON switch is when the truck is being driven by hand.
+            gearboxLabel.text = gearboxText + "   " + DriveSettings.ModeName;
+            gearboxLabel.color = DriveSettings.Manual ? labelColor : dimLabelColor;
         }
 
         if (blurLabel != null)
@@ -487,35 +530,63 @@ public class OptionsScreen : MonoBehaviour
     {
         float y = contentTopY;
 
-        // The two device columns are named once, at the top, rather than over every group.
+        // The two device columns are named once, at the top, rather than over every group, and they belong to
+        // the page rather than to either table: both tables have the same columns in the same places.
         CreateLabel(page, "Keyboard Header", "KEYBOARD", captionSize, dimLabelColor, keyboardColumnX, y,
             deviceColumnWidth, TextAlignmentOptions.TopLeft, true);
         CreateLabel(page, "Gamepad Header", "GAMEPAD", captionSize, dimLabelColor, gamepadColumnX, y,
             deviceColumnWidth, TextAlignmentOptions.TopLeft, true);
 
-        y -= headerHeight;
+        automaticTable = BuildControlsTable(page, GearboxMode.Automatic);
+        manualTable = BuildControlsTable(page, GearboxMode.Manual);
 
-        ControlGroup[] groups = (controls == null || controls.Length == 0) ? ControlBindings.All : controls;
+        ShowControlsTable();
+    }
+
+    /// <summary>
+    /// One of the controls tables, built into a rect of its own.
+    ///
+    /// Both of them are built and only one is shown, which is what lets the setting change the table without
+    /// the screen being rebuilt: the two are laid out in the same place, so the swap is invisible except for
+    /// the rows that differ.
+    /// </summary>
+    private RectTransform BuildControlsTable(RectTransform page, GearboxMode gearbox)
+    {
+        RectTransform table = CreateRect("Table - " + gearbox, page);
+        Stretch(table);
+
+        float y = contentTopY - headerHeight;
+
+        ControlGroup[] groups = ControlBindings.For(gearbox);
 
         for (int g = 0; g < groups.Length; g++)
         {
-            y = BuildCaption(page, groups[g].title, y, accentColor, captionSize);
+            y = BuildCaption(table, groups[g].title, y, accentColor, captionSize);
             y -= 4f;
 
             ControlBinding[] bindings = groups[g].bindings;
             if (bindings != null)
             {
                 for (int i = 0; i < bindings.Length; i++)
-                    y = BuildBindingRow(page, bindings[i], y);
+                    y = BuildBindingRow(table, bindings[i], y);
             }
 
             y -= groupGap;
         }
 
         // The notes stop short of the right-hand corner, where BACK sits.
-        string[] lines = (notes == null || notes.Length == 0) ? ControlBindings.Notes : notes;
+        string[] lines = ControlBindings.NotesFor(gearbox);
         for (int i = 0; i < lines.Length; i++)
-            y = BuildNote(page, lines[i], y, ContentWidth - 420f);
+            y = BuildNote(table, lines[i], y, ContentWidth - 420f);
+
+        return table;
+    }
+
+    /// <summary>Shows the table the gearbox setting calls for and hides the other.</summary>
+    private void ShowControlsTable()
+    {
+        if (automaticTable != null) automaticTable.gameObject.SetActive(!DriveSettings.Manual);
+        if (manualTable != null) manualTable.gameObject.SetActive(DriveSettings.Manual);
     }
 
     /// <summary>One line of the table: the action on the left, then what to press on each device.</summary>
@@ -575,23 +646,24 @@ public class OptionsScreen : MonoBehaviour
         y -= presetChoiceSize.y + groupGap;
 
         // The switches, on top of the preset rather than part of it: turning shadows off at High, or the
-        // blur on at Low, is allowed. There is room for two on a line, and the two that share one are the two
-        // about how the speed feels - the blur and the truck's own trails.
-        shadowsButton = CreateButton("Shadows", page, "SHADOWS", switchSize);
+        // blur on at Low, is allowed. There is room for two on a line: the shadows and the blur share the
+        // top one - both are choices about how the picture is made - and the truck's own speed trails take
+        // the one below, the switch about the sense of speed.
+        shadowsButton = CreateButton("Shadows", page, shadowsText, switchSize);
         PlaceTopLeft((RectTransform)shadowsButton.transform, sideMargin, y, switchSize.x, switchSize.y);
         shadowsLabel = shadowsButton.GetComponentInChildren<TextMeshProUGUI>();
         shadowsButton.onClick.AddListener(ToggleShadows);
 
-        y -= switchSize.y + switchGap;
-
-        blurButton = CreateButton("Motion Blur", page, "MOTION BLUR", switchSize);
-        PlaceTopLeft((RectTransform)blurButton.transform, sideMargin, y, switchSize.x, switchSize.y);
+        blurButton = CreateButton("Motion Blur", page, motionBlurText, switchSize);
+        PlaceTopLeft((RectTransform)blurButton.transform, sideMargin + switchSize.x + switchGap, y,
+            switchSize.x, switchSize.y);
         blurLabel = blurButton.GetComponentInChildren<TextMeshProUGUI>();
         blurButton.onClick.AddListener(ToggleMotionBlur);
 
+        y -= switchSize.y + switchGap;
+
         speedParticlesButton = CreateButton("Speed Particles", page, speedParticlesText, switchSize);
-        PlaceTopLeft((RectTransform)speedParticlesButton.transform, sideMargin + switchSize.x + switchGap, y,
-            switchSize.x, switchSize.y);
+        PlaceTopLeft((RectTransform)speedParticlesButton.transform, sideMargin, y, switchSize.x, switchSize.y);
         speedParticlesLabel = speedParticlesButton.GetComponentInChildren<TextMeshProUGUI>();
         speedParticlesButton.onClick.AddListener(ToggleSpeedParticles);
 
@@ -599,7 +671,22 @@ public class OptionsScreen : MonoBehaviour
 
         // The difficulty, under everything the picture is made of: it is the one choice here that changes what
         // a level asks of the player rather than what it looks like.
+        //
+        // The gearbox shares the heading's own line rather than taking one under it: it is the other setting
+        // about how the level is played rather than how it looks, and this page has no spare line left - the
+        // sound rows below stop a few pixels above BACK. Sharing the heading's line costs the page nothing.
+        float headingY = y;
+
         y = BuildSectionHeading(page, difficultyCaption, y);
+
+        // A few pixels up the line: the heading's rule and the gap under it leave the switch a hair short of
+        // its own height, and this keeps its lower edge clear of the first difficulty row rather than a pixel
+        // into it. Too small to read as out of line with the heading beside it.
+        gearboxButton = CreateButton("Gearbox", page, gearboxText, switchSize);
+        PlaceTopLeft((RectTransform)gearboxButton.transform, noteX - 20f - switchSize.x, headingY + 4f,
+            switchSize.x, switchSize.y);
+        gearboxLabel = gearboxButton.GetComponentInChildren<TextMeshProUGUI>();
+        gearboxButton.onClick.AddListener(ToggleGearbox);
 
         BuildChoiceRow(page, difficultyLabels, y, difficultyRows, ChooseDifficulty, presetButtonSize, presetGap);
 
@@ -817,24 +904,37 @@ public class OptionsScreen : MonoBehaviour
         }
 
         if (shadowsButton != null)
-            SetNavigation(shadowsButton, null, null, blurButton, middlePreset);
+            SetNavigation(shadowsButton, null, blurButton, speedParticlesButton, middlePreset);
 
-        // The blur and the trails share a line, so they are each other's left and right; both of them step
-        // down onto the difficulty table below and back up onto the shadows above.
+        // The blur and the shadows share a line, so they are each other's left and right. Down from the blur
+        // is the difficulty table below it; down from the trails - which sit under the shadows - is the
+        // gearbox, which shares the difficulty heading's line.
         if (blurButton != null)
-            SetNavigation(blurButton, null, speedParticlesButton, middleDifficulty, shadowsButton);
+            SetNavigation(blurButton, shadowsButton, null, middleDifficulty, middlePreset);
 
+        // The trails sit straight above the first difficulty, so that is what they step down onto.
         if (speedParticlesButton != null)
-            SetNavigation(speedParticlesButton, blurButton, null, middleDifficulty, shadowsButton);
+            SetNavigation(speedParticlesButton, null, null,
+                difficultyRows.Count > 0 ? difficultyRows[0].button : gearboxButton, shadowsButton);
+
+        // The gearbox is on the difficulty heading's own line, above the difficulty table and below the
+        // switch grid, so it steps down onto the table and back up onto the trails.
+        if (gearboxButton != null)
+            SetNavigation(gearboxButton, null, null, middleDifficulty, speedParticlesButton);
 
         for (int i = 0; i < difficultyRows.Count; i++)
         {
             Button left = i > 0 ? difficultyRows[i - 1].button : null;
             Button right = i < difficultyRows.Count - 1 ? difficultyRows[i + 1].button : null;
 
+            // Up is whatever is really over this choice: the first has the trails straight above it, the
+            // rest of the row has the gearbox.
+            Button up = i == 0
+                ? speedParticlesButton
+                : (gearboxButton != null ? gearboxButton : middlePreset);
+
             SetNavigation(difficultyRows[i].button, left, right,
-                middleFirstSound != null ? middleFirstSound : backButton,
-                blurButton != null ? blurButton : middlePreset);
+                middleFirstSound != null ? middleFirstSound : backButton, up);
         }
 
         // The sound rows are a grid of twenty small buttons, which is exactly the shape a

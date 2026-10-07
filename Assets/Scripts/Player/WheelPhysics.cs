@@ -162,16 +162,47 @@ public class WheelPhysics : MonoBehaviour
         float normalizedSpeed = Mathf.Clamp01(Mathf.Abs(forwardVel) / car.topSpeed);
         float torqueMultiplier = car.torqueCurve.Evaluate(normalizedSpeed);
 
+        // What the gearbox is worth. Exactly 1 while the box shifts for itself, so a truck driven
+        // automatically has the drive it has always had; in manual it is the gear's own ratio, the revs and
+        // the redline, worked out by the engine (see EngineAudio.UpdateDrivePower).
+        float power = car.GearPowerScale;
+
+        // Whether the reverse gear - which only manual has - is the one engaged, and how much of its own short
+        // range is left. Reverse borrows the first gear's ratio, so without a speed of its own it would simply
+        // keep pulling to the truck's top speed, backwards.
+        bool reverseGear = car.ReverseGearEngaged;
+        float reverseEnvelope = torqueMultiplier;
+
+        if (reverseGear)
+        {
+            float reverseNormalised = Mathf.Clamp01(Mathf.Abs(forwardVel) / car.ReverseTopSpeedMS);
+            reverseEnvelope = car.torqueCurve.Evaluate(reverseNormalised);
+        }
+
         if (throttle > 0.01f)
         {
-            if (car.isShiftingUp)
+            if (reverseGear)
+            {
+                // The gas drives the way the lever is set: in reverse, backwards, at the reverse gear's own
+                // strength and speed - the same force the pedal used to reverse the truck automatically, since
+                // reverse is the same gear either way.
+                float reverseTorque = reverseForce * engineResponse * forwardGrip * reverseEnvelope * power * currentSurfaceFriction;
+                carRb.AddForceAtPosition(-forwardDir * reverseTorque, transform.position);
+            }
+            else if (car.ClutchCut)
+            {
+                // A change the player is making: the truck is out of gear for it, so nothing drives the wheels
+                // - and, unlike an automatic change, nothing brakes them either. The truck coasts through the
+                // change at the speed it had, which is what a clutch does.
+            }
+            else if (car.isShiftingUp)
             {
                 float brake = brakeForce * throttle * 0.65f * currentSurfaceFriction;
                 carRb.AddForceAtPosition(-forwardDir * brake, transform.position);
             }  
             else
             {
-                float torque = engineForce * engineResponse * forwardGrip * torqueMultiplier * currentSurfaceFriction;
+                float torque = engineForce * engineResponse * forwardGrip * torqueMultiplier * power * currentSurfaceFriction;
                 carRb.AddForceAtPosition(forwardDir * torque, transform.position);
             }
         }
@@ -180,7 +211,7 @@ public class WheelPhysics : MonoBehaviour
         {
             if (car.isShiftingDown)
             {
-                float torque = engineForce * engineResponse * forwardGrip * torqueMultiplier * currentSurfaceFriction;
+                float torque = engineForce * engineResponse * forwardGrip * torqueMultiplier * power * currentSurfaceFriction;
                 carRb.AddForceAtPosition(forwardDir * torque * 1f, transform.position);
             } 
             else
@@ -190,7 +221,19 @@ public class WheelPhysics : MonoBehaviour
             }      
         }
 
-        if (throttle < -0.01f && forwardVel <= 0.5f)
+        // Braking while the truck is rolling backwards: the brake stops it whichever way it is going, and in
+        // manual that is the pedal's whole job - in reverse, and in a forward gear sliding back down a slope
+        // alike. Automatic never reaches this: there the pedal is what drives the truck backwards, so holding
+        // it is how reverse is done rather than something to be corrected.
+        if (car.ManualGearbox && throttle < -0.01f && forwardVel < -0.5f)
+        {
+            float brake = brakeForce * -throttle * currentSurfaceFriction;
+            carRb.AddForceAtPosition(forwardDir * brake, transform.position);
+        }
+
+        // Brake-then-reverse belongs to the automatic box, which has no lever to put into reverse. In manual
+        // the pedal stops at stopping: the way backwards is the reverse gear, and the gas.
+        if (throttle < -0.01f && forwardVel <= 0.5f && !car.ManualGearbox)
         {
             float reverse = reverseForce * -throttle * currentSurfaceFriction;
             carRb.AddForceAtPosition(-forwardDir * reverse, transform.position);
@@ -200,8 +243,13 @@ public class WheelPhysics : MonoBehaviour
         {
             if (car.isShiftingDown)
             {
-                float torque = engineForce * engineResponse * forwardGrip * torqueMultiplier * currentSurfaceFriction;
+                float torque = engineForce * engineResponse * forwardGrip * torqueMultiplier * power * currentSurfaceFriction;
                 carRb.AddForceAtPosition(forwardDir * 1f, transform.position);
+            }
+            else if (car.ClutchCut)
+            {
+                // Out of gear, so the engine is not holding the truck back either: the wheels free-wheel
+                // through the change rather than dragging the drivetrain along.
             }
             else
             {

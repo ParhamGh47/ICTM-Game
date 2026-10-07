@@ -167799,10 +167799,6 @@ PrefabInstance:
       value: 
       objectReference: {fileID: 985575554}
     - target: {fileID: 5259838745441529802, guid: 9de7ea8ebea5b664bb865e6f78009de3, type: 3}
-      propertyPath: reverseSpeedThreshold
-      value: 2
-      objectReference: {fileID: 0}
-    - target: {fileID: 5259838745441529802, guid: 9de7ea8ebea5b664bb865e6f78009de3, type: 3}
       propertyPath: mode2Pointers.Array.size
       value: 2
       objectReference: {fileID: 0}

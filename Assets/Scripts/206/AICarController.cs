@@ -67,6 +67,13 @@ public class AICarController : MonoBehaviour
     public float minimumMass = 800f;
 
     public float speedKPH = 60f;
+
+    [Tooltip("How quickly a car picks up speed from a standstill, in metres per second per second. A car that " +
+             "has just been set moving - at the start of a level, or after a bump or a knock-over - pulls away " +
+             "at this rate and works up to its cruising speed rather than being at it on the first step. 0 " +
+             "lifts the ramp altogether and puts a car at its speed the moment it is driven.")]
+    public float acceleration = 2.5f;
+
     public float turnSpeed = 6f;
     public float maxSteerAngle = 35f;
     public float reachThreshold = 2f;
@@ -278,9 +285,18 @@ public class AICarController : MonoBehaviour
              "scrape down one side is one bump rather than five. Bumping into things does not touch this.")]
     public float bumpedCooldown = 1.2f;
 
+    [Tooltip("Whether every collision a car weighs up is logged: how hard it read, what it hit and what the " +
+             "car did about it. One line per collision and nothing at all for the road it drives on, so it is " +
+             "cheap enough to leave on while tuning what counts as a hard hit.")]
+    public bool logBumps = true;
+
     // What is not in the way of driving on, however close it is: the road, a kerb, the ground. A surface whose
     // normal is this near straight up is something a car drives over rather than into.
     private const float GroundNormalAngle = 50f;
+
+    // Below this a contact is not weighed up or reported at all: a car's body grazing the road it is driving
+    // on, which is a contact on every car on every bump in the surface.
+    private const float minimumBumpReport = 1f;
 
     Rigidbody rb;
     float speedMS;
@@ -289,6 +305,12 @@ public class AICarController : MonoBehaviour
     // through a turnaround. Moved towards what the corner ahead asks for rather than set outright, so slowing
     // reads as braking and picking up reads as acceleration.
     float speedFactor = 1f;
+
+    // How fast the car is really travelling, as opposed to how fast it is being asked to. Nothing is asked of
+    // it but this: the drive moves it at <see cref="speedNow"/> and the car works its way up to the asked-for
+    // speed at <see cref="acceleration"/>. Only ever upwards here - every cut to the speed (the braking into a
+    // corner, the spot at a turnaround) still happens on its own clock and is left alone.
+    float speedNow;
 
     // Metres the aim point is pulled sideways right now, and the side the car commits to when
     // something is dead ahead of it (where there is no side to be read off the obstacle itself).
@@ -839,6 +861,17 @@ public class AICarController : MonoBehaviour
             ? Mathf.MoveTowards(speedFactor, wanted, cornerBrakeRate * Time.fixedDeltaTime)
             : Mathf.MoveTowards(speedFactor, wanted, cornerRecoveryRate * Time.fixedDeltaTime);
 
+        // What it is being asked to do, and what it is doing. The two are the same on the open road and are
+        // only ever apart while the car is working back up to speed - from a standing start, or from the
+        // standstill a bump or a knock-over left it in. Building up to it rather than being at it is what
+        // makes pulling away read as pulling away; it is also what stops a car that has just been stood back
+        // on its wheels making its cruising speed within one physics step.
+        float commanded = speedMS * speedFactor;
+        float rate = acceleration > 0f ? acceleration : Mathf.Infinity;
+
+        speedNow = commanded > speedNow ? Mathf.MoveTowards(speedNow, commanded, rate * Time.fixedDeltaTime)
+                                        : commanded;
+
         float steerRate = turnSpeed * Mathf.Lerp(1f, cornerSteerBoost, cornerNow);
 
         // Steer at a point set distance further ALONG THE PATH, rather than at the next waypoint itself.
@@ -909,7 +942,7 @@ public class AICarController : MonoBehaviour
             Quaternion.Slerp(rb.rotation, targetRot, steerRate * Time.fixedDeltaTime)
         );
 
-        Vector3 move = forward * (speedMS * speedFactor * Time.fixedDeltaTime);
+        Vector3 move = forward * (speedNow * Time.fixedDeltaTime);
         rb.MovePosition(position + move);
 
         DampVerticalKick();
@@ -1231,7 +1264,13 @@ public class AICarController : MonoBehaviour
 
     bool IsOnItsWheels()
     {
-        return Vector3.Angle(rb.rotation * Vector3.up, Vector3.up) <= uprightLimit;
+        return TiltFromUpright() <= uprightLimit;
+    }
+
+    /// <summary>How far the car is from standing upright right now, in degrees.</summary>
+    float TiltFromUpright()
+    {
+        return Vector3.Angle(rb.rotation * Vector3.up, Vector3.up);
     }
 
     // --------------------------------------------------------- bumped
@@ -1251,8 +1290,13 @@ public class AICarController : MonoBehaviour
     {
         bumpTimer += Time.fixedDeltaTime;
 
-        // Tipped over after all: that is the knock-over's business, not this.
-        if (!IsOnItsWheels())
+        // Finished on its side or its roof after all: that is the knock-over's business, not this - and it is
+        // the same reading <see cref="wreckTilt"/> makes a recovered car a permanent wreck by, so the two agree
+        // about what "gone" means. What is deliberately not handed over is the ordinary case: a car that is
+        // *momentarily* leaning as it is shoved, which is every hard hit, and which used to abandon the bump
+        // on its first frame and carry on as though the collision had never happened - half of why a hard
+        // shunt read as nothing at all. A car merely leaning now stands its second out and drives on.
+        if (TiltFromUpright() > wreckTilt)
         {
             bumped = false;
             KnockOffLine();
@@ -1300,6 +1344,10 @@ public class AICarController : MonoBehaviour
         bumped = false;
         bumpReversing = false;
         bumpTimer = 0f;
+
+        // It has just spent a second standing still, so it pulls away from a standstill rather than
+        // resuming at the speed it was doing when it was hit.
+        speedNow = 0f;
 
         // The pause it has just had is what stops the next scrape along its side starting another one.
         bumpCooldownUntil = Time.time + bumpedCooldown;
@@ -1357,15 +1405,19 @@ public class AICarController : MonoBehaviour
     }
 
     /// <summary>
-    /// A hard enough collision takes the car off the drive for a moment. Measured against the car rather than
-    /// against how fast it happened to be going, so what counts is the collision - including one with the
-    /// player, whose speed is the other half of it.
+    /// A hard enough collision takes the car off the drive for a moment. Measured from the speed the pair met
+    /// at rather than from how fast the car happened to be going, so what counts is the collision - including
+    /// one with the player, whose speed is the other half of it.
+    ///
+    /// The closing speed is taken unsigned, deliberately. Which of the two was moving is not the question, and
+    /// the direction a contact's relative velocity points in is not something the engine pins down: read
+    /// signed, a real collision comes out as the speed the two are *parting* at, which is negative - so the
+    /// hit is never hard enough, on any car, however hard it was. The passing cars' own damage reads the same
+    /// value the same way, and for the same reason (see <see cref="PassingCarDamage"/>).
     /// </summary>
     void OnCollisionEnter(Collision collision)
     {
         if (stranded || abandoned) return;
-        if (bumped || knockedOver) return;
-        if (Time.time < bumpCooldownUntil) return;
         if (rb == null || collision.contacts.Length == 0) return;
 
         float impact = 0f;
@@ -1375,15 +1427,43 @@ public class AICarController : MonoBehaviour
             // The road coming up at it, or the ground it landed on, is not a collision.
             if (Vector3.Angle(collision.contacts[i].normal, Vector3.up) <= GroundNormalAngle) continue;
 
-            float into = -Vector3.Dot(collision.relativeVelocity, collision.contacts[i].normal);
+            float into = Mathf.Abs(Vector3.Dot(collision.relativeVelocity, collision.contacts[i].normal));
             if (into > impact) impact = into;
         }
 
-        if (impact < hardHitSpeed) return;
+        // Everything below this is the car's own body brushing the road, which is not a collision to weigh up.
+        if (impact < minimumBumpReport) return;
+
+        // The pause already in hand, or the one it has just had, is what keeps one scrape being five bumps.
+        if (bumped || knockedOver || Time.time < bumpCooldownUntil)
+        {
+            if (logBumps)
+                Debug.Log(string.Format(
+                    "[AI car] {0}: {1:0.0} m/s from {2} - already standing (or still gathering itself).",
+                    name, impact, collision.gameObject.name), this);
+
+            return;
+        }
+
+        if (impact < hardHitSpeed)
+        {
+            if (logBumps)
+                Debug.Log(string.Format(
+                    "[AI car] {0}: {1:0.0} m/s from {2} - under the {3:0.#} that counts, so it drives on.",
+                    name, impact, collision.gameObject.name, hardHitSpeed), this);
+
+            return;
+        }
 
         bumped = true;
         bumpReversing = false;
         bumpTimer = 0f;
+
+        if (logBumps)
+            Debug.Log(string.Format(
+                "[AI car] {0}: {1:0.0} m/s from {2} - bumping: {3:0.#} s standing still, then its path " +
+                "again (or a reverse first if something is in the way).",
+                name, impact, collision.gameObject.name, hardHitPause), this);
     }
 
     /// <summary>Stops driving the car and hands it to the physics, which is what makes the hit read.</summary>
@@ -1495,6 +1575,10 @@ public class AICarController : MonoBehaviour
         }
 
         currentWaypoint = NearestWaypointAhead();
+
+        // It was knocked about and has been sitting there, so it sets off from a standstill and builds back
+        // up to its cruising speed - the same pulling away a bumped car is given.
+        speedNow = 0f;
 
         // Whatever it was going around before the hit is no longer its business.
         avoidOffset = 0f;

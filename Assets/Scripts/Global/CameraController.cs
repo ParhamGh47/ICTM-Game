@@ -53,32 +53,42 @@ public class CameraController : MonoBehaviour
     // ---------------------------------------------------------------- braking
 
     [Header("Brake Camera")]
-    [Tooltip("How much closer to the truck the camera comes with the brakes fully on at speed, in metres. " +
-             "The rig already steps to its low-speed camera on a hard stop; this is the pull on top of that, " +
-             "so the stop is something the camera shows rather than only something the truck does. Applies to " +
+    [Tooltip("How far in towards the truck the camera comes with the brakes fully on, from the top of the " +
+             "speed range, in metres. The rig already steps to its low-speed camera on a hard stop; this is the " +
+             "pull on top of that, so the stop is something the camera shows rather than only something the " +
+             "truck does. It is deliberately small: this is a lean towards the truck, not a move. Applies to " +
              "the default third-person view only - the overhead and near views cannot pull in without giving " +
              "away the framing they exist for.")]
-    public float brakeDollyIn = 1.3f;
+    public float brakeDollyIn = 0.85f;
 
     [Tooltip("How close to the truck the camera may be pulled, in metres. The rig's low-speed camera already " +
              "sits nearer than the one it shows at speed, so this is what stops a hard stop from putting the " +
              "view inside the truck.")]
     public float brakeDollyMinDistance = 1.2f;
 
-    [Tooltip("How fast the camera closes on the truck once the brakes go on, in metres per second. The move " +
-             "is eased at both ends, so this is the middle of it rather than the speed it sets off at.")]
-    public float brakeDollyInSpeed = 4.5f;
+    [Tooltip("How fast the camera closes on the truck once the brakes go on, in metres per second of camera " +
+             "distance. A whole pull is about a second of this, and it is eased at both ends on top, so the " +
+             "closing takes longer than the number suggests.")]
+    public float brakeDollyInSpeed = 1.4f;
 
     [Tooltip("How fast the camera lets the truck back out once the brakes come off, in metres per second. " +
              "Slower than closing, which is what makes it read as the truck pulling away from you.")]
-    public float brakeDollyOutSpeed = 2.5f;
+    public float brakeDollyOutSpeed = 0.9f;
 
     [Tooltip("The speed in km/h below which braking does not move the camera at all. A full stop from a " +
-             "crawl has no drama to show.")]
-    public float brakeDollySpeedFloor = 25f;
+             "crawl has no drama to show, and this is where the pull starts from nothing. Low on purpose: the " +
+             "speed the stop was made from is what the pull is really about, so as little of the range as " +
+             "possible is left out of it.")]
+    public float brakeDollySpeedFloor = 15f;
 
-    [Tooltip("The speed in km/h at which braking has its full pull on the camera.")]
-    public float brakeDollyFullSpeed = 85f;
+    [Tooltip("The speed in km/h at which braking from it has its full pull on the camera. Set at the top of " +
+             "the truck's own speed range, so that the whole pull takes a stop from flat out.")]
+    public float brakeDollyFullSpeed = 105f;
+
+    [Tooltip("How long the brake has to be held before it counts as being pressed all the way, in seconds. " +
+             "A tap is worth what it was pressed; a brake leaned on is a hard stop whatever the pedal's travel, " +
+             "which is what a stop is - the pedal is only how it was started.")]
+    public float brakeDollyHoldTime = 0.7f;
 
     [Header("Boost Camera Settings")]
     public float boostCamDuration = 1.5f;
@@ -95,8 +105,15 @@ public class CameraController : MonoBehaviour
     private float dynamicCamBaseDistance;
     private float mainCamBaseDistance;
 
-    // How much of the brake pull is in force right now, 0 to 1, eased.
+    // How far the camera is pulled in towards the truck right now, in metres of that pull.
     private float brakePull;
+
+    // The speed in km/h the truck was doing when the brakes went on. This - rather than the speed left in it
+    // as it slows - is what the pull is read off, so a stop keeps the strength it began with.
+    private float brakeEntrySpeed;
+
+    // How long the brakes have been on for, so that holding them counts as pressing them harder.
+    private float brakeHold;
 
     private float nextSwitchCam = 0f;
 
@@ -195,11 +212,18 @@ public class CameraController : MonoBehaviour
     /// Pulls the default third-person view in towards the truck while the brakes are on.
     ///
     /// The rig already changes to its nearer camera for a hard stop, but that is a step at one threshold and
-    /// reads as a cut rather than as the truck closing on you. This is the same idea made continuous: the
-    /// pull in is the brake pressure the driver is actually using, scaled by how fast the truck was going, so
-    /// leaning on the brakes at speed is a deliberate closing in and a gentle stop from a crawl barely moves
-    /// the camera at all. It is added to each camera's authored distance, so the view it was framed at is
-    /// what it returns to.
+    /// reads as a cut rather than as the truck closing on you. This is the same idea made continuous, and it
+    /// is read off two things only: <em>how hard</em> the brake is being pressed, and the speed the truck was
+    /// carrying <em>before</em> the brakes went on. Not the speed left in it as it slows - a stop is the thing
+    /// the driver set up, and a long one should not quietly become a gentle one as the truck runs out of
+    /// road. It is added to each camera's authored distance, so the view it was framed at is what it returns
+    /// to.
+    ///
+    /// The speed is the one that decides how much this is worth, and it is asked for across nearly the whole
+    /// range the truck can do. How hard the brake is being used shapes it, and that is read as the driver
+    /// would mean it: a brake that is <em>held</em> counts as a brake pressed all the way, however far the
+    /// pedal went. A tap is worth what was tapped; a stop made on a held brake was a hard one, whatever the
+    /// travel of the pedal that started it.
     ///
     /// Only the default view takes it. The overhead and near views are framed at fixed distances for what
     /// they show, and closing them in would take that away rather than add to it.
@@ -213,10 +237,31 @@ public class CameraController : MonoBehaviour
 
         float forwardSpeed = Vector3.Dot(car.rb.velocity, car.transform.forward) * 3.6f;
         float braking = Mathf.Clamp01(-car.throttleInput);
-        float speedShare = Mathf.InverseLerp(brakeDollySpeedFloor, brakeDollyFullSpeed, forwardSpeed);
 
-        float target = braking * speedShare;
+        // The brakes are on: the speed it was doing when they went on is what this stop is worth, held for as
+        // long as they stay on (and taking the faster of the two, so braking later and harder counts for
+        // what it is). Off: the memory follows the truck again, so the next stop is read off its own entry.
+        brakeEntrySpeed = braking > 0.05f
+            ? Mathf.Max(brakeEntrySpeed, forwardSpeed)
+            : forwardSpeed;
 
+        // What that entry speed is worth, as a share of the pull: nothing under the floor, all of it at the
+        // top, and in proportion in between - so a stop from town speed is a fraction of the pull a stop from
+        // flat out is, without ever rounding away to nothing.
+        float speedShare = Mathf.InverseLerp(brakeDollySpeedFloor, brakeDollyFullSpeed, brakeEntrySpeed);
+
+        // How hard the brake is being used. A pedal has travel and a key does not, so the two are read
+        // together: what was pressed, and how long it has been pressed for. Holding it makes it count as a
+        // brake pressed all the way, which is what a held brake is - the pedal is only how the stop started.
+        brakeHold = braking > 0.05f ? brakeHold + Time.deltaTime : 0f;
+
+        float held = brakeDollyHoldTime > 0f ? Mathf.Clamp01(brakeHold / brakeDollyHoldTime) : 1f;
+        float hardness = Mathf.Max(braking, held);
+
+        float target = brakeDollyIn * Ease(hardness) * speedShare;
+
+        // The move itself is rate-limited in metres per second of distance, so nothing here can snap: the
+        // pull takes about a second to arrive however hard it is asked for, and rather longer to let go.
         float rate = target > brakePull ? brakeDollyInSpeed : brakeDollyOutSpeed;
         brakePull = Mathf.MoveTowards(brakePull, target, rate * Time.deltaTime);
 
@@ -227,12 +272,7 @@ public class CameraController : MonoBehaviour
             return;
         }
 
-        // The amount is eased rather than used raw. Both things that ask for the pull arrive as a step - a
-        // brake key goes from nothing to all of it, a pad's trigger from 0 to 1, and the rig's own cameras
-        // step between two distances as the speed crosses their threshold - and a step in the distance is
-        // exactly what reads as a pop. Eased, the camera sets off gently, closes at its quickest in the
-        // middle and settles onto the truck instead of arriving at it.
-        float pull = brakeDollyIn * Ease(brakePull);
+        float pull = brakePull;
 
         // BOTH of the default view's cameras are pulled, not only the one on screen. They are the same view
         // at two distances and the rig steps between them as the speed changes, so a camera left at its

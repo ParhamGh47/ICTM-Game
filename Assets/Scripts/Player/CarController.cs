@@ -627,6 +627,15 @@ void Update()
         rb.velocity = Vector3.zero;
         rb.angularVelocity = Vector3.zero;
 
+        // A reset puts the truck down standing on the road, so a hand-driven gearbox is put back in first: a
+        // truck set down still in fourth, or in reverse, would be asked to pull away in a gear nobody would
+        // ever start it in. The automatic box chooses for itself and is left to it. Nothing here is about the
+        // reset itself - see ReturnToFirstGear for why first is the gear it lands on.
+        if (gearbox != null)
+        {
+            gearbox.ReturnToFirstGear();
+        }
+
         float yaw = transform.eulerAngles.y;
 
         // Land the car on the road instead of wherever it got stuck: find the

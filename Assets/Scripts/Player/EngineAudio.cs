@@ -391,6 +391,27 @@ public class EngineAudio : MonoBehaviour
     }
 
     /// <summary>
+    /// Puts the hand-driven box back into first - the gear it is set down in.
+    ///
+    /// Called when the truck is placed back on the road: a reset leaves it standing, and a truck that landed
+    /// still in fourth, or in reverse, would be asked to pull away in a gear nobody would ever start it in.
+    /// First is also the one gear that is always usable from a standstill, which is exactly the state a reset
+    /// leaves the truck in.
+    ///
+    /// Nothing happens in automatic, where the box chooses for itself and would decide on first anyway - and
+    /// no change is left in progress, so the truck drives off on the gear it was put in rather than through the
+    /// clutch of a shift nobody made.
+    /// </summary>
+    public void ReturnToFirstGear()
+    {
+        if (!Manual) return;
+
+        currentGear = 0;
+        clutchOutUntil = -999f;
+        shiftTimer = 0f;
+    }
+
+    /// <summary>
     /// A gear change the player made, as opposed to one the box decided on.
     ///
     /// The gear goes in at once - the lever is mechanical - and what the truck feels for the next

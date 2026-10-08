@@ -66087,6 +66087,12 @@ MonoBehaviour:
     breaksOff: 1
     bendScale: 1
     wobbleScale: 0
+    redirectChance: 0.7
+    redirectTo:
+    - backDoor
+    - iceCream
+    - backWindow
+    redirectDamage: 0.6
   - name: lightBack
     toughness: 1.8
     breaksOff: 1

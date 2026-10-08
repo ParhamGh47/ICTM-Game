@@ -63,8 +63,24 @@ public class PauseMenu : MonoBehaviour
         if (gameOver.Instance != null && gameOver.Instance.IsGameOver)
             return;
 
+        // While the pause menu is up, back is a way out of it rather than anything the truck does: B / circle
+        // on a pad, which is the same button every other screen in the game leaves with, and Escape on the
+        // keyboard, which Cancel carries as well as B. The truck is paused and reads none of its controls
+        // (see CarController), so the button has nothing else to be here. Checked before the pause button so
+        // one press does one thing.
+        if (isPaused && Input.GetButtonDown("Cancel"))
+        {
+            if (controlsOpen)
+                CloseControls();
+            else
+                ResumeGame();
+
+            return;
+        }
+
         // Escape on the keyboard, Start / Options on a gamepad. B is left alone here: in a level it
-        // is the headlights, so it cannot also be the way out of the pause menu.
+        // is the headlights, so it cannot also be the way out of the pause menu - but while the menu is up
+        // it is, above.
         if (GameInput.PausePressed())
         {
             if (controlsOpen)

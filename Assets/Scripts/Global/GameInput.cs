@@ -31,6 +31,11 @@ using UnityEngine;
 ///   D-pad left        horn                H                 horn
 ///   D-pad right       headlights          L                 headlights
 ///
+/// The D-pad is also what navigates the menus on a pad - see <see cref="MenuDirection"/> - and with the
+/// gearbox on manual that is the same four directions the truck uses for its reset, its horn and its
+/// lights. The two never overlap in practice: a menu is up only while the truck is paused, and a paused
+/// truck reads none of these controls (see <see cref="CarController"/>).
+///
 /// That is the only difference between the two layouts: the horn and the lights keep their own button
 /// names on the keyboard, and on the pad they simply step one place inwards - the horn was X, the left
 /// face button, and it becomes D-pad left; the lights were B, the right one, and they become D-pad right.
@@ -58,6 +63,18 @@ public static class GameInput
     private const string ControllerBrakeAxis = "ControllerBrake";
     private const string ControllerDPadVerticalAxis = "ControllerDPadVertical";
     private const string ControllerDPadHorizontalAxis = "ControllerDPadHorizontal";
+
+    // ---------------------------------------------------------------- menu
+
+    /// <summary>
+    /// Left shoulder: LB on an Xbox pad, L1 on a PlayStation pad. It is the focus control while the truck is
+    /// being driven and the tab-previous control in a menu, which is the one place the two can be told apart:
+    /// a menu has no truck to focus with.
+    /// </summary>
+    public const KeyCode TabPreviousButton = KeyCode.JoystickButton4;
+
+    /// <summary>Right shoulder: RB on an Xbox pad, R1 on a PlayStation pad. Tab-next, and nothing else.</summary>
+    public const KeyCode TabNextButton = KeyCode.JoystickButton5;
 
     // ---------------------------------------------------------------- buttons
 
@@ -117,11 +134,12 @@ public static class GameInput
     /// <summary>
     /// Which way each D-pad direction reports on its own axis.
     ///
-    /// Up is <em>positive</em> on <c>ControllerDPadVertical</c>, exactly as it is on the built-in
-    /// <c>Vertical</c> axis the menus navigate with - the two entries are the same axis with the same
-    /// Invert flag - so a direction means the same thing to the menus and to the truck. Reset therefore
-    /// reads the positive end of the vertical axis, and the left/right pair reads the horizontal one,
-    /// where right is positive.
+    /// Up is <em>positive</em> on <c>ControllerDPadVertical</c> and right is positive on
+    /// <c>ControllerDPadHorizontal</c>. Which way a pad reports its own vertical is not something the project
+    /// can know for it: an Xbox pad reports the D-pad's up on the positive end, so that entry carries no
+    /// Invert - and the Invert flag is the single place to put a pad that arrives reporting it the other way
+    /// round, which is where this was wrong before. Up being positive is also what every menu in the game
+    /// treats as "up", so one D-pad press means the same thing to the truck and to a menu.
     /// </summary>
     private const float DPadUp = 1f;
     private const float DPadDown = -1f;
@@ -193,7 +211,7 @@ public static class GameInput
             return true;
 
         if (DriveSettings.Manual)
-            return DPadPressed(DPadRight, ref dpadRightWasHeld);
+            return DPadPressed(ControllerDPadHorizontalAxis, DPadRight, ref dpadRightWasHeld);
 
         return Input.GetKeyDown(LightsButton);
     }
@@ -209,7 +227,7 @@ public static class GameInput
             return true;
 
         if (DriveSettings.Manual)
-            return DPadPressed(DPadLeft, ref dpadLeftWasHeld);
+            return DPadPressed(ControllerDPadHorizontalAxis, DPadLeft, ref dpadLeftWasHeld);
 
         return Input.GetKeyDown(HornButton);
     }
@@ -248,6 +266,50 @@ public static class GameInput
             || Input.GetKeyDown(HornButton);
     }
 
+    /// <summary>
+    /// The pad's own direction buttons as a menu direction: -1, 0 or 1 on each axis, and 0 when nothing is
+    /// held. +y is up and +x is right, the way the menus read them.
+    ///
+    /// The menus are navigated through Unity's own input module, which reads the built-in
+    /// <c>Horizontal</c>/<c>Vertical</c> axes, and that is where this used to be left - a copy of each of
+    /// those axes was added to the Input Manager on the D-pad's own axis numbers. It did not work on a real
+    /// pad, and neither did the truck's own D-pad controls, which is what this replaces: the D-pad is read
+    /// here, on the two axes it is known to report on (the same ones the truck's controls use), and the menu
+    /// navigation is moved by <see cref="MenuNavigation"/> with the answer. Adding the D-pad to the built-in
+    /// axes as well would move a menu twice for one press, so it is deliberately not done.
+    /// </summary>
+    public static void MenuDirection(out int horizontal, out int vertical)
+    {
+        float x = Input.GetAxisRaw(ControllerDPadHorizontalAxis);
+        float y = Input.GetAxisRaw(ControllerDPadVerticalAxis);
+
+        horizontal = x > DPadDeadZone ? 1 : (x < -DPadDeadZone ? -1 : 0);
+        vertical = y > DPadDeadZone ? 1 : (y < -DPadDeadZone ? -1 : 0);
+    }
+
+    /// <summary>
+    /// Whether the pad's D-pad is being held at all, whatever direction. Used to keep the menus' highlight
+    /// following the selection while a pad is used, the way the built-in axes do when the stick or a key is.
+    /// </summary>
+    public static bool MenuDirectionHeld()
+    {
+        MenuDirection(out int x, out int y);
+
+        return x != 0 || y != 0;
+    }
+
+    /// <summary>Next tab in a menu: E, or the right shoulder button.</summary>
+    public static bool TabNextPressed()
+    {
+        return Input.GetKeyDown(KeyCode.E) || Input.GetKeyDown(TabNextButton);
+    }
+
+    /// <summary>Previous tab in a menu: Q, or the left shoulder button.</summary>
+    public static bool TabPreviousPressed()
+    {
+        return Input.GetKeyDown(KeyCode.Q) || Input.GetKeyDown(TabPreviousButton);
+    }
+
     /// <summary>Change camera: C, or Y / triangle.</summary>
     public static bool CameraPressed()
     {
@@ -274,16 +336,22 @@ public static class GameInput
         if (Input.GetKeyDown(KeyCode.R))
             return true;
 
-        return DPadPressed(DPadUp, ref dpadUpWasHeld);
+        return DPadPressed(ControllerDPadVerticalAxis, DPadUp, ref dpadUpWasHeld);
     }
 
     /// <summary>
     /// One direction of the D-pad as a press rather than as an axis: true on the frame it is pushed, and
     /// not again until it has been let go.
+    ///
+    /// The axis is named by the caller rather than worked out from <paramref name="direction"/>, and that is
+    /// the whole point of the parameter: up and right are both +1 on their own axes, so a direction cannot
+    /// say which axis it belongs to. It used to be guessed that way, and every +1 was therefore read off the
+    /// horizontal axis - which put the reset on D-pad right, alongside the lights, and left D-pad up doing
+    /// nothing at all.
     /// </summary>
-    private static bool DPadPressed(float direction, ref bool wasHeld)
+    private static bool DPadPressed(string axis, float direction, ref bool wasHeld)
     {
-        bool held = DPadHeld(direction);
+        bool held = DPadHeld(axis, direction);
         bool pressed = held && !wasHeld;
 
         wasHeld = held;
@@ -292,12 +360,8 @@ public static class GameInput
     }
 
     /// <summary>Whether one direction of the D-pad is down right now.</summary>
-    private static bool DPadHeld(float direction)
+    private static bool DPadHeld(string axis, float direction)
     {
-        string axis = direction == DPadLeft || direction == DPadRight
-            ? ControllerDPadHorizontalAxis
-            : ControllerDPadVerticalAxis;
-
         float raw = Input.GetAxis(axis);
 
         return direction > 0f ? raw > DPadDeadZone : raw < -DPadDeadZone;

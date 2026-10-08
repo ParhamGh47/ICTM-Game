@@ -46,7 +46,7 @@ public class SpeedMotionBlur : MonoBehaviour
              "pixels out where the streaks are longest on a 1080p picture - a light smear, which is the idea: " +
              "a little blur over the whole race reads as speed, a heavy one around the player reads as a " +
              "smudge. This and maxMix are the two dials for how much there is overall.")]
-    public float maxBlur = 0.048f;
+    public float maxBlur = 0.044f;
 
     [Tooltip("The most of any one pixel the smear is ever allowed to take over, however far out it is. " +
              "Under 1 the crisp frame always shows through, so the far reaches of the picture are lightened " +

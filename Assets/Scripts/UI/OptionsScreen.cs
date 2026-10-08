@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 /// <summary>
@@ -268,6 +269,47 @@ public class OptionsScreen : MonoBehaviour
         StartCoroutine(FadeIn());
     }
 
+    /// <summary>
+    /// Switches tabs from the shoulder buttons or Q/E, which is how a player on a pad or on the keyboard
+    /// changes pages: clicking the tab is the pointer's way, and those are the two ways there are. The
+    /// highlight is not part of it - it is taken into the new page by <see cref="ShowPage"/>.
+    /// </summary>
+    private void Update()
+    {
+        if (GameInput.TabNextPressed()) CycleTab(1);
+        else if (GameInput.TabPreviousPressed()) CycleTab(-1);
+    }
+
+    /// <summary>
+    /// Steps through the tab row. The screen has two tabs, so either direction is the same move - it is
+    /// written as a step through the row rather than as a swap, so a third one would need nothing here.
+    /// </summary>
+    private void CycleTab(int step)
+    {
+        if (tabs.Count < 2) return;
+
+        int current = 0;
+
+        for (int i = 0; i < tabs.Count; i++)
+            if (tabs[i].shows == page) current = i;
+
+        int next = ((current + step) % tabs.Count + tabs.Count) % tabs.Count;
+
+        ShowPage(tabs[next].shows);
+    }
+
+    /// <summary>
+    /// Puts the highlight on a tab that has just been switched to, so the keyboard or the pad carries on from
+    /// the tab row instead of being left on a button the page it left had.
+    /// </summary>
+    private static void Highlight(Button button)
+    {
+        if (button == null || EventSystem.current == null) return;
+
+        EventSystem.current.SetSelectedGameObject(button.gameObject);
+        ButtonFocusEffect.HoldHighlightOnSelection(0.25f);
+    }
+
     private void OnDestroy()
     {
         GraphicsQuality.Changed -= Refresh;
@@ -297,6 +339,20 @@ public class OptionsScreen : MonoBehaviour
         if (settingsPage != null) settingsPage.gameObject.SetActive(show == Page.Settings);
 
         RefreshTabs();
+
+        // The highlight stays inside the page. The tab row is deliberately not part of the button
+        // navigation (see RegisterTabsOutOfNavigation), so switching a tab hands the highlight to the first
+        // thing the new page offers - which on the CONTROLS tab is BACK, that page being a table rather than
+        // a list of buttons.
+        Highlight(EntryFor(show));
+    }
+
+    /// <summary>The button the highlight goes to when a page is shown.</summary>
+    private Button EntryFor(Page show)
+    {
+        if (show == Page.Settings && presetRows.Count > 0) return presetRows[0].button;
+
+        return backButton;
     }
 
     private void RefreshTabs()
@@ -495,9 +551,11 @@ public class OptionsScreen : MonoBehaviour
 
     private void BuildTabs(Transform root)
     {
-        // Named after what they show, because MenuNavigation starts on "Controls" by that name.
+        // Named after what they show, which is also how the pause menu's panel names its own two.
         controlsTab = CreateTab(root, "Controls", controlsTabText, 0, Page.Controls);
         settingsTab = CreateTab(root, "Settings", settingsTabText, 1, Page.Settings);
+
+        RegisterTabsOutOfNavigation();
     }
 
     private Button CreateTab(Transform root, string name, string label, int index, Page shows)
@@ -519,11 +577,44 @@ public class OptionsScreen : MonoBehaviour
         barRect.sizeDelta = new Vector2(0f, 5f);
         barRect.anchoredPosition = Vector2.zero;
 
+        // A tab is not part of the page's button navigation: it is switched by its own controls - the
+        // shoulder buttons or Q/E - and the highlight never comes to rest on it. Clicking still works.
+        Navigation navigation = button.navigation;
+        navigation.mode = Navigation.Mode.None;
+        button.navigation = navigation;
+
         button.onClick.AddListener(() => ShowPage(shows));
 
         tabs.Add(new Tab { shows = shows, label = text, activeBar = bar, button = button });
 
         return button;
+    }
+
+    /// <summary>
+    /// Takes the tab row out of the button navigation, so a stick, a D-pad or the arrow keys never bring the
+    /// highlight onto a tab: navigating the page stays inside the page, and a tab is only ever switched from
+    /// its own controls (<see cref="CycleTab"/>) or by clicking it.
+    /// </summary>
+    private void RegisterTabsOutOfNavigation()
+    {
+        MenuNavigation navigation = FindObjectOfType<MenuNavigation>();
+        if (navigation == null || tabs.Count == 0) return;
+
+        // Any selectables the scene already keeps out of navigation are left out of it.
+        Selectable[] already = navigation.ignore ?? new Selectable[0];
+        Selectable[] ignored = new Selectable[already.Length + tabs.Count];
+
+        already.CopyTo(ignored, 0);
+
+        for (int i = 0; i < tabs.Count; i++)
+            ignored[already.Length + i] = tabs[i].button;
+
+        navigation.ignore = ignored;
+
+        // The tab row may have been read as the menu's buttons already - this screen is built in Awake, which
+        // is when the navigator itself was switched on - so it is told to read them again without them. This
+        // runs before Start, so it is the tab that would otherwise be sitting under the highlight.
+        navigation.RefreshButtons();
     }
 
     private void BuildControlsPage(RectTransform page)
@@ -874,8 +965,9 @@ public class OptionsScreen : MonoBehaviour
     }
 
     /// <summary>
-    /// Where the highlight goes at the places the nearest-neighbour guess gets wrong: off the tab row into
-    /// the tab's own content, and through the preset row and the switches in the order they read.
+    /// Where the highlight goes at the places the nearest-neighbour guess gets wrong: through the preset row
+    /// and the switches in the order they read, around the difficulty table, and down the sound grid. The tab
+    /// row is not wired at all - it is outside the button navigation (see RegisterTabsOutOfNavigation).
     /// </summary>
     private void WireNavigation()
     {
@@ -892,15 +984,13 @@ public class OptionsScreen : MonoBehaviour
         if (soundRows.Count > 0)
             middleFirstSound = soundRows[0].steps[SoundSettings.StepCount / 2].button;
 
-        SetNavigation(controlsTab, null, settingsTab, backButton, null);
-        SetNavigation(settingsTab, controlsTab, null, middlePreset, controlsTab);
-
         for (int i = 0; i < presetRows.Count; i++)
         {
             Button left = i > 0 ? presetRows[i - 1].button : null;
             Button right = i < presetRows.Count - 1 ? presetRows[i + 1].button : null;
 
-            SetNavigation(presetRows[i].button, left, right, shadowsButton, settingsTab);
+            // Nothing above the preset row: the tab row is there, and it is not navigable.
+            SetNavigation(presetRows[i].button, left, right, shadowsButton, null);
         }
 
         if (shadowsButton != null)

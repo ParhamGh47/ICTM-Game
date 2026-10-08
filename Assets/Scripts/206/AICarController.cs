@@ -249,6 +249,39 @@ public class AICarController : MonoBehaviour
              "rest of the level - free to be shunted about, but never driven again.")]
     public float wreckTilt = 70f;
 
+    [Header("Bumped")]
+    [Tooltip("How hard a hit has to be to take a car off the road with it for a moment, in metres per second " +
+             "along the surface it was hit on - measured against the car, so being hit by the player counts " +
+             "the pair of them. A car nudged in traffic drives on as though nothing had happened; a car that " +
+             "has really been collided with stops and gathers itself, which is what stops a platoon carrying " +
+             "on through a crash as though it were not there.")]
+    public float hardHitSpeed = 7f;
+
+    [Tooltip("How long a car that has been hit hard stands still before it does anything about it.")]
+    public float hardHitPause = 1f;
+
+    [Tooltip("How quickly such a car is brought to a stop, in metres per second per second - so a car hit at " +
+             "speed is not still sliding down the road through its pause.")]
+    public float hardHitBrake = 14f;
+
+    [Tooltip("How far ahead a car that has been hit looks for something in its way before deciding it cannot " +
+             "simply carry on.")]
+    public float bumpedProbeDistance = 4.5f;
+
+    [Tooltip("How fast a car that cannot get going forwards backs away to clear itself, in metres per second.")]
+    public float bumpedReverseSpeed = 2.5f;
+
+    [Tooltip("How long it backs away for.")]
+    public float bumpedReverseTime = 0.7f;
+
+    [Tooltip("How long a car is left to drive on after a bump before another hit can stop it again, so a " +
+             "scrape down one side is one bump rather than five. Bumping into things does not touch this.")]
+    public float bumpedCooldown = 1.2f;
+
+    // What is not in the way of driving on, however close it is: the road, a kerb, the ground. A surface whose
+    // normal is this near straight up is something a car drives over rather than into.
+    private const float GroundNormalAngle = 50f;
+
     Rigidbody rb;
     float speedMS;
 
@@ -299,6 +332,14 @@ public class AICarController : MonoBehaviour
     float settleTimer;
     float knockedTimer;
 
+    // Set when a hard hit has taken the car off the drive for a moment - it stands still, backs off if it
+    // cannot get going, and then rejoins its path. Deliberately a lighter thing than being knocked over: the
+    // car keeps its wheels and its heading and is never re-attached by <see cref="Recover"/>.
+    bool bumped;
+    bool bumpReversing;
+    float bumpTimer;
+    float bumpCooldownUntil;
+
     // Said once per session rather than once per car, because a scene can hold dozens of them.
     static bool reportedMissingPath;
 
@@ -306,6 +347,11 @@ public class AICarController : MonoBehaviour
     // safe to share between cars.
     private static readonly Collider[] obstacleHits = new Collider[32];
     private static readonly RaycastHit[] groundHits = new RaycastHit[8];
+    private static readonly RaycastHit[] aheadHits = new RaycastHit[8];
+
+    // The heights a bumped car looks along for something in its way. Two, because one ray can pass over a low
+    // obstacle or under a high one.
+    private static readonly float[] probeHeights = { 0.4f, 1.1f };
 
     // The emission a lamp is tinted through: the Standard shader's colour and the keyword that turns it on.
     private static readonly int EmissionColorId = Shader.PropertyToID("_EmissionColor");
@@ -698,6 +744,12 @@ public class AICarController : MonoBehaviour
     void FixedUpdate()
     {
         if (stranded || abandoned) return;
+
+        if (bumped)
+        {
+            RecoverFromBump();
+            return;
+        }
 
         if (knockedOver)
         {
@@ -1180,6 +1232,158 @@ public class AICarController : MonoBehaviour
     bool IsOnItsWheels()
     {
         return Vector3.Angle(rb.rotation * Vector3.up, Vector3.up) <= uprightLimit;
+    }
+
+    // --------------------------------------------------------- bumped
+
+    /// <summary>
+    /// A car that has been hit hard enough to be stopped for a moment: a beat standing still, and then its
+    /// path again - or, if there is something in the way it would drive straight into, a short reverse first to
+    /// clear itself.
+    ///
+    /// This is not the same thing as being knocked off its wheels, and it does not replace it. The car keeps
+    /// its heading and its wheels throughout, and a hit that tips it past <see cref="uprightLimit"/> leaves
+    /// this for the ordinary knock-over the moment it is noticed, so a real crash behaves exactly as it did.
+    /// What it adds is the middle case a platoon had no answer for: a car that has been collided with and is
+    /// still perfectly drivable, carrying on as though the crash had not happened.
+    /// </summary>
+    void RecoverFromBump()
+    {
+        bumpTimer += Time.fixedDeltaTime;
+
+        // Tipped over after all: that is the knock-over's business, not this.
+        if (!IsOnItsWheels())
+        {
+            bumped = false;
+            KnockOffLine();
+            return;
+        }
+
+        UpdateWheelVisuals();
+
+        if (!bumpReversing)
+        {
+            // Standing still: the drive is not moving it, and the body is brought to a stop rather than left
+            // to its own drag, so a car hit at speed is not still sliding down the road through its pause.
+            rb.velocity = Vector3.MoveTowards(rb.velocity, Vector3.zero, hardHitBrake * Time.fixedDeltaTime);
+
+            if (bumpTimer < hardHitPause) return;
+
+            if (!BlockedAhead())
+            {
+                EndBump();
+                return;
+            }
+
+            // Something in the way: back away from it before setting off again.
+            bumpReversing = true;
+            bumpTimer = 0f;
+            return;
+        }
+
+        if (bumpTimer < bumpedReverseTime)
+        {
+            // Backwards along its own heading, so it comes out of whatever it is wedged against rather than
+            // being steered out of it - a car that cannot go forwards is not in a position to be turned.
+            Vector3 back = rb.rotation * Vector3.back;
+
+            rb.MovePosition(rb.position + back * (bumpedReverseSpeed * Time.fixedDeltaTime));
+            return;
+        }
+
+        EndBump();
+    }
+
+    /// <summary>Gives the car its path back, the bump over.</summary>
+    void EndBump()
+    {
+        bumped = false;
+        bumpReversing = false;
+        bumpTimer = 0f;
+
+        // The pause it has just had is what stops the next scrape along its side starting another one.
+        bumpCooldownUntil = Time.time + bumpedCooldown;
+
+        if (waypoints == null || waypoints.Length == 0)
+        {
+            Strand();
+            return;
+        }
+
+        if (levelOnRecovery)
+        {
+            // Its heading is kept and any lean is dropped, the same hand-over a recovered car gets.
+            rb.MoveRotation(Quaternion.Euler(0f, rb.rotation.eulerAngles.y, 0f));
+        }
+
+        currentWaypoint = NearestWaypointAhead();
+
+        // It starts the drive again with its steering centred and nothing it was avoiding still on its mind.
+        avoidOffset = 0f;
+        steerNow = 0f;
+        cornerNow = 0f;
+    }
+
+    /// <summary>
+    /// Whether there is anything close in front of the car that it would drive into if it set off again.
+    ///
+    /// Only things it would have to get past count: its own colliders are ignored, and so is anything lying
+    /// flat - the road, a kerb, the ground a bump left it on - which is what it drives over rather than into.
+    /// </summary>
+    bool BlockedAhead()
+    {
+        Vector3 forward = rb.rotation * Vector3.forward;
+
+        for (int h = 0; h < probeHeights.Length; h++)
+        {
+            Vector3 origin = transform.position + Vector3.up * probeHeights[h];
+
+            int count = Physics.RaycastNonAlloc(origin, forward, aheadHits, bumpedProbeDistance, ~0,
+                                                QueryTriggerInteraction.Ignore);
+
+            for (int i = 0; i < count; i++)
+            {
+                Collider hit = aheadHits[i].collider;
+
+                if (hit == null) continue;
+                if (hit.transform.IsChildOf(transform)) continue;
+                if (Vector3.Angle(aheadHits[i].normal, Vector3.up) <= GroundNormalAngle) continue;
+
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// A hard enough collision takes the car off the drive for a moment. Measured against the car rather than
+    /// against how fast it happened to be going, so what counts is the collision - including one with the
+    /// player, whose speed is the other half of it.
+    /// </summary>
+    void OnCollisionEnter(Collision collision)
+    {
+        if (stranded || abandoned) return;
+        if (bumped || knockedOver) return;
+        if (Time.time < bumpCooldownUntil) return;
+        if (rb == null || collision.contacts.Length == 0) return;
+
+        float impact = 0f;
+
+        for (int i = 0; i < collision.contacts.Length; i++)
+        {
+            // The road coming up at it, or the ground it landed on, is not a collision.
+            if (Vector3.Angle(collision.contacts[i].normal, Vector3.up) <= GroundNormalAngle) continue;
+
+            float into = -Vector3.Dot(collision.relativeVelocity, collision.contacts[i].normal);
+            if (into > impact) impact = into;
+        }
+
+        if (impact < hardHitSpeed) return;
+
+        bumped = true;
+        bumpReversing = false;
+        bumpTimer = 0f;
     }
 
     /// <summary>Stops driving the car and hands it to the physics, which is what makes the hit read.</summary>

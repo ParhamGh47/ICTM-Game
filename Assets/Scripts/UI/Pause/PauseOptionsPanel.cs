@@ -397,6 +397,8 @@ public class PauseOptionsPanel : MonoBehaviour
         EventSystem events = EventSystem.current;
         if (events == null || controlsTab == null) return;
 
+        // Opens on the CONTROLS tab, which puts the highlight on BACK - that page being a table rather than a
+        // list of buttons, so it is the one thing there is to highlight.
         ShowPage(PausePage.Controls);
 
         // A prompt that is already up is what the highlight belongs on: it is a dialog, and it is the only
@@ -406,10 +408,10 @@ public class PauseOptionsPanel : MonoBehaviour
         // Clearing it first is deliberate: the pause panel's own MenuNavigation is still holding the button
         // this panel just took away, and letting go of it is what makes that component re-read the buttons
         // that are here now. Left alone it would go on protecting a selection that is no longer on screen.
-        // It also leaves the highlight on the tab row, which is where its own guess lands too - the top-most
-        // button is the tab row here, not the BACK button in the corner.
         events.SetSelectedGameObject(null);
-        events.SetSelectedGameObject(promptUp ? reloadButton.gameObject : controlsTab.gameObject);
+
+        if (promptUp) events.SetSelectedGameObject(reloadButton.gameObject);
+        else Highlight(EntryFor(PausePage.Controls));
 
         ButtonFocusEffect.HoldHighlightOnSelection(0.35f);
     }
@@ -428,6 +430,28 @@ public class PauseOptionsPanel : MonoBehaviour
         if (settingsPage != null) settingsPage.gameObject.SetActive(show == PausePage.Settings);
 
         RefreshTabs();
+
+        // The highlight stays inside the page. The tab row is deliberately not part of the button navigation
+        // (see RegisterTabsOutOfNavigation), so a page hands the highlight to the first thing it offers.
+        Highlight(EntryFor(show));
+    }
+
+    /// <summary>The button the highlight goes to when a page is shown.</summary>
+    private Button EntryFor(PausePage show)
+    {
+        if (show == PausePage.Settings && presetRows.Count > 0) return presetRows[0].button;
+
+        return backButton;
+    }
+
+    /// <summary>
+    /// Puts the highlight on a button without the pointer taking it straight back.
+    /// </summary>
+    private static void Highlight(Button button)
+    {
+        if (button == null || EventSystem.current == null) return;
+
+        EventSystem.current.SetSelectedGameObject(button.gameObject);
     }
 
     private void RefreshTabs()
@@ -440,6 +464,42 @@ public class PauseOptionsPanel : MonoBehaviour
             tabs[i].label.color = active ? inkColor : dimInkColor;
             tabs[i].label.fontStyle = active ? FontStyles.Bold : FontStyles.Normal;
         }
+    }
+
+    /// <summary>
+    /// Switches tabs from the shoulder buttons or Q/E, the way the main menu's options do: clicking the tab
+    /// is the pointer's way, and this is the pad's and the keyboard's. Only while the options are actually
+    /// open, so a press in the curl of a level is not a tab change.
+    /// </summary>
+    private void Update()
+    {
+        if (!open) return;
+
+        if (GameInput.TabNextPressed()) CycleTab(1);
+        else if (GameInput.TabPreviousPressed()) CycleTab(-1);
+    }
+
+    /// <summary>
+    /// Steps through the tab row - two tabs, so either direction is the same move. The highlight is not part
+    /// of it: it is taken into the new page by <see cref="ShowPage"/>, because a tab is not somewhere the
+    /// highlight is allowed to rest.
+    /// </summary>
+    private void CycleTab(int step)
+    {
+        if (tabs.Count < 2) return;
+
+        // Nothing is switched while the restart prompt is up: it is a question that wants an answer, and the
+        // highlight belongs on its own two buttons until it has one.
+        if (reloadPrompt != null && reloadPrompt.gameObject.activeSelf) return;
+
+        int current = 0;
+
+        for (int i = 0; i < tabs.Count; i++)
+            if (tabs[i].shows == page) current = i;
+
+        int next = ((current + step) % tabs.Count + tabs.Count) % tabs.Count;
+
+        ShowPage(tabs[next].shows);
     }
 
     // ---------------------------------------------------------------- choices
@@ -736,15 +796,52 @@ public class PauseOptionsPanel : MonoBehaviour
         float left = (safeSize.x - totalWidth) * 0.5f;
         float step = tabSize.x + tabGap;
 
-        // Named after what they show, because the pause panel's MenuNavigation starts on a button by name.
+        // Named after what they show, which is also how the options screen's own two are named.
         controlsTab = CreateTab(root, "Controls", controlsTabText, left, PausePage.Controls);
         settingsTab = CreateTab(root, "Settings", settingsTabText, left + step, PausePage.Settings);
+
+        RegisterTabsOutOfNavigation();
+    }
+
+    /// <summary>
+    /// Takes the tab row out of the button navigation, so a stick, a D-pad or the arrow keys never bring the
+    /// highlight onto a tab: navigating the page stays inside the page, and a tab is only ever switched from
+    /// its own controls (<see cref="CycleTab"/>) or by clicking it.
+    /// </summary>
+    private void RegisterTabsOutOfNavigation()
+    {
+        // The pause window owns the navigator this panel is opened inside, so it is the one holding the
+        // highlight while the options are up.
+        MenuNavigation navigation = GetComponentInParent<MenuNavigation>(true);
+        if (navigation == null || tabs.Count == 0) return;
+
+        Selectable[] already = navigation.ignore ?? new Selectable[0];
+        Selectable[] ignored = new Selectable[already.Length + tabs.Count];
+
+        already.CopyTo(ignored, 0);
+
+        for (int i = 0; i < tabs.Count; i++)
+            ignored[already.Length + i] = tabs[i].button;
+
+        navigation.ignore = ignored;
+
+        // The navigator's buttons were read before this panel existed, and it may be holding one of the
+        // pause window's own; re-reading them without the tabs is what stops the first D-pad press landing on
+        // one - and on nothing, a tab having no way out of itself.
+        navigation.RefreshButtons();
     }
 
     private Button CreateTab(Transform root, string name, string label, float x, PausePage shows)
     {
+        // A tab is not part of the page's button navigation: it is switched by its own controls - the
+        // shoulder buttons or Q/E - and the highlight never comes to rest on it. Clicking still works.
+
         Button button = CreatePlateButton(name, root, label, tabSize, 16f);
         PlaceTop(root, (RectTransform)button.transform, x, tabTopY, tabSize.x, tabSize.y);
+
+        Navigation tabNavigation = button.navigation;
+        tabNavigation.mode = Navigation.Mode.None;
+        button.navigation = tabNavigation;
 
         TextMeshProUGUI text = button.GetComponentInChildren<TextMeshProUGUI>();
         text.characterSpacing = 3f;
@@ -1130,26 +1227,23 @@ public class PauseOptionsPanel : MonoBehaviour
 
     private void BuildActions(Transform root)
     {
-        // The tab row is the one place Unity's own guess reads badly: the page below a tab is not where the
-        // nearest button happens to be, so each tab is pointed at the first thing on the page it opens. Every
-        // other button is wired as the list it looks like - the preset row, the switch grid, the difficulty
-        // row, the camera mix and the five sound rows - because these plates are small enough that a
-        // nearest-neighbour guess lands on the wrong one. The controls page has nothing selectable on it - it
-        // is a table, not a list of buttons - so down is left empty there and BACK is the one thing above.
+        // Every button is wired as the list it looks like - the preset row, the switch grid, the difficulty
+        // row and the sound rows - because these plates are small enough that a nearest-neighbour guess lands
+        // on the wrong one. The tab row above is not wired at all: it is outside the button navigation (see
+        // RegisterTabsOutOfNavigation). The controls page has nothing selectable on it - it is a table, not a
+        // list of buttons - so the highlight sits on BACK there and there is nowhere else to go.
         int middleStep = SoundSettings.StepCount / 2;
         Button middleFirstSound = soundRows.Count > 0 ? soundRows[0].steps[middleStep].button : null;
         Button middlePreset = presetRows.Count > 1 ? presetRows[presetRows.Count / 2].button : null;
         Button middleDifficulty = difficultyRows.Count > 1 ? difficultyRows[difficultyRows.Count / 2].button : null;
-
-        SetNavigation(controlsTab, null, settingsTab, null, backButton);
-        SetNavigation(settingsTab, controlsTab, null, middlePreset, backButton);
 
         for (int i = 0; i < presetRows.Count; i++)
         {
             Button left = i > 0 ? presetRows[i - 1].button : null;
             Button right = i < presetRows.Count - 1 ? presetRows[i + 1].button : null;
 
-            SetNavigation(presetRows[i].button, left, right, shadowsButton, settingsTab);
+            // Nothing above the preset row: the tab row is there, and it is not navigable.
+            SetNavigation(presetRows[i].button, left, right, shadowsButton, null);
         }
 
         SetNavigation(shadowsButton, null, blurButton, speedParticlesButton, middlePreset);

@@ -331,6 +331,7 @@
 "Assets/Scripts/UI/Customize/TruckPaintApplier.cs"
 "Assets/Scripts/Player/JumpAssist.cs"
 "Assets/Scripts/UI/ControlBindings.cs"
+"Assets/Scripts/Global/DriveSettings.cs"
 "Assets/Scripts/Player/Hud/SpeedDisplay.cs"
 "Assets/Scripts/PassingCar/AITarget.cs"
 "Assets/Scripts/UI/Customize/TruckPaint.cs"
@@ -375,4 +376,3 @@
 "Assets/Scripts/UI/EscBack.cs"
 "Assets/Scripts/Player/CarController.cs"
 "Assets/Scripts/UI/Trackers/ProgressTracker/ProgressDisplay.cs"
-"Assets/Scripts/Global/DriveSettings.cs"

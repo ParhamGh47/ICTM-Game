@@ -354,7 +354,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   buttons: []
-  firstButtonName: Controls
+  firstButtonName: Back
   selectOnEnable: 1
   keepSelectionAlive: 1
   rememberLast: 1

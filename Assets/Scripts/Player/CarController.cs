@@ -596,6 +596,11 @@ void Update()
         // reading it is what keeps that edge up to date.
         bool reset = GameInput.ResetPressed();
 
+        // The read above keeps the button's edge current while a menu is up; the press itself is ignored.
+        // Reset is on the D-pad, which is also how a menu is navigated, so without this a player stepping
+        // down a pause menu would put their truck back on the road behind it.
+        if (IsPaused()) return;
+
         if (reset && Time.unscaledTime >= movementLockedUntil &&
             Time.time - lastResetTime >= resetCooldown)
         {

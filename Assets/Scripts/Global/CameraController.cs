@@ -65,8 +65,9 @@ public class CameraController : MonoBehaviour
              "view inside the truck.")]
     public float brakeDollyMinDistance = 1.2f;
 
-    [Tooltip("How fast the camera closes on the truck once the brakes go on, in metres per second.")]
-    public float brakeDollyInSpeed = 6f;
+    [Tooltip("How fast the camera closes on the truck once the brakes go on, in metres per second. The move " +
+             "is eased at both ends, so this is the middle of it rather than the speed it sets off at.")]
+    public float brakeDollyInSpeed = 4.5f;
 
     [Tooltip("How fast the camera lets the truck back out once the brakes come off, in metres per second. " +
              "Slower than closing, which is what makes it read as the truck pulling away from you.")]
@@ -226,31 +227,45 @@ public class CameraController : MonoBehaviour
             return;
         }
 
-        float pull = brakeDollyIn * brakePull;
+        // The amount is eased rather than used raw. Both things that ask for the pull arrive as a step - a
+        // brake key goes from nothing to all of it, a pad's trigger from 0 to 1, and the rig's own cameras
+        // step between two distances as the speed crosses their threshold - and a step in the distance is
+        // exactly what reads as a pop. Eased, the camera sets off gently, closes at its quickest in the
+        // middle and settles onto the truck instead of arriving at it.
+        float pull = brakeDollyIn * Ease(brakePull);
 
-        // Only the camera being shown is pulled; the other is put back to what it was authored at, so the
-        // view is right the moment the rig steps between them.
+        // BOTH of the default view's cameras are pulled, not only the one on screen. They are the same view
+        // at two distances and the rig steps between them as the speed changes, so a camera left at its
+        // authored distance arrives a metre and a half further out than the one it replaced - the other half
+        // of the pop.
         if (dyncamicCam != null)
         {
-            dyncamicCam.CameraDistance =
-                DistanceAfterPull(dynamicCamBaseDistance, currentCam == 0, pull);
+            dyncamicCam.CameraDistance = DistanceAfterPull(dynamicCamBaseDistance, pull);
         }
 
         if (mainCam != null)
         {
-            mainCam.CameraDistance =
-                DistanceAfterPull(mainCamBaseDistance, currentCam == 1, pull);
+            mainCam.CameraDistance = DistanceAfterPull(mainCamBaseDistance, pull);
         }
     }
 
     /// <summary>
     /// What a camera's distance becomes with the brake pull on it, never nearer than the floor.
     /// </summary>
-    private float DistanceAfterPull(float baseDistance, bool isTheCameraOnShow, float pull)
+    private float DistanceAfterPull(float baseDistance, float pull)
     {
-        return isTheCameraOnShow
-            ? Mathf.Max(brakeDollyMinDistance, baseDistance - pull)
-            : baseDistance;
+        return Mathf.Max(brakeDollyMinDistance, baseDistance - pull);
+    }
+
+    /// <summary>
+    /// A smooth start and a smooth finish for the pull, on the 0 - 1 amount the brakes have asked for:
+    /// flat at both ends, which is what stops the camera changing distance with a jolt. 3x² - 2x³.
+    /// </summary>
+    private static float Ease(float amount)
+    {
+        amount = Mathf.Clamp01(amount);
+
+        return amount * amount * (3f - 2f * amount);
     }
 
     private void UpdateCameraBasedOnCar()

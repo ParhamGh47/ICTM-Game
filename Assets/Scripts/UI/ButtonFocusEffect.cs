@@ -270,7 +270,11 @@ public class ButtonFocusEffect : MonoBehaviour
             usingMouse = true;
         }
 
+        // The pad's D-pad is in the list as well as the built-in axes, because the menus read it themselves
+        // rather than through those axes (see MenuNavigation) - without it, a menu moved with the D-pad would
+        // keep the highlight on whatever the pointer is resting on and play none of its own sounds.
         if (Input.GetAxisRaw("Horizontal") != 0f || Input.GetAxisRaw("Vertical") != 0f ||
+            GameInput.MenuDirectionHeld() ||
             Input.GetButtonDown("Submit") || Input.GetButtonDown("Cancel"))
         {
             usingMouse = false;

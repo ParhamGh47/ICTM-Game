@@ -19,6 +19,13 @@ using UnityEngine;
 /// point bends, further hits bend it more, and past its limit it comes off. A single very hard hit can
 /// take a part off outright.
 ///
+/// One part can also pass its hits on. The headlamps do, because losing them is the one loss a driver
+/// cannot finish a level with: seven hits in ten that land on a lamp are dealt to a panel at the back
+/// instead - the rear door, its glass or the load on the roof - picked at random from whichever of those
+/// are still on the truck. The hit arrives softened, at 60% of what it would have been, and softened as a
+/// whole: it both accumulates less and is less likely to be torn off by the single blow, so a lamp prang
+/// costs the panel behind it plenty without costing it outright. A lamp still comes off in the end.
+///
 /// The load on the roof is looser than the panels around it: it is the part that is meant to be seen
 /// taking a knock: it leans further than the rest, and it is the one part that can be set to shake - a fast
 /// spring that swings out, swings back smaller and is gone in about a second - rather than simply being
@@ -92,6 +99,24 @@ public class TruckDamage : MonoBehaviour
                  "it, matched by the same rules as the name above. The plate's lettering is a model of its " +
                  "own, so without this it would be left hanging in the air when the plate came away.")]
         public string[] attached;
+
+        [Tooltip("The chance that a hit on this part is passed to another part instead, 0 to 1. For a part a " +
+                 "driver should not be losing often - the headlamps, which leave them driving blind - almost " +
+                 "every hit goes somewhere else instead. 0 never redirects.")]
+        [Range(0f, 1f)]
+        public float redirectChance = 0f;
+
+        [Tooltip("Where a redirected hit may go instead, matched by the same rules as the name above, and " +
+                 "picked at random from those still on the truck. Empty means hits on this part are never " +
+                 "passed on, whatever the chance above says.")]
+        public string[] redirectTo;
+
+        [Tooltip("How much of a passed-on hit is still felt where it lands, 0 to 1: 0.6 is 40% less. It " +
+                 "softens the whole crash, both what the part accumulates and whether one hit tears it off, " +
+                 "which is what stops a prang on a part that redirects costing the panel it is passed to " +
+                 "outright. 1 passes the hit on undiminished.")]
+        [Range(0f, 1f)]
+        public float redirectDamage = 0.6f;
     }
 
     [Header("Parts")]
@@ -109,7 +134,14 @@ public class TruckDamage : MonoBehaviour
         new BreakablePart { name = "gelgir",      toughness = 1.4f },   // the front grille and its surround
         new BreakablePart { name = "plate",       toughness = 0.35f,    // the number plate
                             attached = new[] { "Text" } },             // and the lettering on it
-        new BreakablePart { name = "lightFront",  toughness = 2.6f },   // the headlamps - thin, but bolted to the body
+        // The headlamps are wanted on the truck: they are how the level is seen once it is dark, so seven hits
+        // out of ten that land on them are passed to a panel behind instead - the rear door, the glass in it
+        // or the load on the roof, which a driver can finish the level with. A lamp still comes off, and the
+        // hint no longer costs its toughness: it is just rarely the thing that is lost to a prang on the nose.
+        new BreakablePart { name = "lightFront",  toughness = 2.6f,   // the headlamps - thin, but bolted to the body
+                            redirectChance = 0.7f,
+                            redirectTo = new[] { "backDoor", "iceCream", "backWindow" },
+                            redirectDamage = 0.6f },                   // and a passed-on hit lands 40% softer
         new BreakablePart { name = "lightBack",   toughness = 1.8f },   // the tail and brake lamps
         new BreakablePart { name = "leftExhaust", toughness = 0.8f },
         new BreakablePart { name = "rightExhaust", toughness = 0.8f },
@@ -257,8 +289,12 @@ public class TruckDamage : MonoBehaviour
         public float bendDegrees;       // about the impact axis
         public Vector3 bendAxis;        // in the part's parent's space
 
+        public string name;             // the name from the settings that found it
         public float toughness;         // how much punishment it takes, from the part's own setting
         public bool breaksOff;          // whether it may come off at all
+        public float redirectChance;    // how often this part passes a hit on to another
+        public string[] redirectTo;     // and where those hits may go
+        public float redirectDamage;    // and how much of such a hit is felt where it lands
         public float bendScale;         // how much further than the standard it bends and shifts
         public float wobbleScale;       // how much it shakes when the truck is hit
 
@@ -531,9 +567,13 @@ public class TruckDamage : MonoBehaviour
                 // read again, so the piece's outline includes what was moved onto it.
                 Part part = new Part();
                 part.transform = child;
+                part.name = wanted.name;
                 part.attachedCount = Attach(child, wanted.attached);
                 part.toughness = Mathf.Max(0.05f, wanted.toughness);
                 part.breaksOff = wanted.breaksOff;
+                part.redirectChance = Mathf.Clamp01(wanted.redirectChance);
+                part.redirectTo = wanted.redirectTo;
+                part.redirectDamage = Mathf.Clamp01(wanted.redirectDamage);
                 part.bendScale = Mathf.Max(0f, wanted.bendScale);
                 part.wobbleScale = Mathf.Max(0f, wanted.wobbleScale);
                 part.renderers = child.GetComponentsInChildren<Renderer>(true);
@@ -671,12 +711,36 @@ public class TruckDamage : MonoBehaviour
         Part part = NearestPart(collision.contacts[worst].point);
         if (part == null) return;
 
+        // Some parts pass a hit on rather than take it themselves. Where the hit lands is decided before any
+        // of the damage is worked out, so it is the receiving part's own toughness and its own limit that the
+        // crash is measured against - and a passed-on hit arrives softened, by however much the part that
+        // passed it on says (<see cref="BreakablePart.redirectDamage"/>). A redirect is protection for the
+        // part that causes it, not for the truck: what it really does is take a hit meant for a lamp and
+        // spend it on a panel at a discount, so a night-time prang no longer costs the panel outright.
+        Part passedTo = RedirectedFrom(part);
+
+        float felt = 1f;
+
+        if (passedTo != null)
+        {
+            felt = Mathf.Clamp01(part.redirectDamage);
+
+            if (logDamage)
+                Debug.Log(string.Format(
+                    "[TruckDamage] the hit on {0} was passed to {1}, {2:0}% of it felt there.",
+                    part.transform != null ? part.transform.name : "?",
+                    passedTo.transform != null ? passedTo.transform.name : "?",
+                    felt * 100f), this);
+
+            part = passedTo;
+        }
+
         lastImpactTime = Time.time;
 
         // Toughness is what makes one part harder to hurt than another: every impact is divided by it, so
         // a part twice as tough needs twice the crash to bend as far and twice the crash to come away.
         float damage = ((impactSpeed - minimumImpactSpeed) * damagePerSpeed + damagePerSpeed) /
-                       part.toughness;
+                       part.toughness * felt;
 
         Apply(part, collision.contacts[worst], damage);
 
@@ -685,9 +749,10 @@ public class TruckDamage : MonoBehaviour
 
         // A single crash hard enough tears a part off whatever it had left, which is what makes a big
         // one read differently from a series of small ones - and the threshold scales with toughness, so
-        // the same crash that takes a plate off leaves a wheel on.
-        // the same crash that takes a plate off leaves a wheel on.
-        bool overwhelmed = impactSpeed >= breakImpactSpeed * part.toughness;
+        // the same crash that takes a plate off leaves a wheel on. A passed-on hit counts at the strength it
+        // arrives at, or the softening above would only slow the accumulation and one hard prang would still
+        // take the panel off in a single blow.
+        bool overwhelmed = impactSpeed * felt >= breakImpactSpeed * part.toughness;
         bool breaking = part.breaksOff && (overwhelmed || part.damage >= health);
 
         if (breaking)
@@ -705,6 +770,74 @@ public class TruckDamage : MonoBehaviour
                 collision.gameObject.name), this);
 
         KnockOn(part, collision.contacts[worst], damage);
+    }
+
+    /// <summary>
+    /// The part a hit should really land on, when the part it arrived at passes its hits on.
+    ///
+    /// One of the named candidates is picked at random from those still on the truck, so a redirected hit
+    /// never goes to a part that is already off - it goes to something there is still something to lose on. If
+    /// none of them is left, the hit lands where it arrived after all.
+    /// </summary>
+    private Part RedirectedFrom(Part hit)
+    {
+        if (hit.redirectChance <= 0f) return null;
+        if (hit.redirectTo == null || hit.redirectTo.Length == 0) return null;
+        if (Random.value >= hit.redirectChance) return null;
+
+        int candidates = 0;
+
+        for (int i = 0; i < foundParts.Count; i++)
+        {
+            Part other = foundParts[i];
+
+            if (other == hit || other.broken || other.transform == null) continue;
+            if (!IsRedirectTarget(hit, other)) continue;
+
+            candidates++;
+        }
+
+        if (candidates == 0) return null;
+
+        int pick = Random.Range(0, candidates);
+
+        for (int i = 0; i < foundParts.Count; i++)
+        {
+            Part other = foundParts[i];
+
+            if (other == hit || other.broken || other.transform == null) continue;
+            if (!IsRedirectTarget(hit, other)) continue;
+
+            if (pick == 0) return other;
+
+            pick--;
+        }
+
+        return null;
+    }
+
+    /// <summary>Whether a part is one of the places this part's hits are allowed to go.</summary>
+    private static bool IsRedirectTarget(Part hit, Part candidate)
+    {
+        for (int i = 0; i < hit.redirectTo.Length; i++)
+        {
+            string wanted = hit.redirectTo[i];
+            if (string.IsNullOrEmpty(wanted)) continue;
+
+            // Either name will do: the setting that found the part, and the model's own name for it. A part
+            // whose root is called something else - the load on the roof - is still found by the name in the
+            // settings, and a part that has been taken off the truck is skipped before this is reached.
+            if (NameMatches(candidate.name, wanted)) return true;
+            if (NameMatches(candidate.transform.name, wanted)) return true;
+        }
+
+        return false;
+    }
+
+    private static bool NameMatches(string name, string wanted)
+    {
+        return !string.IsNullOrEmpty(name) &&
+               name.IndexOf(wanted, System.StringComparison.OrdinalIgnoreCase) >= 0;
     }
 
     /// <summary>

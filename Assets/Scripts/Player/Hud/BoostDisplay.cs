@@ -12,12 +12,17 @@ using UnityEngine.UI;
 /// It is drawn in the same hand as the rest of the HUD - the same font, the same white drop shadow and the
 /// same dark blue as the HUD's own paper - and it is printed on a small sheet of that paper: the count is a
 /// child of the plate, so it is always drawn over the paper rather than under it, and the whole note moves
-/// and scales as one thing.
+/// and scales as one thing. Beside the count sits the boost's own icon, the milkshake the truck collects, so
+/// the number says what it is counting without needing a label.
 ///
 /// It is deliberately quiet when there is nothing to spend: an empty counter is faded rather than hidden, so
 /// the driver can see at a glance whether the last milkshake was used or merely missed. While a boost is
 /// running the counter stays at full strength even if that boost was the last one, so the number dimming is
 /// never mistaken for the boost itself failing.
+///
+/// The icon and the count share the note's centreline. The icon is simply centred on it; the count sits a
+/// little below it, by the part of its line the font keeps for descenders - which digits never use, and which
+/// would otherwise leave the number floating a couple of units above the middle of the milkshake beside it.
 /// </summary>
 public class BoostDisplay : MonoBehaviour
 {
@@ -29,10 +34,15 @@ public class BoostDisplay : MonoBehaviour
              "by the scene rather than by the canvas - the manager in the scene is found instead.")]
     public BoostManager boostManager;
 
+    [Tooltip("The icon beside the count: the milkshake, the thing the truck actually collects. Optional, so a " +
+             "counter can be a bare number if a level wants one. It fades with the count when there is " +
+             "nothing to spend.")]
+    public Image iconImage;
+
     [Header("What It Says")]
-    [Tooltip("Written in front of the count, so the counter reads as 'x3' rather than as a bare number. Clear " +
-             "it for the number on its own.")]
-    public string label = "x";
+    [Tooltip("Written in front of the count. Left empty, because the icon beside it already says what is " +
+             "being counted; set it to 'x' - or anything else - for a counter that reads 'x3'.")]
+    public string label = "";
 
     [Header("Colours")]
     [Tooltip("The colour the counter is written in, while the truck is carrying at least one boost - and while " +
@@ -68,8 +78,17 @@ public class BoostDisplay : MonoBehaviour
 
         int carried = boostManager.Boosts;
 
+        // Carrying one counts as much as spending one: a counter that dimmed at the moment the last boost
+        // was spent would read as the boost having failed.
+        bool live = carried > 0 || boostManager.IsBoosting;
+
         countText.text = string.IsNullOrEmpty(label) ? carried.ToString() : label + " " + carried;
 
-        countText.color = carried > 0 || boostManager.IsBoosting ? carriedColour : emptyColour;
+        countText.color = live ? carriedColour : emptyColour;
+
+        // The icon fades with the count, and only in alpha - the artwork keeps its own colours while the
+        // whole note dims as one thing.
+        if (iconImage != null)
+            iconImage.color = new Color(1f, 1f, 1f, live ? 1f : emptyColour.a);
     }
 }

@@ -48,6 +48,25 @@ public class WheelPhysics : MonoBehaviour
     public float decelerationRate = 12f;
     private float engineResponse = 0f;
 
+    [Header("Idle Hold")]
+    [Tooltip("How fast the truck may still be rolling for the idle hold to apply, in metres per second. Below " +
+             "this with no throttle at all the truck is settled into the spot it is standing on, which is what " +
+             "keeps the start of a level on a slope from creeping away; above it the truck coasts exactly as it " +
+             "always has, so driving is untouched.")]
+    public float idleHoldSpeed = 1.5f;
+
+    [Tooltip("How hard the hold pulls against what is left of the rolling, in newtons per metre per second of " +
+             "it, per wheel. Rolling resistance alone cannot park a truck: it grows with speed while a grade " +
+             "pushes with a force that does not, so the two meet at a speed the truck then creeps at - nearly " +
+             "6 km/h backwards on a 10% grade. This is the stiffness that out-pulls the grade instead.")]
+    public float idleHoldStiffness = 15000f;
+
+    [Tooltip("The most the hold may pull with, in newtons per wheel. It is here so that the hold settles a " +
+             "truck rather than stopping it like a wall: coming into it at the whole hold speed is about " +
+             "5 m/s² - half of what the brakes do - which settles the truck in a third of a second over " +
+             "23 cm. Even so it out-holds a 40% grade.")]
+    public float idleHoldMax = 2000f;
+
     [Header("Drifting")]
     public float driftThreshold = 7.0f;
     public float driftMultiplier = 1.2f;
@@ -257,9 +276,53 @@ public class WheelPhysics : MonoBehaviour
                 carRb.AddForceAtPosition(rolling, transform.position);
             }
 
+            // With no input at all, the truck is also held where it is standing - which is the one case the
+            // rolling resistance above cannot do on its own. See ApplyIdleHold.
+            ApplyIdleHold(forwardDir, forwardVel);
         }
 
         Vector3 drag = -forwardDir * forwardVel * Mathf.Abs(forwardVel) * 1.2f * currentSurfaceFriction;
         carRb.AddForceAtPosition(drag, transform.position);
+    }
+
+
+    /// <summary>
+    /// Holds a truck that is not being driven where it is standing.
+    ///
+    /// This is the answer to a level that starts on a slope, which is where it showed: the truck is left
+    /// alone on a grade and slides back down it. The reason is not a lack of friction but the shape of it.
+    /// Rolling resistance is a force that grows with speed - 300 N per m/s here - while a grade pushes with a
+    /// constant one, <c>m g sin(theta)</c>, so the two do not meet at a standstill, they meet at a speed: the
+    /// truck settles into creeping backwards down the slope and stays there (nearly 6 km/h on a 10% grade,
+    /// and on a 40% one nothing stops it at all).
+    ///
+    /// The hold is a stiffness that exists only in the last <see cref="idleHoldSpeed"/> of motion, and only
+    /// with no throttle, no brake and no driving force of any kind - the caller reaches here only when the
+    /// pedal is untouched. Above that speed it does not exist, so coasting and driving are exactly what they
+    /// were; below it, the stiffness is what the grade is up against instead of the rolling resistance, and
+    /// the truck stops. <see cref="idleHoldMax"/> caps it so it settles the truck rather than stopping it like
+    /// a wall.
+    ///
+    /// It is deliberately not scaled by the surface: a truck parked on a verge should stay parked for the
+    /// same reason one parked on tarmac does, and the strength of it is a feel decision rather than a friction
+    /// one. It is per wheel, like every other force here, and is only applied where the wheel has found
+    /// ground - the caller returns early when it has not, so a truck in the air is left to gravity. A boost
+    /// stands it down, because a boost is the driver asking to be moved.
+    /// </summary>
+    private void ApplyIdleHold(Vector3 forwardDir, float forwardVel)
+    {
+        // A boost is the driver asking for the opposite of this, and it is the one thing that can be asked for
+        // with the pedal untouched from a standstill. It out-pulls the hold anyway, being three times as hard,
+        // but standing down for it keeps the two from being felt as one through the first third of a second.
+        if (car != null && car.IsBoosting)
+            return;
+
+        if (Mathf.Abs(forwardVel) >= idleHoldSpeed)
+            return;
+
+        float hold =
+            Mathf.Clamp(-forwardVel * idleHoldStiffness, -idleHoldMax, idleHoldMax);
+
+        carRb.AddForceAtPosition(forwardDir * hold, transform.position);
     }
 }

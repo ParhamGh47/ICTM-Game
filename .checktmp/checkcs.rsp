@@ -358,6 +358,7 @@
 "Assets/Scripts/Boost/BoostClip.cs"
 "Assets/Scripts/UI/Pause/PauseTracker.cs"
 "Assets/Scripts/UI/Customize/CustomizeScreen.cs"
+"Assets/Scripts/Global/ResetBlocker.cs"
 "Assets/Scripts/Player/EngineAudio.cs"
 "Assets/Scripts/UI/StoryTypeWriter.cs"
 "Assets/Scripts/Player/JumpCinematicCamera.cs"
@@ -376,4 +377,3 @@
 "Assets/Scripts/UI/EscBack.cs"
 "Assets/Scripts/Player/CarController.cs"
 "Assets/Scripts/UI/Trackers/ProgressTracker/ProgressDisplay.cs"
-"Assets/Scripts/Global/ResetBlocker.cs"

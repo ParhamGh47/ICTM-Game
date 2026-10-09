@@ -79,12 +79,23 @@ public class KillDisplay : MonoBehaviour
             currentKillText.text = currentKills.ToString();
     }
 
-    public void CheckGameOver()
+    /// <summary>
+    /// Whether crossing the line satisfies the level's target, and shows the game over screen if it does not.
+    ///
+    /// The rule is all-or-nothing: a level that asks for targets is satisfied by hitting none of them (the
+    /// player simply drove past them) or by hitting the whole number - or more - but a run that clips a few
+    /// and falls short is a failure. Returns true when the game is over so the caller can stop there rather
+    /// than entering the end scene on a failed run.
+    /// </summary>
+    public bool CheckGameOver()
     {
-        if (currentKills != 0 && currentKills < requiredKills)
-        {
+        if (currentKills == 0 || currentKills >= requiredKills)
+            return false;
+
+        if (gameOver.Instance != null)
             gameOver.Instance.ShowGameOver();
-        }
+
+        return true;
     }
 
     /// <summary>

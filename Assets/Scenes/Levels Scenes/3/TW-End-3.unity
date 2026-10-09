@@ -1741,6 +1741,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   targetScene: Levels
+  allowBack: 0
 --- !u!114 &3000682584150296891
 MonoBehaviour:
   m_ObjectHideFlags: 0

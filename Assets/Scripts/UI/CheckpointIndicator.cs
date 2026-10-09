@@ -68,6 +68,51 @@ public class CheckpointIndicator : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Where a checkpoint sits in this level's list, or -1 when it is not one of them.
+    /// </summary>
+    public int IndexOf(Transform checkpoint)
+    {
+        if (checkpoint == null || checkpoints == null) return -1;
+
+        for (int i = 0; i < checkpoints.Length; i++)
+        {
+            if (checkpoints[i] == checkpoint) return i;
+        }
+
+        return -1;
+    }
+
+    /// <summary>
+    /// The player drove through this checkpoint.
+    ///
+    /// The compass is sent to the one <em>after</em> the one that was actually reached, rather than simply to
+    /// the next entry in the list. That is what makes a missed checkpoint stay behind: the arrow points at the
+    /// first checkpoint the player has not been through, and a checkpoint they went past without touching - a
+    /// wide line round the outside of it, a hop over the bend it sits on - would otherwise be left at the head
+    /// of the list and pointed at again from further down the level, sending the player back up the road for a
+    /// line they already crossed.
+    ///
+    /// Passing a checkpoint further back than the one the compass is showing is not a step backwards either:
+    /// a checkpoint that has already been reached leaves the arrow where it is.
+    /// </summary>
+    public void Reached(Transform checkpoint)
+    {
+        int index = IndexOf(checkpoint);
+
+        // Not one of the wired checkpoints - a stray trigger, or a level whose compass has not been filled in
+        // yet - so fall back to the plain one-step advance this used to be.
+        if (index < 0)
+        {
+            NextCheckpoint();
+            return;
+        }
+
+        if (index + 1 <= currentIndex) return;
+
+        SetCheckpointIndex(index + 1);
+    }
+
     public void ResetCheckpoints()
     {
         currentIndex = 0;

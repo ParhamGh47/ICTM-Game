@@ -214,7 +214,42 @@ public class CarController : MonoBehaviour
              "it took off from, so there is a real run-up between the car and the ramp it has to try again.")]
     public float resetJumpBackOffMetres = 150f;
 
+    [Header("Reset Clear Of Level Furniture")]
+    [Tooltip("Keep a reset on the racing side of the level's own gates - the Block wall a level starts behind, " +
+             "and the finish Flag - both of which straddle the road. A reset steps back up the road, and at " +
+             "those two places the step back puts the truck on the wrong side of the line the level runs on: " +
+             "behind the start gate, which is off the course, or through the finish gate. Each gate says in " +
+             "ResetBlocker.side which side the racing is on, and a reset that would land on the other one is " +
+             "put on the racing side of it instead.")]
+    public bool resetClearOfBlockers = true;
+
+    [Tooltip("How far along the road a gate can be from where the reset landed and still be what the reset " +
+             "was aiming at, in metres. This is what keeps a walk back to the ramp before a jump - which can " +
+             "be 150 m - from being dragged forward through the start gate it has just gone past.")]
+    public float resetBlockerReach = 25f;
+
+    [Tooltip("How far past (or before) the gate the truck is put on the racing side of it, in metres. " +
+             "Something more than half the truck, so it is set down clear of the furniture rather than " +
+             "touching it.")]
+    public float resetBlockerClearance = 6f;
+
+    [Tooltip("How far each step is when the truck has been left inside a gate that is not on a road, in " +
+             "metres. Small enough that it stops just clear of the furniture rather than a field away from it.")]
+    public float resetBlockerStep = 2f;
+
+    [Tooltip("How far that step-out may go before the reset gives up and leaves the truck where it first " +
+             "chose. Only needs to cover the depth of a gate.")]
+    public float resetBlockerMax = 40f;
+
+    [Tooltip("How much room to leave around the truck when testing whether it would be inside a gate, in " +
+             "metres, so the truck is not put down touching the furniture it has just cleared.")]
+    public float resetBlockerMargin = 0.35f;
+
     private Road[] cachedRoads;
+
+    // The level's gates, fetched once: there are a handful per level and they never move, so looking them up
+    // again on every reset would be work for nothing.
+    private ResetBlocker[] cachedGates;
     private CheckpointIndicator cachedCompass;
     private JumpAssist cachedJumpAssist;
 
@@ -227,6 +262,10 @@ public class CarController : MonoBehaviour
     // (the car's own body, the road, a bridge deck), so a few slots are needed, not one - and a reset now
     // looks a long way up and down for the road, which is more surfaces than a two-metre probe could meet.
     private static readonly RaycastHit[] roadHits = new RaycastHit[16];
+
+    // The same trick for the reset's clearance test: the truck it is testing overlaps its own colliders, and
+    // several of them plus whatever furniture is under it have to fit, so a handful of slots are needed.
+    private static readonly Collider[] blockerHits = new Collider[32];
 
     [Header("Focus System")]
     public bool enableFocus = true;
@@ -650,6 +689,11 @@ void Update()
         // and the same road is what the finished reset is checked against before it is left alone.
         Road resetRoad = null;
 
+        // The way the road the reset landed on runs, which is the direction the clearance walk at the end of
+        // this method steps in. Zero when the reset did not land on a road, where the truck's own heading is
+        // used instead.
+        Vector3 resetForward = Vector3.zero;
+
         if (resetOntoRoad)
         {
             // A reset only steps back up the road when the car has no road under it. How far back is
@@ -681,6 +725,7 @@ void Update()
                 {
                     resetPosition = onRoad;
                     resetRoad = road;
+                    resetForward = roadForward;
 
                     if (resetFacesForward && roadForward.sqrMagnitude > 0.0001f)
                         yaw = Quaternion.LookRotation(roadForward, Vector3.up).eulerAngles.y;
@@ -724,6 +769,7 @@ void Update()
                     }
 
                     resetPosition = onRoad;
+                    resetForward = roadForward;
 
                     if (resetFacesForward && roadForward.sqrMagnitude > 0.0001f)
                         yaw = Quaternion.LookRotation(roadForward, Vector3.up).eulerAngles.y;
@@ -763,6 +809,23 @@ void Update()
         {
             transform.position = standing;
             transform.rotation = stance;
+        }
+
+        // And the last word on where it lands along the level: a reset may not leave the truck on the wrong
+        // side of the level's own gates. The Block wall a level starts behind and the finish Flag both straddle
+        // the road, and the step back a reset makes crosses the line the level runs on at each of them. See
+        // KeepClearOfLevelGates.
+        if (resetClearOfBlockers)
+        {
+            Vector3 clearPosition = transform.position;
+            Quaternion clearRotation = transform.rotation;
+            Vector3 clearForward = resetForward.sqrMagnitude > 0.0001f ? resetForward : HeadingOf(yaw);
+
+            if (KeepClearOfLevelGates(ref clearPosition, ref clearRotation, resetRoad, clearForward))
+            {
+                transform.position = clearPosition;
+                transform.rotation = clearRotation;
+            }
         }
 
         // The body is told where it is, not just the transform it happens to own.
@@ -999,6 +1062,325 @@ void Update()
             this);
 
         return true;
+    }
+
+
+    /// <summary>
+    /// Keeps a finished reset on the racing side of the level's own gates, and reports whether it had to
+    /// move the truck to do it.
+    ///
+    /// This is the reset's answer to the two places a level deliberately puts something across the road: the
+    /// Block wall it starts behind, and the Flag that finishes it. Everywhere else a reset simply steps back
+    /// up the road and lands on empty tarmac, but at those two the step back crosses the line the level runs
+    /// on - behind the start gate, which is off the course, or through the finish gate, which leaves it. Each
+    /// gate says in <see cref="ResetBlocker.side"/> which side the racing is on, and a reset that lands on the
+    /// other one is put on the racing side of it.
+    ///
+    /// The test is distance along the road, not overlap. A reset steps back a measured distance, so it lands
+    /// a metre or two clear of the wall about as often as it lands in it: an overlap test would report that
+    /// everything was fine while leaving the player facing a barrier on the wrong side of the level's own
+    /// line. A gate is only counted when it is within <see cref="resetBlockerReach"/> of where the reset
+    /// landed, which is what keeps a walk back to the ramp before a jump - 150 m - from being dragged forward
+    /// through the gate it has comfortably gone past.
+    ///
+    /// The move follows the road's spline rather than the truck's heading, so it stays on the road round a
+    /// bend instead of cutting the corner, and puts the truck down on the surface exactly as the reset itself
+    /// did. When the reset did not land on a road at all there is no spline to walk, and the only thing left
+    /// to answer is a truck genuinely inside a gate: that is stepped out of along <paramref name="forward"/>.
+    ///
+    /// Returns false when there was nothing to clear, or when the walk ran out of its budget without finding
+    /// a clear spot - in which case the reset keeps the place it had chosen, and says so, because a level
+    /// shaped that way wants looking at rather than a silent guess.
+    /// </summary>
+    private bool KeepClearOfLevelGates(ref Vector3 position, ref Quaternion rotation, Road road, Vector3 forward)
+    {
+        if (cachedGates == null)
+            cachedGates = FindObjectsOfType<ResetBlocker>();
+
+        if (cachedGates.Length > 0)
+        {
+            SplineC gateSpline = road != null ? road.spline : null;
+
+            float roadLength = 0f;
+            float truckAlong = 0f;
+            float travelDir = 1f;
+
+            if (gateSpline != null && gateSpline.distance > 0.01f)
+            {
+                roadLength = gateSpline.distance;
+
+                float nearest =
+                    gateSpline.GetClosestParam(position, false, true);
+
+                Vector3 at, tangent;
+                gateSpline.GetSplineValueBoth(nearest, out at, out tangent);
+
+                tangent.y = 0f;
+
+                if (tangent.sqrMagnitude > 0.0001f)
+                {
+                    tangent.Normalize();
+
+                    // Which way along the road is the way the truck is going. The gates are told apart by
+                    // this: how far ahead of the truck one is, in the direction of travel.
+                    travelDir = Vector3.Dot(tangent, forward) >= 0f ? 1f : -1f;
+                    truckAlong = nearest * roadLength;
+                }
+                else
+                {
+                    gateSpline = null;
+                }
+            }
+
+            if (gateSpline != null)
+            {
+                float reach = Mathf.Max(1f, resetBlockerReach);
+                float clearance = Mathf.Max(1f, resetBlockerClearance);
+                bool inside = InsideAResetBlocker(position, rotation);
+
+                float target = float.NaN;
+
+                for (int i = 0; i < cachedGates.Length; i++)
+                {
+                    ResetBlocker gate = cachedGates[i];
+
+                    if (gate == null || gate.transform.IsChildOf(transform))
+                        continue;
+
+                    float along =
+                        gateSpline.GetClosestParam(GateCentre(gate), false, true) * roadLength;
+
+                    // How far ahead of the truck the gate is, the way the truck is going: positive while it
+                    // is still to come, negative once the truck is beyond it.
+                    float ahead = (along - truckAlong) * travelDir;
+
+                    bool courseIsPastIt = gate.side == ResetBlocker.Side.PastIt;
+
+                    // How far onto the wrong side of this gate the truck has landed. The course being past
+                    // the gate makes being behind it wrong; the course being short of it makes being beyond
+                    // it wrong. A gate further off than the reach is not what this reset was aiming at.
+                    float wrongBy = courseIsPastIt ? ahead : -ahead;
+
+                    if (!inside && (wrongBy <= 0f || wrongBy > reach))
+                        continue;
+
+                    // The racing side: past the gate while the course runs past it, short of it while the
+                    // course runs up to it. A wall built of several pieces has several of these, and the
+                    // furthest of them is the one that decides, so the truck clears all of it.
+                    float wanted =
+                        courseIsPastIt ? along + travelDir * clearance : along - travelDir * clearance;
+
+                    if (float.IsNaN(target))
+                        target = wanted;
+                    else if (courseIsPastIt == (travelDir > 0f))
+                        target = Mathf.Max(target, wanted);
+                    else
+                        target = Mathf.Min(target, wanted);
+                }
+
+                if (!float.IsNaN(target))
+                {
+                    PoseOnRoad(road, gateSpline, Mathf.Clamp(target, 0f, roadLength), travelDir,
+                               rotation.eulerAngles.y, out position, out rotation);
+
+                    if (!InsideAResetBlocker(position, rotation))
+                        return true;
+                }
+            }
+        }
+
+        if (!InsideAResetBlocker(position, rotation))
+            return false;
+
+        float step = Mathf.Max(0.5f, resetBlockerStep);
+        float limit = Mathf.Max(step, resetBlockerMax);
+
+        SplineC spline = road != null ? road.spline : null;
+
+        float param = 0f;
+        float direction = 1f;
+
+        if (spline != null && spline.distance > 0.01f)
+        {
+            param = spline.GetClosestParam(position, false, true);
+
+            Vector3 at, tangent;
+            spline.GetSplineValueBoth(param, out at, out tangent);
+
+            tangent.y = 0f;
+
+            // Which way along the spline is the way the truck faces. Falling back to the heading when the
+            // road's own tangent is degenerate keeps the walk going rather than giving up on it.
+            if (tangent.sqrMagnitude > 0.0001f)
+                direction = Vector3.Dot(tangent.normalized, forward) >= 0f ? 1f : -1f;
+            else
+                spline = null;
+        }
+
+        float yaw = rotation.eulerAngles.y;
+
+        for (float travelled = step; travelled <= limit + 0.001f; travelled += step)
+        {
+            Vector3 spot;
+
+            if (spline != null)
+            {
+                Vector3 at, tangent;
+                spline.GetSplineValueBoth(
+                    Mathf.Clamp01(param + direction * (travelled / spline.distance)), out at, out tangent);
+
+                tangent.y = 0f;
+
+                if (tangent.sqrMagnitude < 0.0001f)
+                    break;
+
+                tangent.Normalize();
+
+                Vector3 right = new Vector3(tangent.z, 0f, -tangent.x);
+
+                spot = at + right * (GetLaneCenterOffset(road) * direction);
+            }
+            else
+            {
+                spot = position + forward * travelled;
+            }
+
+            Vector3 surfacePoint = spot;
+            Vector3 surfaceUp = Vector3.up;
+
+            if (resetToSurface)
+                FindRoadSurface(spot, out surfacePoint, out surfaceUp,
+                                resetProbeAbove, resetProbeBelow, 2f, road);
+
+            Vector3 candidate = surfacePoint + surfaceUp * resetHeight;
+
+            Quaternion candidateStance =
+                Quaternion.LookRotation(Quaternion.Euler(0f, yaw, 0f) * Vector3.forward, surfaceUp)
+                * Quaternion.Euler(0f, 0f, resetRoll);
+
+            if (InsideAResetBlocker(candidate, candidateStance))
+                continue;
+
+            position = candidate;
+            rotation = candidateStance;
+
+            if (logAutomaticResets)
+            {
+                Debug.Log(
+                    $"'{name}' was reset inside a Block or the finish Flag, and has been put {travelled:F1} m " +
+                    "further up the road to clear it.", this);
+            }
+
+            return true;
+        }
+
+        Debug.LogWarning(
+            $"'{name}' was reset inside a Block or the finish Flag and no clear spot was found within " +
+            $"{limit:F0} m. It has been left where the reset put it; check the layout in " +
+            $"'{gameObject.scene.name}'.", this);
+
+        return false;
+    }
+
+
+    /// <summary>
+    /// Where a gate is along the road: the middle of the solid part of it. A wall of several pieces answers
+    /// for the piece being asked about rather than for the run of the whole wall, which is what the param of
+    /// its crossing of the road needs.
+    /// </summary>
+    private static Vector3 GateCentre(ResetBlocker gate)
+    {
+        Collider collider = gate.GetComponentInChildren<Collider>();
+
+        return collider != null ? collider.bounds.center : gate.transform.position;
+    }
+
+
+    /// <summary>
+    /// Puts the truck on the road a given distance along it, in the lane for the way it is going, standing on
+    /// the surface there and facing the way the road runs - the same treatment the reset gives the spot it
+    /// chose for itself.
+    /// </summary>
+    private void PoseOnRoad(Road road, SplineC spline, float metres, float dir, float yaw,
+                            out Vector3 position, out Quaternion rotation)
+    {
+        float length = Mathf.Max(0.01f, spline.distance);
+
+        Vector3 at, tangent;
+        spline.GetSplineValueBoth(Mathf.Clamp01(metres / length), out at, out tangent);
+
+        tangent.y = 0f;
+
+        if (tangent.sqrMagnitude > 0.0001f)
+            tangent.Normalize();
+
+        Vector3 right =
+            new Vector3(tangent.z, 0f, -tangent.x);
+
+        Vector3 spot =
+            at + right * (GetLaneCenterOffset(road) * dir);
+
+        Vector3 surfacePoint = spot;
+        Vector3 surfaceUp = Vector3.up;
+
+        if (resetToSurface)
+            FindRoadSurface(spot, out surfacePoint, out surfaceUp,
+                            resetProbeAbove, resetProbeBelow, 2f, road);
+
+        position = surfacePoint + surfaceUp * resetHeight;
+
+        float facing =
+            resetFacesForward && tangent.sqrMagnitude > 0.0001f
+                ? Quaternion.LookRotation(tangent * dir, Vector3.up).eulerAngles.y
+                : yaw;
+
+        rotation =
+            Quaternion.LookRotation(Quaternion.Euler(0f, facing, 0f) * Vector3.forward, surfaceUp)
+            * Quaternion.Euler(0f, 0f, resetRoll);
+    }
+
+
+    /// <summary>
+    /// Whether the truck put down at this pose would be inside one of the level's <see cref="ResetBlocker"/>s.
+    ///
+    /// The test is the truck's own chassis box - the low box the handling was tuned on, which is the part of
+    /// the truck that has to end up on the road - with a small margin round it, swept over everything solid at
+    /// the pose. Triggers are ignored, and so are the truck's own colliders, which of course overlap it.
+    /// </summary>
+    private bool InsideAResetBlocker(Vector3 position, Quaternion rotation)
+    {
+        BoxCollider chassis = ResolveChassisCollider();
+
+        if (chassis == null)
+            return false;
+
+        Vector3 half =
+            Vector3.Scale(chassis.size, chassis.transform.lossyScale) * 0.5f
+            + Vector3.one * Mathf.Max(0f, resetBlockerMargin);
+
+        // The chassis box lives on the Body object rather than on the truck's root, so its centre is carried
+        // into the pose being tested the same way the box itself would be.
+        Vector3 offset =
+            transform.InverseTransformPoint(chassis.transform.TransformPoint(chassis.center));
+
+        Vector3 centre =
+            position + rotation * offset;
+
+        int count =
+            Physics.OverlapBoxNonAlloc(centre, half, blockerHits, rotation, ~0, QueryTriggerInteraction.Ignore);
+
+        for (int i = 0; i < count; i++)
+        {
+            Collider hit = blockerHits[i];
+
+            if (hit == null || hit.transform.IsChildOf(transform))
+                continue;
+
+            if (hit.GetComponentInParent<ResetBlocker>() != null)
+                return true;
+        }
+
+        return false;
     }
 
 

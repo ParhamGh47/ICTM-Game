@@ -11,6 +11,15 @@ public class ProgressTracker : MonoBehaviour
     public ProgressDisplay progressDisplay;
     public CheckpointIndicator checkpointCompass;
 
+    /// <summary>
+    /// The checkpoint this trigger belongs to, as the compass lists it - the parent object the trigger's box
+    /// sits on. Left empty it is taken from the trigger's own place in the hierarchy, which is where the
+    /// checkpoint prefab puts it.
+    /// </summary>
+    [Tooltip("The checkpoint object this trigger belongs to, as the compass lists it. Empty means the " +
+             "trigger's own parent.")]
+    public Transform checkpoint;
+
     private bool triggered = false;
 
     void Start()
@@ -25,11 +34,18 @@ public class ProgressTracker : MonoBehaviour
 
         if (other.CompareTag("Player"))
         {
+            // Which checkpoint was reached, not merely that one was: the compass uses it to step past any
+            // checkpoint the player missed on the way here. See CheckpointIndicator.Reached.
+            if (checkpointCompass != null)
+            {
+                checkpointCompass.Reached(checkpoint != null ? checkpoint : transform.parent);
+            }
+
             if (progressDisplay != null)
             {
-                checkpointCompass.NextCheckpoint();
                 progressDisplay.AddProgress(progressAmount);
             }
+
             triggered = true;
         }
     }

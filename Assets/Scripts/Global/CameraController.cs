@@ -90,6 +90,38 @@ public class CameraController : MonoBehaviour
              "which is what a stop is - the pedal is only how it was started.")]
     public float brakeDollyHoldTime = 0.7f;
 
+    [Header("Steering Camera")]
+    [Tooltip("Let the default third-person view lag sideways while the truck is cornering, so a hard corner " +
+             "shows a glimpse of the truck's flank the way a racing chase camera does. It is added to each of " +
+             "the view's two cameras' own Horizontal Damping (Cinemachine's sideways damping on the follow " +
+             "camera), so the framing it was authored at is what it returns to, and only this view takes it - " +
+             "the overhead and near views are framed on fixed offsets for what they show.")]
+    public bool steerDamping = true;
+
+    [Tooltip("The most sideways lag it may add, in the same units as the cameras' own Horizontal Damping. " +
+             "This is a glimpse rather than a lurch: the truck is allowed to turn a little within the frame, " +
+             "not to present its whole side to the camera.")]
+    public float steerDampingMax = 0.68f;
+
+    [Tooltip("How long the steer has to be held before it counts in full, in seconds. This is what makes a " +
+             "quick flick of the wheel leave the camera alone while a corner the driver settles into brings the " +
+             "truck's flank into view, which is the way racing games read a corner.")]
+    public float steerDampingHoldTime = 0.5f;
+
+    [Tooltip("Speed in km/h below which steering does not move the camera at all. A truck being turned round " +
+             "on the spot is not cornering, and the camera should not swing for it.")]
+    public float steerDampingSpeedFloor = 12f;
+
+    [Tooltip("Speed in km/h at which a corner is worth the whole lag. Above it the steering lock available " +
+             "shrinks as the speed rises, so the corner itself is gentler and the lag needs no more room.")]
+    public float steerDampingFullSpeed = 85f;
+
+    [Tooltip("How fast the extra lag arrives and how fast it eases out again, per second of Horizontal " +
+             "Damping. Slower out than in, so the truck comes back to the middle of the screen gradually " +
+             "rather than snapping back the moment the wheel is straightened.")]
+    public float steerDampingInSpeed = 2.4f;
+    public float steerDampingOutSpeed = 1.3f;
+
     [Header("Boost Camera Settings")]
     public float boostCamDuration = 1.5f;
 
@@ -114,6 +146,16 @@ public class CameraController : MonoBehaviour
 
     // How long the brakes have been on for, so that holding them counts as pressing them harder.
     private float brakeHold;
+
+    // The default view's own Horizontal Damping, as the cameras were authored, so the steering lag is added
+    // to that rather than to whatever the last steering input left behind.
+    private Vector3 dynamicCamBaseDamping;
+    private Vector3 mainCamBaseDamping;
+
+    // How much extra sideways lag the steering has asked for, and how long the steer has been held, which is
+    // the half that keeps a flick of the wheel from moving the camera.
+    private float steerDampingNow;
+    private float steerHold;
 
     private float nextSwitchCam = 0f;
 
@@ -146,6 +188,10 @@ public class CameraController : MonoBehaviour
 
         dynamicCamBaseDistance = dyncamicCam != null ? dyncamicCam.CameraDistance : 0f;
         mainCamBaseDistance = mainCam != null ? mainCam.CameraDistance : 0f;
+
+        // The same for the sideways damping the steering works on: the value the cameras were framed with.
+        dynamicCamBaseDamping = dyncamicCam != null ? dyncamicCam.Damping : Vector3.zero;
+        mainCamBaseDamping = mainCam != null ? mainCam.Damping : Vector3.zero;
 
         // The view the player last drove from, so a level opens on it rather than always back on the default
         // one. Mode 1 owns two cameras - the one it shows at speed and the one it shows at rest - and the one
@@ -205,6 +251,7 @@ public class CameraController : MonoBehaviour
             UpdateCameraBasedOnCar();
 
         UpdateBrakeCamera();
+        UpdateSteeringCamera();
         UpdateFocusEffect();
     }
 
@@ -288,6 +335,71 @@ public class CameraController : MonoBehaviour
             mainCam.CameraDistance = DistanceAfterPull(mainCamBaseDistance, pull);
         }
     }
+
+    /// <summary>
+    /// Lets the default third-person view lag sideways while the truck is cornering, so a hard corner shows a
+    /// glimpse of the truck's flank.
+    ///
+    /// The lag is Cinemachine's own sideways damping on the follow cameras - the Horizontal Damping of the
+    /// default view - which is a smoothing time on the camera's position in the target's frame: the more of it,
+    /// the further the camera is left behind as the truck turns, and the more of the truck's side is on screen.
+    /// It is therefore added to the value each camera was framed with, and taken away again by the same route,
+    /// so the view returns to exactly the framing it was authored at.
+    ///
+    /// Three things decide how much of it there is, and they are the three that make a corner read the way a
+    /// racing game reads one:
+    ///
+    /// - the steer itself, scaled by <see cref="CarController.GetSpeedAdjustedSteer"/> - the lock the truck
+    ///   actually has at the speed it is doing, rather than the stick's position - so a truck that can barely
+    ///   turn at the top of its range does not swing the camera for a full-lock input;
+    /// - the speed, because a lurch sideways is something a moving truck does: below the floor speed there is
+    ///   none of this at all, which is what keeps a truck being turned round on the spot from swinging the
+    ///   view, and it is worth its whole at the full speed;
+    /// - how long the steer has been held, so a flick of the wheel leaves the camera alone while a corner the
+    ///   driver settles into brings the flank into view.
+    ///
+    /// Only the default view's two cameras are touched. The overhead and near views are framed on fixed
+    /// offsets for what they show, and this is about the third-person chase view.
+    /// </summary>
+    private void UpdateSteeringCamera()
+    {
+        float target = 0f;
+
+        if (steerDamping && car != null)
+        {
+            float forwardSpeed = Vector3.Dot(car.rb.velocity, car.transform.forward) * 3.6f;
+            float steer = Mathf.Abs(car.steerInput);
+
+            // A flick is not a corner: the steer has to be held for the hold time before it is worth anything.
+            steerHold = steer > 0.05f ? steerHold + Time.deltaTime : 0f;
+
+            float held =
+                steerDampingHoldTime > 0f ? Mathf.Clamp01(steerHold / steerDampingHoldTime) : 1f;
+
+            float speedShare =
+                Mathf.InverseLerp(steerDampingSpeedFloor, steerDampingFullSpeed, forwardSpeed);
+
+            float corner =
+                steer * car.GetSpeedAdjustedSteer() * speedShare;
+
+            target = steerDampingMax * Mathf.Clamp01(corner * held);
+        }
+        else
+        {
+            steerHold = 0f;
+        }
+
+        float rate = target > steerDampingNow ? steerDampingInSpeed : steerDampingOutSpeed;
+
+        steerDampingNow = Mathf.MoveTowards(steerDampingNow, target, rate * Time.deltaTime);
+
+        if (dyncamicCam != null)
+            dyncamicCam.Damping = dynamicCamBaseDamping + new Vector3(steerDampingNow, 0f, 0f);
+
+        if (mainCam != null)
+            mainCam.Damping = mainCamBaseDamping + new Vector3(steerDampingNow, 0f, 0f);
+    }
+
 
     /// <summary>
     /// What a camera's distance becomes with the brake pull on it, never nearer than the floor.

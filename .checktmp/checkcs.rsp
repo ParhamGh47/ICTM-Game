@@ -338,6 +338,7 @@
 "Assets/Scripts/Player/TireSmokeController.cs"
 "Assets/Scripts/IceCreamS/FallingIceCream.cs"
 "Assets/Scripts/Adamak/AdamakController.cs"
+"Assets/Scripts/Player/ShadowRacer.cs"
 "Assets/Scripts/UI/gameOver.cs"
 "Assets/Scripts/Global/GameplayCursor.cs"
 "Assets/Scripts/Global/UiSquishClip.cs"

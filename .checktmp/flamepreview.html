@@ -1,0 +1,75 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:0;background:#0a0a12;color:#cfd3e6;font-family:ui-monospace,monospace}
+h2{font-size:13px;font-weight:600;margin:14px 0 6px 14px;color:#9aa2c4}
+.row{display:flex;gap:16px;padding:0 14px 16px;flex-wrap:wrap}
+.card{background:#14141f;border:1px solid #23233a;border-radius:8px;padding:8px}
+.lab{font-size:11px;color:#7d84a6;margin-top:6px}
+</style></head><body>
+<h2>Black fire — car colour → bloom → cool, all around the body</h2>
+<div class="row">
+<div class="card"><canvas id="sidescene" width="620" height="320" style="border-radius:6px"></canvas><div class="lab">side view</div></div>
+<div class="card"><canvas id="topscene" width="380" height="420" style="border-radius:6px"></canvas><div class="lab">top-down</div></div>
+<div class="card"><canvas id="grad" width="120" height="320" style="border-radius:6px"></canvas><div class="lab">colour over life</div></div>
+</div>
+<script>
+const SHADOW_TINT=[0.07,0.07,0.085], FLAME=[0.36,0.35,0.44];
+function smoothstep(t){return t*t*(3-2*t);}
+function grad(t){
+  const base=[SHADOW_TINT[0]+(FLAME[0]-SHADOW_TINT[0])*0.3, SHADOW_TINT[1]+(FLAME[1]-SHADOW_TINT[1])*0.3, SHADOW_TINT[2]+(FLAME[2]-SHADOW_TINT[2])*0.3];
+  const cool=[FLAME[0]*0.45,FLAME[1]*0.45,FLAME[2]*0.5];
+  const mix=(a,b,k)=>[a[0]+(b[0]-a[0])*k,a[1]+(b[1]-a[1])*k,a[2]+(b[2]-a[2])*k];
+  return t<0.28 ? mix(base,FLAME,t/0.28) : mix(FLAME,cool,(t-0.28)/0.72);
+}
+function flameAlpha(x,y){const v=y/63;const hw=(1-v)*Math.sqrt(Math.max(v,0.0001))*1.85;const nx=(x-31.5)/31.5;if(hw<=0.001)return 0;let a=Math.min(1,Math.max(0,1-Math.abs(nx)/hw));a=Math.pow(a,0.65);a*=smoothstep(Math.min(1,Math.max(0,(1-v)/0.28)));a*=smoothstep(Math.min(1,Math.max(0,v/0.14)));return Math.min(1,Math.max(0,a));}
+function flameData(r,g,b){const c=document.createElement('canvas');c.width=64;c.height=64;const ctx=c.getContext('2d');const img=ctx.createImageData(64,64);for(let y=0;y<64;y++)for(let x=0;x<64;x++){const a=flameAlpha(x,63-y);const i=(y*64+x)*4;img.data[i]=Math.round(r*255);img.data[i+1]=Math.round(g*255);img.data[i+2]=Math.round(b*255);img.data[i+3]=Math.round(a*255);}ctx.putImageData(img,0,0);return c;}
+const BUCKETS=10; const FLAMES=[];
+for(let k=0;k<BUCKETS;k++){const c=grad(k/(BUCKETS-1));FLAMES.push(flameData(c[0],c[1],c[2]));}
+function pick(t){return FLAMES[Math.min(BUCKETS-1,Math.max(0,Math.round(t*(BUCKETS-1))))];}
+function rngf(seed){let s=seed;return ()=>{s=(s*1103515245+12345)&0x7fffffff;return s/0x7fffffff;};}
+function roundRect(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+function onRect(rnd,x,y,w,h){
+  const p=(x,y,w,h)=>{const t=rnd()*(2*(w+h));if(t<w)return[x+t,y];if(t<w+h)return[x+w,y+(t-w)];if(t<2*w+h)return[x+w-(t-w-h),y+h];return[x,y+h-(t-2*w-h)];};
+  if(rnd()<0.72)return p(x,y,w,h);
+  return p(x-24,y-48,100,50);
+}
+function drawSide(){
+  const c=document.getElementById('sidescene'),ctx=c.getContext('2d');
+  ctx.fillStyle='#0b0b14';ctx.fillRect(0,0,c.width,c.height);
+  ctx.fillStyle='rgba(255,255,255,0.04)';ctx.fillRect(0,255,c.width,65);
+  const cx=310,cy=215,body={x:cx-80,y:cy-24,w:160,h:44},rnd=rngf(11);
+  for(let i=0;i<900;i++){
+    const [bx,by]=onRect(rnd,body.x,body.y,body.w,body.h);
+    const t=rnd(), rise=-(14+rnd()*46), drift=(rnd()-0.5)*110;
+    const x=bx+drift*t*(0.5+rnd()*0.6), y=by+rise*t*(0.6+rnd()*0.5);
+    const h=(18+rnd()*34)*(1-t*0.55), w=h*0.55;
+    ctx.save();ctx.translate(x,y);ctx.rotate((rnd()-0.5)*0.9);
+    ctx.globalAlpha=(0.25+rnd()*0.55)*(1-t*0.5);
+    ctx.drawImage(pick(t),-w/2,-h,w,h);ctx.restore();
+  }
+  ctx.globalAlpha=1;
+  ctx.save();ctx.shadowColor='rgba(120,132,170,0.9)';ctx.shadowBlur=26;ctx.fillStyle='rgb(17,17,23)';
+  roundRect(ctx,body.x,body.y,body.w,body.h,8);ctx.fill();roundRect(ctx,cx-40,body.y-48,100,50,9);ctx.fill();
+  ctx.fillStyle='rgb(9,9,14)';ctx.beginPath();ctx.arc(cx-48,cy+26,15,0,7);ctx.fill();ctx.beginPath();ctx.arc(cx+48,cy+26,15,0,7);ctx.fill();ctx.restore();
+}
+function drawTop(){
+  const c=document.getElementById('topscene'),ctx=c.getContext('2d');
+  ctx.fillStyle='#0b0b14';ctx.fillRect(0,0,c.width,c.height);
+  const cx=190,cy=215,body={x:cx-26,y:cy-58,w:52,h:104},rnd=rngf(29);
+  for(let i=0;i<900;i++){
+    const [bx,by]=onRect(rnd,body.x,body.y,body.w,body.h);
+    const t=rnd(), ang=rnd()*Math.PI*2, sp=24+rnd()*95;
+    const x=bx+Math.cos(ang)*sp*t, y=by+Math.sin(ang)*sp*t, h=(16+rnd()*32)*(1-t*0.5), w=h*0.55;
+    ctx.save();ctx.translate(x,y);ctx.rotate(ang+Math.PI*0.5+(rnd()-0.5));
+    ctx.globalAlpha=(0.2+rnd()*0.55)*(1-t*0.5);ctx.drawImage(pick(t),-w/2,-h,w,h);ctx.restore();
+  }
+  ctx.globalAlpha=1;
+  ctx.save();ctx.shadowColor='rgba(120,132,170,0.9)';ctx.shadowBlur=24;ctx.fillStyle='rgb(17,17,23)';
+  roundRect(ctx,body.x,body.y,body.w,body.h,7);ctx.fill();ctx.fillStyle='rgb(9,9,14)';
+  roundRect(ctx,cx-32,cy-20,10,24,3);ctx.fill();roundRect(ctx,cx+22,cy-20,10,24,3);ctx.fill();ctx.restore();
+}
+function drawGrad(){
+  const c=document.getElementById('grad'),ctx=c.getContext('2d');
+  for(let y=0;y<c.height;y++){const t=1-y/(c.height-1);const col=grad(t*0.95);ctx.fillStyle='rgb('+Math.round(col[0]*255)+','+Math.round(col[1]*255)+','+Math.round(col[2]*255)+')';ctx.fillRect(0,y,c.width,c.height-y===1?1:1);}
+}
+drawSide();drawTop();drawGrad();
+</script></body></html>

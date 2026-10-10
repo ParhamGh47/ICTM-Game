@@ -110,6 +110,11 @@ public static class UiSounds
         source.volume = 1f;
         source.clip = clip;
 
+        // Heard over a pause. The screens that set AudioListener.pause - the pause menu, the opening card -
+        // silence the whole game's audio, and a menu whose buttons make no sound at all reads as broken; the
+        // level's own pause music is exempt for the same reason.
+        source.ignoreListenerPause = true;
+
         // Its volume is worked out where it is played, so nothing else may write to it - see SoundBus.
         SoundBus.MarkHandled(source);
 

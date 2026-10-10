@@ -63,6 +63,12 @@ public class PauseMenu : MonoBehaviour
         if (gameOver.Instance != null && gameOver.Instance.IsGameOver)
             return;
 
+        // Nor while the level's opening card is up (see TutorialIntro). The card holds the game itself and
+        // answers every button, so the pause menu must not open behind it: a player who has not started the
+        // level yet has no business in a menu they did not ask for.
+        if (TutorialIntro.isShowing)
+            return;
+
         // While the pause menu is up, back is a way out of it rather than anything the truck does: B / circle
         // on a pad, which is the same button every other screen in the game leaves with, and Escape on the
         // keyboard, which Cancel carries as well as B. The truck is paused and reads none of its controls

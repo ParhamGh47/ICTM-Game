@@ -38,7 +38,7 @@ RenderSettings:
   m_ReflectionIntensity: 1
   m_CustomReflection: {fileID: 0}
   m_Sun: {fileID: 0}
-  m_IndirectSpecularColor: {r: 0, g: 0, b: 0, a: 1}
+  m_IndirectSpecularColor: {r: 0.12731704, g: 0.13414727, b: 0.121078536, a: 1}
   m_UseRadianceAmbientProbe: 0
 --- !u!157 &3
 LightmapSettings:
@@ -123,6 +123,125 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
+--- !u!1 &100
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1001}
+  - component: {fileID: 1002}
+  m_Layer: 0
+  m_Name: Credits Screen
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1001
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 100}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_RootOrder: 1
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1002
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 100}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9c1f0b4a7e2d4c8fa1b3d5e60718293a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  creditsText: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.
+
+
+    Sed
+    do eiusmod tempor incididunt ut labore et dolore magna aliqua.
+
+
+    Ut enim
+    ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex
+    ea commodo consequat.
+
+
+    Duis aute irure dolor in reprehenderit in voluptate
+    velit esse cillum dolore eu fugiat nulla pariatur.
+
+
+    Excepteur sint occaecat
+    cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est
+    laborum.
+
+
+    Sed ut perspiciatis unde omnis iste natus error sit voluptatem
+    accusantium doloremque laudantium, totam rem aperiam.
+
+
+    Eaque ipsa quae ab
+    illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.
+
+
+    Nemo
+    enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit.
+
+
+    Neque
+    porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci
+    velit.
+
+
+    Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis
+    suscipit laboriosam.
+
+
+    Quis autem vel eum iure reprehenderit qui in ea voluptate
+    velit esse quam nihil molestiae consequatur.
+
+
+    At vero eos et accusamus et
+    iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum.
+
+
+    Lorem
+    ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt
+    ut labore.
+
+
+    Thanks for playing.'
+  font: {fileID: 11400000, guid: 5d9ca5d060d66fc43a47e0cec6e394a6, type: 2}
+  logo: {fileID: 0}
+  backgroundColor: {r: 0.012, g: 0.024, b: 0.055, a: 1}
+  accentColor: {r: 1, g: 0.64, b: 0.16, a: 1}
+  labelColor: {r: 0.86, g: 0.89, b: 0.95, a: 1}
+  logoHeight: 150
+  contentWidth: 1200
+  titleSize: 76
+  bodySize: 34
+  scrollSpeed: 100
+  startDelay: 2.5
+  endHoldTime: 5
+  music: {fileID: 8300000, guid: ab57c997f8216764d99db317503b4e2d, type: 3}
+  loopMusic: 1
+  musicVolume: 0.7
+  menuSceneName: Menu
+  skipHint: CLICK  OR  PRESS ESC TO SKIP
+  hintColor: {r: 1, g: 0.64, b: 0.16, a: 0.85}
+  fadeTime: 0.5
 --- !u!1 &3200001
 GameObject:
   m_ObjectHideFlags: 0
@@ -207,68 +326,6 @@ AudioListener:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 3200001}
   m_Enabled: 1
---- !u!1 &100
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1001}
-  - component: {fileID: 1002}
-  m_Layer: 0
-  m_Name: Credits Screen
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &1001
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 100}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_RootOrder: 1
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1002
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 100}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9c1f0b4a7e2d4c8fa1b3d5e60718293a, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  font: {fileID: 11400000, guid: 5d9ca5d060d66fc43a47e0cec6e394a6, type: 2}
-  logo: {fileID: 0}
-  backgroundColor: {r: 0.012, g: 0.024, b: 0.055, a: 1}
-  accentColor: {r: 1, g: 0.64, b: 0.16, a: 1}
-  labelColor: {r: 0.86, g: 0.89, b: 0.95, a: 1}
-  logoHeight: 150
-  contentWidth: 1200
-  titleSize: 76
-  bodySize: 34
-  scrollSpeed: 120
-  startDelay: 1.2
-  endHoldTime: 2.5
-  music: {fileID: 8300000, guid: 5aedd08f86f31bf4a86de37200e7e7db, type: 3}
-  loopMusic: 1
-  musicVolume: 0.7
-  menuSceneName: Menu
-  skipHint: CLICK  OR  PRESS ESC TO SKIP
-  fadeTime: 0.5
 --- !u!1 &3200060
 GameObject:
   m_ObjectHideFlags: 0
@@ -329,7 +386,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4f231c4fb786f3946a6b90b886c48677, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  m_SendPointerHoverToParent: 1
   m_HorizontalAxis: Horizontal
   m_VerticalAxis: Vertical
   m_SubmitButton: Submit

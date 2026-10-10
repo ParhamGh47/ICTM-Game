@@ -38,7 +38,7 @@ RenderSettings:
   m_ReflectionIntensity: 1
   m_CustomReflection: {fileID: 0}
   m_Sun: {fileID: 0}
-  m_IndirectSpecularColor: {r: 0.18028378, g: 0.22571412, b: 0.30692285, a: 1}
+  m_IndirectSpecularColor: {r: 0.18028334, g: 0.22571328, b: 0.3069217, a: 1}
   m_UseRadianceAmbientProbe: 0
 --- !u!157 &3
 LightmapSettings:
@@ -719,6 +719,22 @@ MonoBehaviour:
   speedUpMultiplier: 8
   continueButton: {fileID: 1070969797}
   speedUpButton: {fileID: 2096338727}
+  speedUpOffLabel: 'Speed-up: OFF'
+  speedUpOnLabel: 'Speed-up: ON'
+  speedUpOnLabelColor: {r: 0.72, g: 0.28, b: 0.05, a: 1}
+  keystrokes: 1
+  keystrokeVolume: 0.42
+  keystrokeInterval: 0.034
+  keystrokeIntervalSpeedUp: 0.02
+  keystrokePitchSpread: 0.1
+  keystrokeSpeedUpPitch: 1.09
+  shiftedPitch: 0.94
+  shiftedVolume: 1.12
+  carriageBell: 1
+  bellVolume: 0.5
+  keystrokeRhythmSpread: 0.12
+  sentencePause: 0.07
+  clausePause: 0.025
   startText: cdeafulhei
 --- !u!1 &1624336669
 GameObject:
@@ -1046,7 +1062,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c4b1585b316e7a04989302c57ad9e633, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  gameplaySceneName: Core-4
+  gameplaySceneName: Core-5
   endScene: 
 --- !u!1 &1916624449
 GameObject:
@@ -1627,7 +1643,6 @@ MonoBehaviour:
     m_VerticalOverflow: 0
     m_LineSpacing: 1
   m_Text: Speed-up
-
 --- !u!114 &2096338733
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1642,9 +1657,17 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   buttons: []
   firstButtonName: cont
+  ignore: []
   selectOnEnable: 1
   keepSelectionAlive: 1
   rememberLast: 1
+  dPadNavigation: 1
+  dPadRepeatDelay: 0.45
+  dPadRepeatRate: 0.12
+  ignoreHeldInput: 1
+  minimumInputGrace: 0.2
+  maximumInputGrace: 2
+  highlightHoldTime: 0.35
 --- !u!114 &2096338734
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1658,6 +1681,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   targetScene: Levels
+  allowBack: 1
 --- !u!114 &3000692029517237948
 MonoBehaviour:
   m_ObjectHideFlags: 0
